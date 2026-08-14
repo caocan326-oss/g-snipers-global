@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { api, type MarketDetail, type SeoPage } from "@/lib/api";
+import { api, type ChainFeed, type MarketDetail } from "@/lib/api";
 
 export default function MarketDetailPage() {
   const params = useParams<{ id: string }>();
@@ -20,8 +20,7 @@ export default function MarketDetailPage() {
   const [brief, setBrief] = useState({ summary: "", opportunities: "", risks: "", recommended_actions: "" });
   const [competitor, setCompetitor] = useState({ name: "", website: "", positioning: "" });
   const [signal, setSignal] = useState({ theme: "", locale: "", intensity: 3, intent: "informational" });
-  const [settings, setSettings] = useState({ status: "watching", opportunity_score: 50, notes: "" });
-  const [seoPages, setSeoPages] = useState<SeoPage[]>([]);
+  const [settings, setSettings] = useState({ status: "watching", notes: "" });
 
   function load() {
     api<MarketDetail>(`/api/markets/${params.id}`)
@@ -34,12 +33,9 @@ export default function MarketDetailPage() {
           recommended_actions: m.brief?.recommended_actions ?? "",
         });
         setSignal((s) => ({ ...s, locale: m.primary_locale }));
-        setSettings({ status: m.status, opportunity_score: m.opportunity_score, notes: m.notes ?? "" });
+        setSettings({ status: m.status, notes: m.notes ?? "" });
       })
       .catch((e) => setError(e.message));
-    api<SeoPage[]>(`/api/seo-pages?market_id=${params.id}`)
-      .then(setSeoPages)
-      .catch(() => setSeoPages([]));
   }
 
   useEffect(() => {
@@ -69,30 +65,26 @@ export default function MarketDetailPage() {
     load();
   }
 
-  async function toSeo(signalId: string) {
-    const page = await api<SeoPage>(`/api/demand-signals/${signalId}/create-seo-page`, { method: "POST" });
-    router.push(`/seo/${page.id}`);
-  }
-
-  async function toGeo(signalId: string) {
-    await api(`/api/geo/from-demand-signal/${signalId}`, { method: "POST" });
-    router.push("/geo");
+  async function feed(signalId: string, path: string) {
+    setError("");
+    try {
+      const res = await api<ChainFeed>(`/api/demand-signals/${signalId}/${path}`, { method: "POST" });
+      router.push(res.redirect_path);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "投喂失败");
+    }
   }
 
   async function saveSettings(e: FormEvent) {
     e.preventDefault();
     await api(`/api/markets/${params.id}`, {
       method: "PATCH",
-      body: JSON.stringify({
-        status: settings.status,
-        opportunity_score: Number(settings.opportunity_score),
-        notes: settings.notes,
-      }),
+      body: JSON.stringify({ status: settings.status, notes: settings.notes }),
     });
     load();
   }
 
-  if (error) return <p className="text-red-600">{error}</p>;
+  if (error && !market) return <p className="text-red-600">{error}</p>;
   if (!market) return <p className="text-sm text-slate-500">加载中…</p>;
 
   return (
@@ -106,7 +98,7 @@ export default function MarketDetailPage() {
           <span className="text-base font-normal text-slate-400">{market.country_code}</span>
         </h1>
         <p className="mt-1 text-sm text-slate-500">
-          {market.region} · {market.primary_locale} · 机会分 {market.opportunity_score}
+          {market.region} · {market.primary_locale} · 投喂到三条交付链
         </p>
         {market.notes ? <p className="mt-2 text-sm text-slate-600">{market.notes}</p> : null}
       </div>
@@ -116,7 +108,7 @@ export default function MarketDetailPage() {
           <CardTitle>市场状态</CardTitle>
         </CardHeader>
         <CardContent>
-          <form className="grid gap-3 md:grid-cols-4" onSubmit={saveSettings}>
+          <form className="grid gap-3 md:grid-cols-3" onSubmit={saveSettings}>
             <select
               className="h-9 rounded-md border border-slate-200 px-2 text-sm"
               value={settings.status}
@@ -127,20 +119,12 @@ export default function MarketDetailPage() {
               <option value="paused">暂停</option>
             </select>
             <Input
-              type="number"
-              min={0}
-              max={100}
-              value={settings.opportunity_score}
-              onChange={(e) => setSettings({ ...settings, opportunity_score: Number(e.target.value) })}
-            />
-            <Input
               placeholder="备注"
               value={settings.notes}
               onChange={(e) => setSettings({ ...settings, notes: e.target.value })}
             />
             <Button type="submit">保存状态</Button>
           </form>
-          <p className="mt-2 text-xs text-slate-500">机会分由客户经理评估，不是搜索份额或第三方抓取。</p>
         </CardContent>
       </Card>
 
@@ -156,22 +140,15 @@ export default function MarketDetailPage() {
                 <Textarea value={brief.summary} onChange={(e) => setBrief({ ...brief, summary: e.target.value })} />
               </div>
               <div>
-                <Label>机会</Label>
+                <Label>可投喂动作</Label>
                 <Textarea
-                  value={brief.opportunities}
-                  onChange={(e) => setBrief({ ...brief, opportunities: e.target.value })}
+                  value={brief.recommended_actions}
+                  onChange={(e) => setBrief({ ...brief, recommended_actions: e.target.value })}
                 />
               </div>
               <div>
                 <Label>风险</Label>
                 <Textarea value={brief.risks} onChange={(e) => setBrief({ ...brief, risks: e.target.value })} />
-              </div>
-              <div>
-                <Label>建议动作</Label>
-                <Textarea
-                  value={brief.recommended_actions}
-                  onChange={(e) => setBrief({ ...brief, recommended_actions: e.target.value })}
-                />
               </div>
               <Button type="submit">保存简报</Button>
             </form>
@@ -223,30 +200,30 @@ export default function MarketDetailPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>需求信号 → SEO 选题</CardTitle>
+          <CardTitle>信号 → 开到交付链</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-slate-500">
-            信号由客户经理录入（访谈、公开资料、后续可接真实数据源）。不是实时搜索量，也不是 Share of Voice。
+            信号由客户经理录入。不是搜索量，也不是 Share of Voice。选一条，开站内任务、GEO 工单或外链跟进。
           </p>
           <ul className="space-y-3">
             {market.demand_signals.map((s) => (
-              <li key={s.id} className="flex items-start justify-between gap-4 rounded-md border border-slate-100 p-3">
-                <div>
-                  <div className="font-medium">{s.theme}</div>
-                  <div className="mt-1 flex flex-wrap gap-2 text-xs text-slate-500">
-                    <Badge>{s.locale}</Badge>
-                    <Badge tone="amber">强度 {s.intensity}</Badge>
-                    <Badge tone="blue">{s.intent}</Badge>
-                    <span>来源 {s.source}</span>
-                  </div>
+              <li key={s.id} className="rounded-md border border-slate-100 p-3">
+                <div className="font-medium">{s.theme}</div>
+                <div className="mt-1 flex flex-wrap gap-2 text-xs text-slate-500">
+                  <Badge>{s.locale}</Badge>
+                  <Badge tone="blue">{s.intent}</Badge>
+                  <span>来源 {s.source}</span>
                 </div>
-                <div className="flex gap-2">
-                  <Button size="sm" onClick={() => toSeo(s.id)}>
-                    开选题
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button size="sm" onClick={() => feed(s.id, "open-onsite")}>
+                    开站内任务
                   </Button>
-                  <Button size="sm" variant="outline" onClick={() => toGeo(s.id)}>
-                    加入 GEO 监测
+                  <Button size="sm" variant="outline" onClick={() => feed(s.id, "open-geo-ticket")}>
+                    开 GEO 工单
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => feed(s.id, "open-link-followup")}>
+                    开外链跟进
                   </Button>
                 </div>
               </li>
@@ -255,7 +232,7 @@ export default function MarketDetailPage() {
           <form className="grid gap-2 md:grid-cols-5" onSubmit={addSignal}>
             <Input
               className="md:col-span-2"
-              placeholder="主题 / 关键词"
+              placeholder="主题 / 买家会问的原句"
               value={signal.theme}
               onChange={(e) => setSignal({ ...signal, theme: e.target.value })}
               required
@@ -278,24 +255,7 @@ export default function MarketDetailPage() {
               录入信号
             </Button>
           </form>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>本市场的 SEO 选题</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          {seoPages.length === 0 ? <p className="text-sm text-slate-500">还没有选题。从上方需求信号开一篇即可。</p> : null}
-          {seoPages.map((p) => (
-            <Link key={p.id} href={`/seo/${p.id}`} className="flex items-center justify-between rounded-md border p-3 hover:border-brand-600">
-              <div>
-                <div className="font-medium">{p.title}</div>
-                <div className="text-xs text-slate-500">{p.locale}</div>
-              </div>
-              <Badge>{p.status}</Badge>
-            </Link>
-          ))}
+          {error ? <p className="text-sm text-red-600">{error}</p> : null}
         </CardContent>
       </Card>
     </div>

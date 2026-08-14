@@ -17,6 +17,7 @@ from app.models import (
     GeoChecklistItem,
     GeoObservation,
     GeoPrompt,
+    GeoTicket,
     Inquiry,
     InsightBrief,
     Market,
@@ -53,6 +54,7 @@ def seed(db: Session) -> None:
     if db.scalar(select(Market).where(Market.tenant_id == tenant.id)) is not None:
         _seed_geo(db, tenant, user)
         _seed_onsite_offsite_dist(db, tenant, user)
+        _seed_three_chains(db, tenant, user)
         db.commit()
         return
 
@@ -245,6 +247,7 @@ def seed(db: Session) -> None:
     )
     _seed_geo(db, tenant, user)
     _seed_onsite_offsite_dist(db, tenant, user)
+    _seed_three_chains(db, tenant, user)
     db.commit()
 
 
@@ -265,6 +268,7 @@ def _seed_geo(db: Session, tenant: Tenant, user: User) -> None:
         demand_signal_id=us_signal.id if us_signal else None,
         prompt_text="How do renters install a smart lock without replacing the whole door?",
         locale="en-US",
+        diagnosis="untested",
     )
     jp_prompt = GeoPrompt(
         tenant_id=tenant.id,
@@ -272,6 +276,7 @@ def _seed_geo(db: Session, tenant: Tenant, user: User) -> None:
         seo_page_id=jp_page.id if jp_page else None,
         prompt_text="賃貸でスマートロックを付けるには管理組合の許可が必要ですか？",
         locale="ja-JP",
+        diagnosis="untested",
     )
     db.add_all([us_prompt, jp_prompt])
     db.flush()
@@ -288,15 +293,31 @@ def _seed_geo(db: Session, tenant: Tenant, user: User) -> None:
             )
 
     pages = db.query(SeoPage).filter(SeoPage.tenant_id == tenant.id).all()
-    db.add(
-        GeoAsset(
-            tenant_id=tenant.id,
-            kind="llms_txt",
-            title="llms.txt 草稿",
-            body=build_llms_txt(tenant, pages),
-            status="draft",
-            updated_by=user.id,
-        )
+    db.add_all(
+        [
+            GeoAsset(
+                tenant_id=tenant.id,
+                kind="llms_txt",
+                title="llms.txt 草稿",
+                body=build_llms_txt(tenant, pages),
+                status="draft",
+                updated_by=user.id,
+            ),
+            GeoAsset(
+                tenant_id=tenant.id,
+                kind="cite_checklist",
+                title="可引用性清单",
+                body=(
+                    "1. 官网有可被引用的事实页（规格、对比、案例），而非只有首页口号。\n"
+                    "2. 关键实体名称中英一致，避免同一品牌多种拼写。\n"
+                    "3. 对比页写清差异，而不是堆砌形容词。\n"
+                    "4. 来源可核验：日期、作者、原始数据出处。\n"
+                    "5. 未测引擎不要写成「已覆盖」。引用 ≠ 吸收。不得声称「已让 ChatGPT 引用」。\n"
+                ),
+                status="draft",
+                updated_by=user.id,
+            ),
+        ]
     )
 
     if us_page:
@@ -508,10 +529,13 @@ def _seed_onsite_offsite_dist(db: Session, tenant: Tenant, user: User) -> None:
         competitor_name="August Home",
         referring_domain="reddit.com",
         competitor_url="https://www.reddit.com/r/smarthome/",
+        link_url="https://www.reddit.com/r/smarthome/",
+        kind="competitor",
+        verify_status="unverified",
         our_presence="none",
         domain_metric="untested",
         status="outreach",
-        notes="客户经理从公开讨论记下的缺口。域名权重未测，不是 Ahrefs 数字。",
+        notes="客户经理从公开讨论记下的缺口。逐条核验，不是 Ahrefs 数字。",
     )
     g2 = BacklinkGap(
         tenant_id=tenant.id,
@@ -519,25 +543,35 @@ def _seed_onsite_offsite_dist(db: Session, tenant: Tenant, user: User) -> None:
         competitor_name="Level Lock",
         referring_domain="theverge.com",
         competitor_url=None,
+        link_url="https://www.theverge.com/",
+        kind="competitor",
+        verify_status="unverified",
         our_presence="untested",
         domain_metric="untested",
         status="identified",
-        notes="是否真有稿件未核实，保持未测。",
+        notes="是否真有稿件未核实，保持未核验。",
     )
     g3 = BacklinkGap(
         tenant_id=tenant.id,
         market_id=jp.id if jp else None,
         competitor_name="Qrio",
         referring_domain="kakaku.com",
+        link_url="https://kakaku.com/",
+        kind="competitor",
+        verify_status="valid",
         our_presence="none",
         domain_metric="untested",
         status="identified",
+        notes="竞品页人工点开有效；我方无链。",
     )
     g4 = BacklinkGap(
         tenant_id=tenant.id,
         market_id=us.id if us else None,
         competitor_name="August Home",
         referring_domain="wirecutter.com",
+        link_url="https://www.nytimes.com/wirecutter/",
+        kind="competitor",
+        verify_status="unverified",
         our_presence="none",
         domain_metric="untested",
         status="skipped",
@@ -548,20 +582,54 @@ def _seed_onsite_offsite_dist(db: Session, tenant: Tenant, user: User) -> None:
         market_id=de.id if de else None,
         competitor_name="Nuki",
         referring_domain="heise.de",
+        link_url="https://www.heise.de/",
+        kind="competitor",
+        verify_status="dead",
         our_presence="none",
         domain_metric="untested",
         status="identified",
+        notes="人工复查：旧稿 404。",
     )
     g6 = BacklinkGap(
         tenant_id=tenant.id,
         market_id=us.id if us else None,
         competitor_name="Level Lock",
         referring_domain="houzz.com",
+        link_url="https://www.houzz.com/",
+        kind="competitor",
+        verify_status="spam",
         our_presence="none",
         domain_metric="untested",
         status="replied",
+        notes="目录站互链气味重，标垃圾，不跟进购买。",
     )
-    db.add_all([g1, g2, g3, g4, g5, g6])
+    inbound_ok = BacklinkGap(
+        tenant_id=tenant.id,
+        market_id=us.id if us else None,
+        competitor_name="—",
+        referring_domain="smarthome-weekly.example",
+        link_url="https://smarthome-weekly.example/renters-lock",
+        kind="inbound",
+        verify_status="valid",
+        our_presence="present",
+        domain_metric="untested",
+        status="won",
+        notes="我方 inbound：客户经理手点确认存在。权重未测。",
+    )
+    inbound_dead = BacklinkGap(
+        tenant_id=tenant.id,
+        market_id=us.id if us else None,
+        competitor_name="—",
+        referring_domain="old-blog.example",
+        link_url="https://old-blog.example/gone",
+        kind="inbound",
+        verify_status="dead",
+        our_presence="none",
+        domain_metric="untested",
+        status="lost",
+        notes="原合作稿已下线，待跟进或放弃。",
+    )
+    db.add_all([g1, g2, g3, g4, g5, g6, inbound_ok, inbound_dead])
     db.flush()
 
     db.add_all(
@@ -659,6 +727,115 @@ def _seed_onsite_offsite_dist(db: Session, tenant: Tenant, user: User) -> None:
             ),
         ]
     )
+
+
+def _seed_three_chains(db: Session, tenant: Tenant, user: User) -> None:
+    """Backfill China engines, GEO tickets, inbound verify rows on existing demos."""
+    prompts = db.query(GeoPrompt).filter(GeoPrompt.tenant_id == tenant.id).all()
+    for prompt in prompts:
+        existing = {o.engine for o in prompt.observations}
+        for engine in ENGINES:
+            if engine not in existing:
+                db.add(
+                    GeoObservation(
+                        tenant_id=tenant.id,
+                        prompt_id=prompt.id,
+                        engine=engine,
+                        status="untested",
+                    )
+                )
+        if not prompt.diagnosis:
+            prompt.diagnosis = "untested"
+
+    if db.scalar(select(GeoTicket).where(GeoTicket.tenant_id == tenant.id)) is None and prompts:
+        first = prompts[0]
+        db.add_all(
+            [
+                GeoTicket(
+                    tenant_id=tenant.id,
+                    prompt_id=first.id,
+                    title="英文安装问句：中西引擎采样后补事实页",
+                    diagnosis="untested",
+                    rationale="8 个槽位默认未测。先抽查再诊断，禁止把空槽写成已引用。",
+                    acceptance_criteria="至少完成一轮人工记录；引用 ≠ 吸收；未测保持未测。客户经理确认后才算验收。",
+                    status="open",
+                ),
+                GeoTicket(
+                    tenant_id=tenant.id,
+                    prompt_id=prompts[-1].id,
+                    title="日语许可问句：若竞品主导则开站内对照页",
+                    diagnosis="untested",
+                    rationale="诊断层等采样。不得发明 brand.com 引用率。",
+                    acceptance_criteria="豆包 / Kimi / 通义 / DeepSeek 可手填或保持未测；验收须确认。",
+                    status="in_progress",
+                ),
+            ]
+        )
+
+    if (
+        db.scalar(
+            select(GeoAsset).where(GeoAsset.tenant_id == tenant.id, GeoAsset.kind == "cite_checklist")
+        )
+        is None
+    ):
+        db.add(
+            GeoAsset(
+                tenant_id=tenant.id,
+                kind="cite_checklist",
+                title="可引用性清单",
+                body=(
+                    "1. 官网有可被引用的事实页（规格、对比、案例），而非只有首页口号。\n"
+                    "2. 关键实体名称中英一致。\n"
+                    "3. 对比页写清差异。\n"
+                    "4. 来源可核验。\n"
+                    "5. 未测不要写成已覆盖。引用 ≠ 吸收。\n"
+                ),
+                status="draft",
+                updated_by=user.id,
+            )
+        )
+
+    gaps = db.query(BacklinkGap).filter(BacklinkGap.tenant_id == tenant.id).all()
+    for gap in gaps:
+        if not gap.kind:
+            gap.kind = "competitor"
+        if not gap.verify_status:
+            gap.verify_status = "unverified"
+        if not gap.link_url:
+            gap.link_url = gap.competitor_url
+
+    if not any(g.kind == "inbound" for g in gaps):
+        us = db.scalar(select(Market).where(Market.tenant_id == tenant.id, Market.country_code == "US"))
+        db.add_all(
+            [
+                BacklinkGap(
+                    tenant_id=tenant.id,
+                    market_id=us.id if us else None,
+                    competitor_name="—",
+                    referring_domain="smarthome-weekly.example",
+                    link_url="https://smarthome-weekly.example/renters-lock",
+                    kind="inbound",
+                    verify_status="valid",
+                    our_presence="present",
+                    domain_metric="untested",
+                    status="won",
+                    notes="我方 inbound：人工点开有效。权重未测。",
+                ),
+                BacklinkGap(
+                    tenant_id=tenant.id,
+                    market_id=us.id if us else None,
+                    competitor_name="—",
+                    referring_domain="old-blog.example",
+                    link_url="https://old-blog.example/gone",
+                    kind="inbound",
+                    verify_status="dead",
+                    our_presence="none",
+                    domain_metric="untested",
+                    status="lost",
+                    notes="原合作稿已下线。",
+                ),
+            ]
+        )
 
 
 def main() -> None:

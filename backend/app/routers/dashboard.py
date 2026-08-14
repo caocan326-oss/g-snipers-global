@@ -10,6 +10,7 @@ from app.models import (
     GeoAsset,
     GeoObservation,
     GeoPrompt,
+    GeoTicket,
     Inquiry,
     Market,
     OnsiteIssue,
@@ -72,6 +73,12 @@ def summary(user: User = Depends(get_current_user), db: Session = Depends(get_db
     geo_assets_draft = (
         db.query(func.count(GeoAsset.id)).filter(GeoAsset.tenant_id == tid, GeoAsset.status == "draft").scalar() or 0
     )
+    geo_tickets_open = (
+        db.query(func.count(GeoTicket.id))
+        .filter(GeoTicket.tenant_id == tid, GeoTicket.status.in_(["open", "in_progress", "verify", "reopened"]))
+        .scalar()
+        or 0
+    )
     onsite_pages = db.query(func.count(SitePage.id)).filter(SitePage.tenant_id == tid).scalar() or 0
     onsite_open_low = (
         db.query(func.count(OnsiteIssue.id))
@@ -86,6 +93,12 @@ def summary(user: User = Depends(get_current_user), db: Session = Depends(get_db
         or 0
     )
     offsite_gaps = db.query(func.count(BacklinkGap.id)).filter(BacklinkGap.tenant_id == tid).scalar() or 0
+    links_unverified = (
+        db.query(func.count(BacklinkGap.id))
+        .filter(BacklinkGap.tenant_id == tid, BacklinkGap.verify_status == "unverified")
+        .scalar()
+        or 0
+    )
     offsite_outreach_open = (
         db.query(func.count(OutreachItem.id))
         .filter(OutreachItem.tenant_id == tid, OutreachItem.status.in_(["todo", "sent_manual"]))
@@ -107,10 +120,12 @@ def summary(user: User = Depends(get_current_user), db: Session = Depends(get_db
         geo_untested=geo_untested,
         geo_recorded=geo_recorded,
         geo_assets_draft=geo_assets_draft,
+        geo_tickets_open=geo_tickets_open,
         onsite_pages=onsite_pages,
         onsite_open_low=onsite_open_low,
         onsite_open_high=onsite_open_high,
         offsite_gaps=offsite_gaps,
         offsite_outreach_open=offsite_outreach_open,
+        links_unverified=links_unverified,
         distribution_jobs=distribution_jobs,
     )

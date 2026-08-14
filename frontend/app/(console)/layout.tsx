@@ -11,14 +11,10 @@ import { cn } from "@/lib/utils";
 
 const nav = [
   { href: "/home", label: "首页" },
-  { href: "/insights", label: "全球洞察中心" },
-  { href: "/seo", label: "SEO 工作台" },
-  { href: "/onsite", label: "站内优化" },
-  { href: "/offsite", label: "站外优化" },
-  { href: "/distribution", label: "外链分发台" },
-  { href: "/geo", label: "GEO 监测" },
-  { href: "/work-orders", label: "工单" },
-  { href: "/inquiries", label: "询盘" },
+  { href: "/insights", label: "洞察投喂" },
+  { href: "/onsite", label: "站内改页" },
+  { href: "/geo", label: "GEO 闭环" },
+  { href: "/offsite", label: "外链核验与分发" },
 ];
 
 export default function ConsoleLayout({ children }: { children: ReactNode }) {
@@ -41,7 +37,7 @@ export default function ConsoleLayout({ children }: { children: ReactNode }) {
       <aside className="flex w-60 flex-col border-r border-slate-200 bg-white">
         <div className="px-5 py-5">
           <div className="text-sm font-semibold text-brand-700">G-Snipers 海外版</div>
-          <div className="mt-1 text-xs text-slate-500">洞察 · 执行工作台</div>
+          <div className="mt-1 text-xs text-slate-500">三条交付链 · 人审后才动线上</div>
         </div>
         <nav className="flex-1 space-y-0.5 px-3">
           {nav.map((item) => (

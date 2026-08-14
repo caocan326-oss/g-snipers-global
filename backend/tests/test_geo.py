@@ -12,18 +12,31 @@ def test_geo_prompt_slots_are_untested_not_zero(client: TestClient, demo_user) -
     )
     assert created.status_code == 201
     observations = created.json()["observations"]
-    assert len(observations) == 4
+    assert len(observations) == 8
+    engines = {o["engine"] for o in observations}
+    assert engines == {
+        "chatgpt",
+        "perplexity",
+        "gemini",
+        "claude",
+        "deepseek",
+        "doubao",
+        "kimi",
+        "tongyi",
+    }
     assert all(o["status"] == "untested" for o in observations)
-    assert "citation_rate" not in created.json()
+    assert created.json()["cite_rate"] == "未测"
+    assert created.json()["absorption_rate"] == "未测"
+    assert created.json()["diagnosis"] == "untested"
     assert "share_of_voice" not in created.json()
 
     summary = client.get("/api/geo/summary", headers=headers)
     assert summary.status_code == 200
     body = summary.json()
     assert body["prompts"] == 1
-    assert body["untested"] == 4
+    assert body["untested"] == 8
     assert body["recorded"] == 0
-    assert "citation_rate" not in body
+    assert body["cite_rate"] == "未测"
     assert "percent" not in body
 
 
@@ -46,7 +59,7 @@ def test_record_observation_and_llms_asset_confirm(client: TestClient, demo_user
     assert recorded.json()["observed_at"]
 
     summary = client.get("/api/geo/summary", headers=headers).json()
-    assert summary["untested"] == 3
+    assert summary["untested"] == 7
     assert summary["recorded"] == 1
 
     generated = client.post("/api/geo/assets/llms.txt/generate", headers=headers)
@@ -108,4 +121,58 @@ def test_demand_signal_feeds_geo_prompt(client: TestClient, demo_user) -> None:
     prompt = client.post(f"/api/geo/from-demand-signal/{signal['id']}", headers=headers)
     assert prompt.status_code == 201
     assert prompt.json()["prompt_text"] == "renter smart lock"
+    assert len(prompt.json()["observations"]) == 8
     assert all(o["status"] == "untested" for o in prompt.json()["observations"])
+
+
+def test_geo_ticket_verify_requires_confirm_and_can_reopen(client: TestClient, demo_user) -> None:
+    headers = auth_header(client)
+    prompt = client.post(
+        "/api/geo/prompts",
+        headers=headers,
+        json={"prompt_text": "best lock for apartments", "locale": "en-US"},
+    ).json()
+    ticket = client.post(
+        "/api/geo/tickets",
+        headers=headers,
+        json={
+            "prompt_id": prompt["id"],
+            "title": "采样后补对照页",
+            "diagnosis": "absent",
+            "rationale": "未测不得写成已引用",
+            "acceptance_criteria": "人工抽查后再验收",
+        },
+    )
+    assert ticket.status_code == 201
+    assert ticket.json()["status"] == "open"
+    ticket_id = ticket.json()["id"]
+
+    denied = client.post(
+        f"/api/geo/tickets/{ticket_id}/verify",
+        headers=headers,
+        json={"confirmed": False},
+    )
+    assert denied.status_code == 400
+
+    verified = client.post(
+        f"/api/geo/tickets/{ticket_id}/verify",
+        headers=headers,
+        json={"confirmed": True, "note": "已按标准复核，仍不声称已被引用"},
+    )
+    assert verified.status_code == 200
+    assert verified.json()["status"] == "done"
+
+    reopened = client.post(
+        f"/api/geo/tickets/{ticket_id}/reopen",
+        headers=headers,
+        json={"note": "复测后仍未出现，重开"},
+    )
+    assert reopened.json()["status"] == "reopened"
+
+    diagnosis = client.patch(
+        f"/api/geo/prompts/{prompt['id']}/diagnosis",
+        headers=headers,
+        json={"diagnosis": "competitor_dominated"},
+    )
+    assert diagnosis.json()["diagnosis"] == "competitor_dominated"
+    assert diagnosis.json()["cite_rate"] == "未测"

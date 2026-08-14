@@ -30,7 +30,6 @@ export default function InsightsPage() {
     region: "亚太",
     country_code: "",
     primary_locale: "en-US",
-    opportunity_score: 50,
   });
 
   function load() {
@@ -56,9 +55,9 @@ export default function InsightsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">全球洞察中心</h1>
+        <h1 className="text-2xl font-semibold">洞察投喂</h1>
         <p className="mt-1 text-sm text-slate-500">
-          按市场看机会分、需求信号与竞品，再把主题交给 SEO 工作台执行。数据由客户经理维护，不调用 Google API。
+          选市场、记信号，再开到三条链：站内改页 / GEO 工单 / 外链跟进。不做机会分或 Share of Voice 看板。
         </p>
       </div>
 
@@ -79,11 +78,10 @@ export default function InsightsPage() {
                 <Badge tone={statusTone[m.status] ?? "default"}>{statusLabel[m.status] ?? m.status}</Badge>
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-semibold">{m.opportunity_score}</div>
-                <p className="mt-1 text-xs text-slate-500">机会分（人工评估，非 Share of Voice）</p>
-                <p className="mt-3 text-xs text-slate-500">
-                  需求 {m.demand_count} · 竞品 {m.competitor_count} · 选题 {m.seo_count}
+                <p className="text-sm text-slate-600">
+                  信号 {m.demand_count} · 竞品 {m.competitor_count}
                 </p>
+                <p className="mt-2 text-xs text-slate-500">点进去把信号投喂到交付链。</p>
               </CardContent>
             </Card>
           </Link>

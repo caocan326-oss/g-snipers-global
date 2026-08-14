@@ -17,7 +17,30 @@ def test_offsite_gap_and_outreach(client: TestClient, demo_user) -> None:
     assert gap.status_code == 201
     assert gap.json()["domain_metric"] == "untested"
     assert gap.json()["status"] == "identified"
+    assert gap.json()["verify_status"] == "unverified"
+    assert gap.json()["kind"] == "competitor"
     gap_id = gap.json()["id"]
+
+    verified = client.patch(
+        f"/api/offsite/gaps/{gap_id}",
+        headers=headers,
+        json={"verify_status": "valid", "notes": "人工点开有效"},
+    )
+    assert verified.status_code == 200
+    assert verified.json()["verify_status"] == "valid"
+
+    inbound = client.post(
+        "/api/offsite/gaps",
+        headers=headers,
+        json={
+            "competitor_name": "—",
+            "referring_domain": "partner.example",
+            "kind": "inbound",
+            "link_url": "https://partner.example/lock",
+        },
+    )
+    assert inbound.json()["kind"] == "inbound"
+    assert inbound.json()["verify_status"] == "unverified"
 
     listed = client.get("/api/offsite/gaps", headers=headers)
     assert any(g["id"] == gap_id for g in listed.json())

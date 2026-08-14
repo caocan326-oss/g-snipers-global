@@ -31,9 +31,10 @@ export default function OnsiteListPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">站内优化</h1>
+        <h1 className="text-2xl font-semibold">站内改页 + 人审</h1>
         <p className="mt-1 text-sm text-slate-500">
-          监测 TDK / 标题 / 内链 / 结构化数据 / 收录与抓取。低风险可在工作区落草稿；高风险（改线上 HTML、noindex、robots）必须人工确认。收录未接 GSC，显示未测，不填 0 页。
+          页面清单 → 问题列表 → 改稿草稿。低风险只写入工作区；高风险（JSON-LD / 收录 / 抓取处置）必须确认，且本切片不会改客户线上站。没有
+          GSC 时收录与抓取保持未测，不用 0 页充数。
         </p>
       </div>
       <Card>
@@ -73,14 +74,14 @@ export default function OnsiteListPage() {
       </Card>
       <Card>
         <CardHeader>
-          <CardTitle>登记演示页</CardTitle>
+          <CardTitle>登记一页（演示清单）</CardTitle>
         </CardHeader>
         <CardContent>
           <form className="grid gap-3 md:grid-cols-4" onSubmit={create}>
             <Input placeholder="路径" value={form.path} onChange={(e) => setForm({ ...form, path: e.target.value })} required />
             <Input placeholder="语言" value={form.locale} onChange={(e) => setForm({ ...form, locale: e.target.value })} />
             <Input placeholder="标题" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
-            <Button type="submit">进入工作台</Button>
+            <Button type="submit">进入改页台</Button>
           </form>
           {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
         </CardContent>

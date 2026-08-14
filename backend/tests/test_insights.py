@@ -77,3 +77,40 @@ def test_demand_signal_creates_seo_page(client: TestClient, demo_user) -> None:
     assert page.json()["target_keyword"] == "smart lock for renters"
     assert page.json()["status"] == "idea"
     assert page.json()["market_id"] == market["id"]
+
+
+def test_insight_feeds_three_chains(client: TestClient, demo_user) -> None:
+    headers = auth_header(client)
+    market = client.post(
+        "/api/markets",
+        headers=headers,
+        json={"name": "美国", "region": "北美", "country_code": "US", "primary_locale": "en-US"},
+    ).json()
+    signal = client.post(
+        f"/api/markets/{market['id']}/demand-signals",
+        headers=headers,
+        json={"theme": "apartment smart lock", "locale": "en-US"},
+    ).json()
+
+    onsite = client.post(f"/api/demand-signals/{signal['id']}/open-onsite", headers=headers)
+    assert onsite.status_code == 201
+    assert onsite.json()["chain"] == "onsite"
+    page = client.get(f"/api/onsite/pages/{onsite.json()['created_id']}", headers=headers)
+    assert page.status_code == 200
+    assert page.json()["index_status"] == "untested"
+    assert any("apartment smart lock" in i["title"] for i in page.json()["issues"])
+
+    geo = client.post(f"/api/demand-signals/{signal['id']}/open-geo-ticket", headers=headers)
+    assert geo.status_code == 201
+    tickets = client.get("/api/geo/tickets", headers=headers).json()
+    assert any(t["id"] == geo.json()["created_id"] for t in tickets)
+    prompts = client.get("/api/geo/prompts", headers=headers).json()
+    assert any(len(p["observations"]) == 8 for p in prompts)
+
+    link = client.post(f"/api/demand-signals/{signal['id']}/open-link-followup", headers=headers)
+    assert link.status_code == 201
+    gaps = client.get("/api/offsite/gaps", headers=headers).json()
+    row = next(g for g in gaps if g["id"] == link.json()["created_id"])
+    assert row["kind"] == "inbound"
+    assert row["verify_status"] == "unverified"
+    assert row["domain_metric"] == "untested"

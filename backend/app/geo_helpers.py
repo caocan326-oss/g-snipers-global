@@ -1,8 +1,28 @@
-"""GEO helpers. No live AI-engine calls; no invented citation rates."""
+"""GEO helpers. No live AI-engine calls; no invented citation rates.
 
-from app.models import SeoPage, Tenant
+Skeleton after public GeoLook flow (prompt set → sample → diagnosis →
+tickets with acceptance → verify / reopen). Do not copy GeoLook code.
+Citation ≠ absorption. brand.com cite rate stays 未测 until a human records.
+"""
 
-ENGINES = ("chatgpt", "perplexity", "gemini", "claude")
+from __future__ import annotations
+
+from app.models import GeoObservation, GeoPrompt, OnsiteIssue, SeoPage, SitePage, Tenant
+
+WESTERN_ENGINES = ("chatgpt", "perplexity", "gemini", "claude")
+CHINA_ENGINES = ("deepseek", "doubao", "kimi", "tongyi")
+ENGINES = WESTERN_ENGINES + CHINA_ENGINES
+
+ENGINE_LABELS = {
+    "chatgpt": "ChatGPT",
+    "perplexity": "Perplexity",
+    "gemini": "Gemini",
+    "claude": "Claude",
+    "deepseek": "DeepSeek",
+    "doubao": "豆包",
+    "kimi": "Kimi",
+    "tongyi": "通义",
+}
 
 CHECKLIST_DEFS = (
     ("author_visible", "作者与资质可见"),
@@ -17,6 +37,24 @@ CHECKLIST_DEFS = (
 OBS_STATUSES = {"untested", "mentioned", "not_mentioned", "cited"}
 CHECK_STATUSES = {"untested", "pass", "fail"}
 
+DIAGNOSES = {
+    "untested": "未测",
+    "absent": "未出现",
+    "mentioned": "被提及",
+    "competitor_dominated": "竞品主导",
+    "suspected_negative": "疑似负面",
+}
+
+TICKET_STATUSES = {"open", "in_progress", "verify", "done", "reopened"}
+
+# Low-risk drafts write into the workspace page; never a live HTTP publish.
+CATEGORY_WORKSPACE_FIELD = {
+    "tdk": "meta_description",
+    "heading": "headings",
+    "internal_link": "internal_links",
+    "schema": "structured_data",
+}
+
 
 def build_llms_txt(tenant: Tenant, pages: list[SeoPage]) -> str:
     lines = [
@@ -27,7 +65,7 @@ def build_llms_txt(tenant: Tenant, pages: list[SeoPage]) -> str:
     ]
     if not pages:
         lines.append("## Pages")
-        lines.append("- （还没有选题。从 SEO 工作台产出页面后再生成。）")
+        lines.append("- （还没有选题。从站内改页登记页面后再生成。）")
         return "\n".join(lines) + "\n"
 
     by_locale: dict[str, list[SeoPage]] = {}
@@ -40,3 +78,35 @@ def build_llms_txt(tenant: Tenant, pages: list[SeoPage]) -> str:
             lines.append(f"- [{page.title}](/{locale}/{slug}): {page.target_keyword}")
         lines.append("")
     return "\n".join(lines)
+
+
+def engine_region(engine: str) -> str:
+    return "western" if engine in WESTERN_ENGINES else "china"
+
+
+def ensure_engine_slots(db, tenant_id: str, prompt: GeoPrompt) -> None:
+    existing = {o.engine for o in prompt.observations}
+    for engine in ENGINES:
+        if engine not in existing:
+            db.add(
+                GeoObservation(
+                    tenant_id=tenant_id,
+                    prompt_id=prompt.id,
+                    engine=engine,
+                    status="untested",
+                )
+            )
+
+
+def apply_proposed_change(page: SitePage, issue: OnsiteIssue) -> None:
+    """Write the change draft onto workspace fields. Does not touch a live site."""
+    text = (issue.proposed_change or "").strip()
+    if not text:
+        return
+    field = CATEGORY_WORKSPACE_FIELD.get(issue.category)
+    if field:
+        setattr(page, field, text)
+        return
+    if issue.category in {"index", "crawl"}:
+        note = f"[已确认方案 · {issue.category}] {text}"
+        page.notes = "\n".join(x for x in (page.notes or "", note) if x).strip()

@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.auth import get_current_user
 from app.database import get_db
+from app.geo_helpers import apply_proposed_change
 from app.models import OnsiteIssue, SitePage, User
 from app.risk import HIGH, LOW, RISKS, default_risk, require_confirm
 from app.schemas import (
@@ -157,6 +158,10 @@ def apply_draft(
         raise HTTPException(status_code=404, detail="任务不存在")
     if row.risk != LOW:
         raise HTTPException(status_code=400, detail="高风险任务不能自动落草稿，请走人工确认")
+    page = db.get(SitePage, row.page_id)
+    if page is None or page.tenant_id != user.tenant_id:
+        raise HTTPException(status_code=404, detail="页面不存在")
+    apply_proposed_change(page, row)
     row.status = "draft_applied"
     db.commit()
     db.refresh(row)
@@ -176,6 +181,10 @@ def confirm_apply(
         raise HTTPException(status_code=404, detail="任务不存在")
     if row.risk != HIGH:
         raise HTTPException(status_code=400, detail="低风险任务请用工作区落草稿，无需线上确认")
+    page = db.get(SitePage, row.page_id)
+    if page is None or page.tenant_id != user.tenant_id:
+        raise HTTPException(status_code=404, detail="页面不存在")
+    apply_proposed_change(page, row)
     row.status = "confirmed"
     db.commit()
     db.refresh(row)

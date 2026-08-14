@@ -16,9 +16,16 @@ const catLabel: Record<string, string> = {
   tdk: "TDK",
   heading: "标题",
   internal_link: "内链",
-  schema: "结构化数据",
+  schema: "JSON-LD",
   index: "收录",
   crawl: "抓取",
+};
+
+const statusLabel: Record<string, string> = {
+  open: "待处理",
+  draft_applied: "已落工作区草稿",
+  confirmed: "已确认（仍不自动上线）",
+  wont_fix: "不做",
 };
 
 export default function OnsiteEditorPage() {
@@ -91,7 +98,7 @@ export default function OnsiteEditorPage() {
     <div className="space-y-6">
       <div>
         <Link href="/onsite" className="text-sm text-brand-700">
-          ← 页面列表
+          ← 页面清单
         </Link>
         <h1 className="mt-2 text-2xl font-semibold">{page.title}</h1>
         <p className="text-sm text-slate-500">
@@ -103,7 +110,7 @@ export default function OnsiteEditorPage() {
       <form className="grid gap-6 lg:grid-cols-2" onSubmit={save}>
         <Card>
           <CardHeader>
-            <CardTitle>TDK</CardTitle>
+            <CardTitle>TDK 工作区</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <div>
@@ -122,7 +129,7 @@ export default function OnsiteEditorPage() {
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>标题 / 内链 / 结构化数据</CardTitle>
+            <CardTitle>标题 / 内链 / JSON-LD</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <div>
@@ -144,9 +151,12 @@ export default function OnsiteEditorPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>监测任务 · 执行分级</CardTitle>
+          <CardTitle>问题列表 · 改稿草稿 · 人审</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
+          <p className="text-sm text-slate-500">
+            「落草稿」会把方案写入上方对应字段。高风险确认只记录人审，不会对客户站点发 HTTP。
+          </p>
           {page.issues.map((i: OnsiteIssue) => (
             <div key={i.id} className="rounded-md border p-3">
               <div className="flex flex-wrap items-center gap-2">
@@ -154,18 +164,18 @@ export default function OnsiteEditorPage() {
                 <Badge>{catLabel[i.category] ?? i.category}</Badge>
                 <Badge tone={i.risk === "high" ? "red" : "green"}>{i.risk === "high" ? "高风险" : "低风险"}</Badge>
                 <Badge tone="amber">{i.metric_status === "untested" ? "指标未测" : i.metric_status}</Badge>
-                <Badge tone="blue">{i.status}</Badge>
+                <Badge tone="blue">{statusLabel[i.status] ?? i.status}</Badge>
               </div>
               <p className="mt-1 text-sm text-slate-600">{i.detail}</p>
-              <p className="mt-1 text-sm text-slate-500">方案：{i.proposed_change}</p>
+              <p className="mt-1 text-sm text-slate-500">改稿草稿：{i.proposed_change}</p>
               <div className="mt-2 flex gap-2">
                 {i.risk === "low" ? (
                   <Button size="sm" variant="outline" onClick={() => applyDraft(i.id)}>
-                    低风险：落工作区草稿
+                    低风险：写入工作区草稿
                   </Button>
                 ) : (
                   <Button size="sm" onClick={() => confirmHigh(i.id)}>
-                    高风险：我已确认（仍不自动改线上）
+                    高风险：我已确认（仍不上线）
                   </Button>
                 )}
               </div>
@@ -190,12 +200,12 @@ export default function OnsiteEditorPage() {
               required
             />
             <Input
-              placeholder="方案"
+              placeholder="改稿草稿"
               value={issueForm.proposed_change}
               onChange={(e) => setIssueForm({ ...issueForm, proposed_change: e.target.value })}
             />
             <Button type="submit" variant="outline">
-              记一条监测
+              记一条问题
             </Button>
           </form>
           {error ? <p className="text-sm text-red-600">{error}</p> : null}

@@ -36,11 +36,13 @@ class DashboardSummary(BaseModel):
     geo_untested: int
     geo_recorded: int
     geo_assets_draft: int
+    geo_tickets_open: int
     onsite_pages: int
     onsite_open_low: int
     onsite_open_high: int
     offsite_gaps: int
     offsite_outreach_open: int
+    links_unverified: int
     distribution_jobs: int
 
 
@@ -232,6 +234,8 @@ class GeoObservationOut(BaseModel):
     id: str
     prompt_id: str
     engine: str
+    engine_label: str = ""
+    region: str = ""
     status: str
     notes: str | None
     observed_at: datetime | None = None
@@ -257,8 +261,43 @@ class GeoPromptOut(BaseModel):
     market_id: str | None
     seo_page_id: str | None
     demand_signal_id: str | None
+    diagnosis: str = "untested"
+    diagnosis_label: str = "未测"
     observations: list[GeoObservationOut] = []
     created_at: datetime | None = None
+    cite_rate: str = "未测"
+    absorption_rate: str = "未测"
+
+
+class GeoDiagnosisIn(BaseModel):
+    diagnosis: str
+
+
+class GeoTicketCreate(BaseModel):
+    prompt_id: str
+    title: str
+    diagnosis: str = "untested"
+    rationale: str = ""
+    acceptance_criteria: str = ""
+
+
+class GeoTicketOut(BaseModel):
+    id: str
+    prompt_id: str
+    title: str
+    diagnosis: str
+    diagnosis_label: str = "未测"
+    rationale: str
+    acceptance_criteria: str
+    status: str
+    verified_note: str | None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class GeoTicketVerifyIn(BaseModel):
+    confirmed: bool = False
+    note: str | None = None
 
 
 class GeoAssetOut(BaseModel):
@@ -294,6 +333,8 @@ class GeoSummary(BaseModel):
     recorded: int
     checklist_untested: int
     assets_draft: int
+    tickets_open: int = 0
+    cite_rate: str = "未测"
 
 
 class InquiryOut(BaseModel):
@@ -381,9 +422,19 @@ class BacklinkGapCreate(BaseModel):
     competitor_name: str
     referring_domain: str
     competitor_url: str | None = None
+    link_url: str | None = None
+    kind: str = "competitor"
     market_id: str | None = None
     our_presence: str = "none"
     notes: str | None = None
+
+
+class BacklinkGapUpdate(BaseModel):
+    status: str | None = None
+    verify_status: str | None = None
+    notes: str | None = None
+    link_url: str | None = None
+    kind: str | None = None
 
 
 class OutreachOut(BaseModel):
@@ -406,12 +457,22 @@ class BacklinkGapOut(BaseModel):
     competitor_name: str
     referring_domain: str
     competitor_url: str | None
+    link_url: str | None = None
+    kind: str = "competitor"
+    verify_status: str = "unverified"
     market_id: str | None
     our_presence: str
     domain_metric: str
     status: str
     notes: str | None
     outreach: list[OutreachOut] = []
+
+
+class ChainFeedOut(BaseModel):
+    chain: str
+    created_id: str
+    title: str
+    redirect_path: str
 
 
 class DistributionJobCreate(BaseModel):

@@ -39,6 +39,8 @@ def test_onsite_page_and_risk_gates(client: TestClient, demo_user) -> None:
 
     drafted = client.post(f"/api/onsite/issues/{low.json()['id']}/apply-draft", headers=headers)
     assert drafted.json()["status"] == "draft_applied"
+    workspace = client.get(f"/api/onsite/pages/{page_id}", headers=headers).json()
+    assert workspace["meta_description"] == "加长"
 
     denied_live = client.post(
         f"/api/onsite/issues/{high.json()['id']}/confirm-apply",
@@ -53,3 +55,5 @@ def test_onsite_page_and_risk_gates(client: TestClient, demo_user) -> None:
         json={"confirmed": True},
     )
     assert confirmed.json()["status"] == "confirmed"
+    after_high = client.get(f"/api/onsite/pages/{page_id}", headers=headers).json()
+    assert after_high["structured_data"] == "JSON-LD"

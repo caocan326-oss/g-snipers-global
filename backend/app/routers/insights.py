@@ -4,8 +4,23 @@ from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
 from app.database import get_db
-from app.models import Competitor, DemandSignal, InsightBrief, Market, SeoPage, User
+from app.geo_helpers import ENGINES
+from app.models import (
+    BacklinkGap,
+    Competitor,
+    DemandSignal,
+    GeoObservation,
+    GeoPrompt,
+    GeoTicket,
+    InsightBrief,
+    Market,
+    OnsiteIssue,
+    SeoPage,
+    SitePage,
+    User,
+)
 from app.schemas import (
+    ChainFeedOut,
     CompetitorCreate,
     CompetitorOut,
     DemandSignalCreate,
@@ -64,7 +79,7 @@ def list_markets(
     q = db.query(Market).filter(Market.tenant_id == user.tenant_id)
     if status:
         q = q.filter(Market.status == status)
-    markets = q.order_by(Market.opportunity_score.desc(), Market.name.asc()).all()
+    markets = q.order_by(Market.status.asc(), Market.name.asc()).all()
     return [_market_out(db, m) for m in markets]
 
 
@@ -229,3 +244,134 @@ def create_seo_from_signal(
     db.commit()
     db.refresh(page)
     return page
+
+
+def _owned_signal(db: Session, user: User, signal_id: str) -> DemandSignal:
+    signal = db.get(DemandSignal, signal_id)
+    if signal is None or signal.tenant_id != user.tenant_id:
+        raise HTTPException(status_code=404, detail="需求信号不存在")
+    return signal
+
+
+@router.post("/demand-signals/{signal_id}/open-onsite", response_model=ChainFeedOut, status_code=201)
+def open_onsite_from_signal(
+    signal_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ChainFeedOut:
+    signal = _owned_signal(db, user, signal_id)
+    slug = signal.theme.lower().replace(" ", "-")[:48]
+    path = f"/{signal.locale.lower()}/{slug}"
+    page = (
+        db.query(SitePage)
+        .filter(SitePage.tenant_id == user.tenant_id, SitePage.path == path)
+        .first()
+    )
+    if page is None:
+        page = SitePage(
+            tenant_id=user.tenant_id,
+            market_id=signal.market_id,
+            path=path,
+            locale=signal.locale,
+            title=signal.theme,
+            index_status="untested",
+            crawl_status="untested",
+            notes="由洞察信号开出的站内任务。收录/抓取未接 GSC，保持未测。",
+        )
+        db.add(page)
+        db.flush()
+    issue = OnsiteIssue(
+        tenant_id=user.tenant_id,
+        page_id=page.id,
+        category="tdk",
+        title=f"从信号开站内改页：{signal.theme}",
+        detail="洞察投喂。先出 TDK / 标题 / 内链草稿，高风险改线上须确认。",
+        proposed_change=f"围绕「{signal.theme}」补 Title / Description（工作区草稿，不改线上）。",
+        risk="low",
+        status="open",
+        metric_status="untested",
+    )
+    db.add(issue)
+    db.commit()
+    return ChainFeedOut(
+        chain="onsite",
+        created_id=page.id,
+        title=issue.title,
+        redirect_path=f"/onsite/{page.id}",
+    )
+
+
+@router.post("/demand-signals/{signal_id}/open-geo-ticket", response_model=ChainFeedOut, status_code=201)
+def open_geo_from_signal(
+    signal_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ChainFeedOut:
+    signal = _owned_signal(db, user, signal_id)
+    prompt = GeoPrompt(
+        tenant_id=user.tenant_id,
+        market_id=signal.market_id,
+        demand_signal_id=signal.id,
+        prompt_text=signal.theme,
+        locale=signal.locale,
+        diagnosis="untested",
+    )
+    db.add(prompt)
+    db.flush()
+    for engine in ENGINES:
+        db.add(
+            GeoObservation(
+                tenant_id=user.tenant_id,
+                prompt_id=prompt.id,
+                engine=engine,
+                status="untested",
+            )
+        )
+    ticket = GeoTicket(
+        tenant_id=user.tenant_id,
+        prompt_id=prompt.id,
+        title=f"采样验收：{signal.theme}",
+        diagnosis="untested",
+        rationale="洞察信号转入 GEO。先人工采样中西引擎，未测不得写成已引用。引用 ≠ 吸收。",
+        acceptance_criteria="8 个引擎槽位完成一轮人工记录或明确保持未测；不得发明 brand.com 引用率；验收须客户经理确认。",
+        status="open",
+    )
+    db.add(ticket)
+    db.commit()
+    db.refresh(ticket)
+    return ChainFeedOut(
+        chain="geo",
+        created_id=ticket.id,
+        title=ticket.title,
+        redirect_path="/geo",
+    )
+
+
+@router.post("/demand-signals/{signal_id}/open-link-followup", response_model=ChainFeedOut, status_code=201)
+def open_link_from_signal(
+    signal_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ChainFeedOut:
+    signal = _owned_signal(db, user, signal_id)
+    gap = BacklinkGap(
+        tenant_id=user.tenant_id,
+        market_id=signal.market_id,
+        competitor_name="待核验",
+        referring_domain="待登记",
+        kind="inbound",
+        verify_status="unverified",
+        our_presence="untested",
+        domain_metric="untested",
+        status="identified",
+        notes=f"从信号「{signal.theme}」开外链跟进。逐条核验，禁止一键群发。",
+    )
+    db.add(gap)
+    db.commit()
+    db.refresh(gap)
+    return ChainFeedOut(
+        chain="offsite",
+        created_id=gap.id,
+        title=f"外链跟进：{signal.theme}",
+        redirect_path="/offsite",
+    )

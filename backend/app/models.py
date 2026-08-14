@@ -180,9 +180,13 @@ class GeoPrompt(Base):
     demand_signal_id: Mapped[str | None] = mapped_column(ForeignKey("demand_signals.id"))
     prompt_text: Mapped[str] = mapped_column(String(500), nullable=False)
     locale: Mapped[str] = mapped_column(String(16), nullable=False)
+    diagnosis: Mapped[str] = mapped_column(String(40), default="untested")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     observations: Mapped[list["GeoObservation"]] = relationship(
+        back_populates="prompt", cascade="all, delete-orphan"
+    )
+    tickets: Mapped[list["GeoTicket"]] = relationship(
         back_populates="prompt", cascade="all, delete-orphan"
     )
 
@@ -232,6 +236,28 @@ class GeoChecklistItem(Base):
     notes: Mapped[str | None] = mapped_column(Text)
 
     seo_page: Mapped[SeoPage] = relationship()
+
+
+class GeoTicket(Base):
+    """Implementation ticket with acceptance; verify or reopen after sampling."""
+
+    __tablename__ = "geo_tickets"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
+    prompt_id: Mapped[str] = mapped_column(ForeignKey("geo_prompts.id"), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(300), nullable=False)
+    diagnosis: Mapped[str] = mapped_column(String(40), default="untested")
+    rationale: Mapped[str] = mapped_column(Text, default="")
+    acceptance_criteria: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(String(20), default="open", index=True)
+    verified_note: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    prompt: Mapped["GeoPrompt"] = relationship(back_populates="tickets")
 
 
 class SitePage(Base):
@@ -290,6 +316,9 @@ class BacklinkGap(Base):
     competitor_name: Mapped[str] = mapped_column(String(200), nullable=False)
     referring_domain: Mapped[str] = mapped_column(String(300), nullable=False)
     competitor_url: Mapped[str | None] = mapped_column(String(500))
+    link_url: Mapped[str | None] = mapped_column(String(500))
+    kind: Mapped[str] = mapped_column(String(20), default="competitor")
+    verify_status: Mapped[str] = mapped_column(String(20), default="unverified")
     our_presence: Mapped[str] = mapped_column(String(20), default="none")
     domain_metric: Mapped[str] = mapped_column(String(20), default="untested")
     status: Mapped[str] = mapped_column(String(20), default="identified", index=True)

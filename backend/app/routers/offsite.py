@@ -4,12 +4,14 @@ from sqlalchemy.orm import Session, selectinload
 from app.auth import get_current_user
 from app.database import get_db
 from app.models import BacklinkGap, OutreachItem, User
-from app.schemas import BacklinkGapCreate, BacklinkGapOut, OutreachCreate, OutreachOut
+from app.schemas import BacklinkGapCreate, BacklinkGapOut, BacklinkGapUpdate, OutreachCreate, OutreachOut
 
 router = APIRouter(prefix="/api/offsite", tags=["offsite"])
 
 GAP_STATUSES = {"identified", "outreach", "replied", "won", "lost", "skipped"}
 OUTREACH_STATUSES = {"todo", "sent_manual", "replied", "closed"}
+VERIFY_STATUSES = {"unverified", "valid", "dead", "spam"}
+KINDS = {"inbound", "competitor"}
 
 
 def _gap_out(row: BacklinkGap) -> BacklinkGapOut:
@@ -18,6 +20,9 @@ def _gap_out(row: BacklinkGap) -> BacklinkGapOut:
         competitor_name=row.competitor_name,
         referring_domain=row.referring_domain,
         competitor_url=row.competitor_url,
+        link_url=row.link_url,
+        kind=row.kind or "competitor",
+        verify_status=row.verify_status or "unverified",
         market_id=row.market_id,
         our_presence=row.our_presence,
         domain_metric=row.domain_metric,
@@ -49,10 +54,13 @@ def create_gap(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> BacklinkGapOut:
+    if body.kind not in KINDS:
+        raise HTTPException(status_code=400, detail="无效链接类型")
     row = BacklinkGap(
         tenant_id=user.tenant_id,
         domain_metric="untested",
         status="identified",
+        verify_status="unverified",
         **body.model_dump(),
     )
     db.add(row)
@@ -65,16 +73,32 @@ def create_gap(
 @router.patch("/gaps/{gap_id}", response_model=BacklinkGapOut)
 def update_gap(
     gap_id: str,
-    status: str,
+    status: str | None = None,
+    body: BacklinkGapUpdate = BacklinkGapUpdate(),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> BacklinkGapOut:
-    if status not in GAP_STATUSES:
-        raise HTTPException(status_code=400, detail="无效缺口状态")
     row = db.get(BacklinkGap, gap_id)
     if row is None or row.tenant_id != user.tenant_id:
         raise HTTPException(status_code=404, detail="缺口不存在")
-    row.status = status
+    payload = body.model_dump(exclude_unset=True)
+    next_status = status or payload.get("status")
+    if next_status:
+        if next_status not in GAP_STATUSES:
+            raise HTTPException(status_code=400, detail="无效缺口状态")
+        row.status = next_status
+    if "verify_status" in payload:
+        if payload["verify_status"] not in VERIFY_STATUSES:
+            raise HTTPException(status_code=400, detail="无效核验状态")
+        row.verify_status = payload["verify_status"]
+    if "notes" in payload:
+        row.notes = payload["notes"]
+    if "link_url" in payload:
+        row.link_url = payload["link_url"]
+    if "kind" in payload:
+        if payload["kind"] not in KINDS:
+            raise HTTPException(status_code=400, detail="无效链接类型")
+        row.kind = payload["kind"]
     db.commit()
     row = (
         db.query(BacklinkGap)

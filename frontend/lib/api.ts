@@ -64,11 +64,13 @@ export type DashboardSummary = {
   geo_untested: number;
   geo_recorded: number;
   geo_assets_draft: number;
+  geo_tickets_open: number;
   onsite_pages: number;
   onsite_open_low: number;
   onsite_open_high: number;
   offsite_gaps: number;
   offsite_outreach_open: number;
+  links_unverified: number;
   distribution_jobs: number;
 };
 
@@ -121,6 +123,13 @@ export type MarketDetail = Market & {
   brief: InsightBrief | null;
 };
 
+export type ChainFeed = {
+  chain: string;
+  created_id: string;
+  title: string;
+  redirect_path: string;
+};
+
 export type SeoPage = {
   id: string;
   title: string;
@@ -164,6 +173,8 @@ export type GeoObservation = {
   id: string;
   prompt_id: string;
   engine: string;
+  engine_label?: string;
+  region?: string;
   status: string;
   notes: string | null;
   observed_at: string | null;
@@ -175,7 +186,23 @@ export type GeoPrompt = {
   locale: string;
   market_id: string | null;
   seo_page_id: string | null;
+  diagnosis: string;
+  diagnosis_label: string;
   observations: GeoObservation[];
+  cite_rate?: string;
+  absorption_rate?: string;
+};
+
+export type GeoTicket = {
+  id: string;
+  prompt_id: string;
+  title: string;
+  diagnosis: string;
+  diagnosis_label: string;
+  rationale: string;
+  acceptance_criteria: string;
+  status: string;
+  verified_note: string | null;
 };
 
 export type GeoAsset = {
@@ -232,6 +259,9 @@ export type BacklinkGap = {
   competitor_name: string;
   referring_domain: string;
   competitor_url: string | null;
+  link_url: string | null;
+  kind: string;
+  verify_status: string;
   our_presence: string;
   domain_metric: string;
   status: string;
