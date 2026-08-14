@@ -48,6 +48,7 @@ export type User = {
   role: string;
   tenant_id: string;
   tenant_name: string;
+  site_origin?: string;
 };
 
 export type DashboardSummary = {
@@ -256,9 +257,54 @@ export type SitePage = {
   canonical?: string;
   index_status: string;
   crawl_status: string;
+  fetched_at?: string | null;
+  final_url?: string;
+  http_status?: number | null;
+  needs_js?: boolean;
+  html_lang?: string;
+  hreflang?: string;
+  viewport?: string;
+  json_ld_types?: string;
+  crawl_error?: string;
   notes: string | null;
   open_issue_count: number;
   analyzed_at?: string | null;
+};
+
+export type FetchRegistered = {
+  origin: string;
+  fetched: number;
+  failed: number;
+  verified: number;
+  created: number;
+  pages: number;
+  note: string;
+  ai_status: string;
+  results: {
+    page_id: string | null;
+    path: string;
+    url: string;
+    crawl_status: string;
+    http_status: number | null;
+    final_url: string;
+    needs_js: boolean;
+    error: string;
+    verified: number;
+    created: number;
+  }[];
+};
+
+export const crawlStatusLabel: Record<string, string> = {
+  untested: "未抓取",
+  ok: "已抓取",
+  robots_disallow: "robots 禁止",
+  timeout: "超时",
+  ssl_error: "SSL 失败",
+  http_4xx: "HTTP 4xx",
+  http_5xx: "HTTP 5xx",
+  host_rejected: "主机名拒绝",
+  needs_js: "需要 JS",
+  error: "抓取失败",
 };
 
 export type OnsiteIssue = {

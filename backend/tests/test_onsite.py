@@ -40,7 +40,8 @@ def test_onsite_page_and_risk_gates(client: TestClient, demo_user) -> None:
     drafted = client.post(f"/api/onsite/issues/{low.json()['id']}/apply-draft", headers=headers)
     assert drafted.json()["status"] == "draft_applied"
     workspace = client.get(f"/api/onsite/pages/{page_id}", headers=headers).json()
-    assert workspace["meta_description"] == "加长"
+    assert workspace["meta_description"] == ""
+    assert drafted.json()["proposed_change"] == "加长"
 
     denied_live = client.post(
         f"/api/onsite/issues/{high.json()['id']}/confirm-apply",
@@ -54,9 +55,10 @@ def test_onsite_page_and_risk_gates(client: TestClient, demo_user) -> None:
         headers=headers,
         json={"confirmed": True},
     )
-    assert confirmed.json()["status"] == "confirmed"
+    assert confirmed.json()["status"] in {"confirmed", "verified"}
     after_high = client.get(f"/api/onsite/pages/{page_id}", headers=headers).json()
-    assert after_high["structured_data"] == "JSON-LD"
+    assert after_high["structured_data"] == ""
+    assert confirmed.json()["proposed_change"] == "JSON-LD"
 
 
 def test_analyze_does_not_apply_and_board_groups_severity(client: TestClient, demo_user) -> None:
@@ -100,7 +102,8 @@ def test_analyze_does_not_apply_and_board_groups_severity(client: TestClient, de
 
     applied = client.post(f"/api/onsite/issues/{empty_apply['id']}/apply-draft", headers=headers)
     assert applied.json()["status"] == "draft_applied"
-    assert client.get(f"/api/onsite/pages/{page_id}", headers=headers).json()["meta_description"] == "工作区描述草稿"
+    assert applied.json()["proposed_change"] == "工作区描述草稿"
+    assert client.get(f"/api/onsite/pages/{page_id}", headers=headers).json()["meta_description"] == ""
 
     board = client.get("/api/onsite/board", headers=headers).json()
     assert "critical" in board["groups"]

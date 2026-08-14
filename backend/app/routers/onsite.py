@@ -1,5 +1,3 @@
-from datetime import datetime, timezone
-
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session, selectinload
@@ -7,10 +5,22 @@ from sqlalchemy.orm import Session, selectinload
 from app.auth import get_current_user
 from app.database import get_db
 from app.ai_engine import assist_onsite_issue
-from app.geo_helpers import apply_proposed_change
 from app.llm import UNCONFIGURED, configured
-from app.models import OnsiteIssue, SeoPage, SitePage, User
-from app.onsite_analyzer import analyze_page, parse_internal_paths
+from app.models import OnsiteIssue, SeoPage, SitePage, Tenant, User
+from app.onsite_analyzer import parse_internal_paths, reconcile_issues
+from app.onsite_fetch import (
+    OriginError,
+    allowed_hosts_from_origin,
+    apply_observation,
+    build_fetch_url,
+    fetch_many,
+    fetch_url,
+    load_robots,
+    make_client,
+    normalize_origin,
+    origin_host,
+    registered_targets,
+)
 from app.risk import RISKS, SEVERITIES, default_severity, needs_confirm, require_confirm, severity_to_risk
 from app.schemas import (
     AiAssistOut,
@@ -19,20 +29,24 @@ from app.schemas import (
     ConfirmReadyIn,
     ContentBriefOut,
     CrawlOrSeedOut,
+    FetchPageResultOut,
+    FetchRegisteredOut,
     OnsiteBoardOut,
     OnsiteDraftIn,
     OnsiteIssueCreate,
     OnsiteIssueOut,
+    SiteOriginIn,
     SitePageCreate,
     SitePageDetailOut,
     SitePageOut,
     SitePageUpdate,
+    SiteSettingsOut,
 )
 
 router = APIRouter(prefix="/api/onsite", tags=["onsite"])
 
 CATEGORIES = {"tdk", "heading", "internal_link", "schema", "index", "crawl", "canonical"}
-ISSUE_STATUSES = {"open", "drafted", "draft_applied", "confirmed", "wont_fix"}
+ISSUE_STATUSES = {"open", "drafted", "draft_applied", "confirmed", "verified", "wont_fix"}
 OPENISH = {"open", "drafted", "draft_applied"}
 
 
@@ -82,6 +96,15 @@ def _page_out(db: Session, page: SitePage) -> SitePageOut:
         canonical=page.canonical or "",
         index_status=page.index_status,
         crawl_status=page.crawl_status,
+        fetched_at=page.fetched_at,
+        final_url=page.final_url or "",
+        http_status=page.http_status,
+        needs_js=bool(page.needs_js),
+        html_lang=page.html_lang or "",
+        hreflang=page.hreflang or "",
+        viewport=page.viewport or "",
+        json_ld_types=page.json_ld_types or "",
+        crawl_error=page.crawl_error or "",
         notes=page.notes,
         open_issue_count=open_count,
         analyzed_at=page.analyzed_at,
@@ -222,44 +245,200 @@ def crawl_or_seed(user: User = Depends(get_current_user), db: Session = Depends(
     return CrawlOrSeedOut(
         seeded=seeded,
         pages=total,
-        note="只从已登记页的内链扩清单，不请求客户站点，也不跑 GSC。",
+        note="只从已登记页的内链扩清单。线上回抓请用「抓这一站」。不跑 GSC。",
     )
 
 
-def _analyze_one(db: Session, user: User, page: SitePage) -> tuple[int, int]:
-    existing = {
-        (i.category, i.title)
-        for i in db.query(OnsiteIssue).filter(
-            OnsiteIssue.page_id == page.id,
-            OnsiteIssue.status.in_(["open", "drafted", "draft_applied", "confirmed"]),
-        )
-    }
-    created = 0
-    skipped = 0
-    for finding in analyze_page(page):
-        key = (finding.category, finding.title)
-        if key in existing:
-            skipped += 1
-            continue
-        db.add(
-            OnsiteIssue(
-                tenant_id=user.tenant_id,
+@router.get("/settings", response_model=SiteSettingsOut)
+def get_site_settings(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> SiteSettingsOut:
+    tenant = _tenant(db, user)
+    return SiteSettingsOut(site_origin=tenant.site_origin or "")
+
+
+@router.patch("/settings", response_model=SiteSettingsOut)
+def update_site_settings(
+    body: SiteOriginIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> SiteSettingsOut:
+    tenant = _tenant(db, user)
+    try:
+        tenant.site_origin = normalize_origin(body.site_origin)
+    except OriginError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    db.commit()
+    return SiteSettingsOut(site_origin=tenant.site_origin)
+
+
+@router.post("/fetch-registered", response_model=FetchRegisteredOut)
+def fetch_registered(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> FetchRegisteredOut:
+    """HTTP GET already-registered pages only. Observation layer only. No GSC."""
+    tenant = _tenant(db, user)
+    origin = _require_origin(tenant)
+    pages = db.query(SitePage).filter(SitePage.tenant_id == user.tenant_id).all()
+    targets = registered_targets(origin, pages)
+    rows = fetch_many(targets, origin)
+    fetched, failed, verified, created, results = _ingest_snapshots(db, user, rows)
+    pages_after = db.query(SitePage).filter(SitePage.tenant_id == user.tenant_id).all()
+    ai_status = _ai_after_analyze(db, user, pages_after)
+    db.commit()
+    note = (
+        f"只抓已登记页（含站点根），主机名必须是 {origin_host(origin)}。"
+        "观察层已覆盖；改稿未动。收录仍未测。"
+    )
+    if ai_status == UNCONFIGURED:
+        note += " LLM 未配置，未编造诊断。"
+    return FetchRegisteredOut(
+        origin=origin,
+        fetched=fetched,
+        failed=failed,
+        verified=verified,
+        created=created,
+        pages=len(pages_after),
+        note=note,
+        results=results,
+        ai_status=ai_status,
+    )
+
+
+@router.post("/pages/{page_id}/fetch", response_model=FetchRegisteredOut)
+def fetch_one_page(
+    page_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> FetchRegisteredOut:
+    tenant = _tenant(db, user)
+    origin = _require_origin(tenant)
+    page = _owned_page(db, user, page_id)
+    snap, created, verified = _fetch_one_registered(db, user, page, origin)
+    ai_status = _ai_after_analyze(db, user, [page])
+    db.commit()
+    failed = 0 if snap.usable else 1
+    fetched = 1 if snap.usable else 0
+    note = "已回抓本页观察层。改稿未覆盖。收录仍未测。"
+    if ai_status == UNCONFIGURED:
+        note += " LLM 未配置，未编造诊断。"
+    return FetchRegisteredOut(
+        origin=origin,
+        fetched=fetched,
+        failed=failed,
+        verified=verified,
+        created=created,
+        pages=1,
+        note=note,
+        results=[
+            FetchPageResultOut(
                 page_id=page.id,
-                category=finding.category,
-                title=finding.title,
-                detail=finding.detail,
-                proposed_change="",
-                severity=finding.severity,
-                risk=severity_to_risk(finding.severity),
-                status="open",
-                metric_status=finding.metric_status,
+                path=page.path,
+                url=build_fetch_url(origin, page.path),
+                crawl_status=snap.crawl_status,
+                http_status=snap.http_status,
+                final_url=snap.final_url,
+                needs_js=snap.needs_js,
+                error=snap.error,
+                verified=verified,
+                created=created,
+            )
+        ],
+        ai_status=ai_status,
+    )
+
+
+def _tenant(db: Session, user: User) -> Tenant:
+    tenant = db.get(Tenant, user.tenant_id)
+    if tenant is None:
+        raise HTTPException(status_code=404, detail="租户不存在")
+    return tenant
+
+
+def _require_origin(tenant: Tenant) -> str:
+    try:
+        return normalize_origin(tenant.site_origin or "")
+    except OriginError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+def _page_issues(db: Session, page_id: str) -> list[OnsiteIssue]:
+    return db.query(OnsiteIssue).filter(OnsiteIssue.page_id == page_id).all()
+
+
+def _analyze_one(db: Session, user: User, page: SitePage) -> tuple[int, int, int]:
+    created, skipped, verified = reconcile_issues(
+        db, tenant_id=user.tenant_id, page=page, issues=_page_issues(db, page.id)
+    )
+    db.flush()
+    return created, skipped, verified
+
+
+def _ensure_root_page(db: Session, user: User, path: str = "/") -> SitePage:
+    page = (
+        db.query(SitePage)
+        .filter(SitePage.tenant_id == user.tenant_id, SitePage.path == path)
+        .first()
+    )
+    if page is None:
+        page = SitePage(
+            tenant_id=user.tenant_id,
+            path=path,
+            locale="und",
+            title=path or "/",
+            index_status="untested",
+            crawl_status="untested",
+            notes="站点根。由抓取登记，未编收录。",
+        )
+        db.add(page)
+        db.flush()
+    return page
+
+
+def _ingest_snapshots(
+    db: Session,
+    user: User,
+    rows: list[tuple[str, SitePage | None, object]],
+) -> tuple[int, int, int, int, list[FetchPageResultOut]]:
+    fetched = failed = verified = created = 0
+    results: list[FetchPageResultOut] = []
+    for url, page, snap in rows:
+        if page is None:
+            path = "/"
+            page = _ensure_root_page(db, user, path)
+        apply_observation(page, snap)
+        page_created = page_verified = 0
+        if snap.usable:
+            fetched += 1
+            c, _s, v = _analyze_one(db, user, page)
+            page_created, page_verified = c, v
+            created += c
+            verified += v
+        else:
+            failed += 1
+        results.append(
+            FetchPageResultOut(
+                page_id=page.id,
+                path=page.path,
+                url=url,
+                crawl_status=snap.crawl_status,
+                http_status=snap.http_status,
+                final_url=snap.final_url,
+                needs_js=snap.needs_js,
+                error=snap.error,
+                verified=page_verified,
+                created=page_created,
             )
         )
-        existing.add(key)
-        created += 1
-    page.analyzed_at = datetime.now(timezone.utc)
-    db.flush()
-    return created, skipped
+    return fetched, failed, verified, created, results
+
+
+def _fetch_one_registered(db: Session, user: User, page: SitePage, origin: str):
+    url = build_fetch_url(origin, page.path)
+    with make_client() as client:
+        robots = load_robots(origin, client)
+        snap = fetch_url(url, allowed_hosts_from_origin(origin), client=client, robots=robots)
+    apply_observation(page, snap)
+    created = verified = 0
+    if snap.usable:
+        created, _skipped, verified = _analyze_one(db, user, page)
+    return snap, created, verified
 
 
 def _ai_after_analyze(db: Session, user: User, pages: list[SitePage]) -> str:
@@ -280,17 +459,20 @@ def _ai_after_analyze(db: Session, user: User, pages: list[SitePage]) -> str:
 @router.post("/analyze", response_model=AnalyzeOut)
 def analyze_inventory(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> AnalyzeOut:
     pages = db.query(SitePage).filter(SitePage.tenant_id == user.tenant_id).all()
-    created = skipped = 0
+    created = skipped = verified = 0
     for page in pages:
-        c, s = _analyze_one(db, user, page)
+        c, s, v = _analyze_one(db, user, page)
         created += c
         skipped += s
+        verified += v
     ai_status = _ai_after_analyze(db, user, pages)
     db.commit()
-    note = "分析未改工作区字段，也未应用到线上。"
+    note = "分析只读当前观察，不改改稿，也不应用到线上。已满足的工单标为已验收。"
     if ai_status == UNCONFIGURED:
         note += " LLM 未配置，诊断/改稿未编造。"
-    return AnalyzeOut(created=created, skipped=skipped, pages=len(pages), note=note, ai_status=ai_status)
+    return AnalyzeOut(
+        created=created, skipped=skipped, verified=verified, pages=len(pages), note=note, ai_status=ai_status
+    )
 
 
 @router.post("/pages/{page_id}/analyze", response_model=AnalyzeOut)
@@ -300,13 +482,15 @@ def analyze_one_page(
     db: Session = Depends(get_db),
 ) -> AnalyzeOut:
     page = _owned_page(db, user, page_id)
-    created, skipped = _analyze_one(db, user, page)
+    created, skipped, verified = _analyze_one(db, user, page)
     ai_status = _ai_after_analyze(db, user, [page])
     db.commit()
-    note = "分析未改工作区字段，也未应用到线上。"
+    note = "分析只读当前观察，不改改稿，也不应用到线上。已满足的工单标为已验收。"
     if ai_status == UNCONFIGURED:
         note += " LLM 未配置，诊断/改稿未编造。"
-    return AnalyzeOut(created=created, skipped=skipped, pages=1, note=note, ai_status=ai_status)
+    return AnalyzeOut(
+        created=created, skipped=skipped, verified=verified, pages=1, note=note, ai_status=ai_status
+    )
 
 
 @router.post("/pages/{page_id}/issues", response_model=OnsiteIssueOut, status_code=201)
@@ -379,7 +563,6 @@ def apply_draft(
     page = db.get(SitePage, row.page_id)
     if page is None or page.tenant_id != user.tenant_id:
         raise HTTPException(status_code=404, detail="页面不存在")
-    apply_proposed_change(page, row)
     row.status = "draft_applied"
     db.commit()
     db.refresh(row)
@@ -404,8 +587,14 @@ def confirm_apply(
     page = db.get(SitePage, row.page_id)
     if page is None or page.tenant_id != user.tenant_id:
         raise HTTPException(status_code=404, detail="页面不存在")
-    apply_proposed_change(page, row)
     row.status = "confirmed"
+    tenant = _tenant(db, user)
+    if (tenant.site_origin or "").strip():
+        try:
+            origin = normalize_origin(tenant.site_origin)
+            _fetch_one_registered(db, user, page, origin)
+        except OriginError:
+            pass
     db.commit()
     db.refresh(row)
     return _issue_out(row, page)
@@ -439,7 +628,7 @@ def ai_onsite_engine(
     created = skipped = 0
     if body.step in {"analyze", "all"}:
         for page in pages:
-            c, s = _analyze_one(db, user, page)
+            c, s, _v = _analyze_one(db, user, page)
             created += c
             skipped += s
     issues = (

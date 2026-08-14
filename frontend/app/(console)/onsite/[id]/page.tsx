@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { api, type AiAssist, type OnsiteIssue, type SitePageDetail } from "@/lib/api";
+import { api, crawlStatusLabel, type AiAssist, type FetchRegistered, type OnsiteIssue, type SitePageDetail } from "@/lib/api";
 
 const catLabel: Record<string, string> = {
   tdk: "TDK",
@@ -26,9 +26,10 @@ const sevLabel: Record<string, string> = { critical: "Critical", high: "High", l
 const sevTone: Record<string, "red" | "amber" | "green"> = { critical: "red", high: "amber", low: "green" };
 const statusLabel: Record<string, string> = {
   open: "已分析，待改稿",
-  drafted: "已有改稿，未应用",
-  draft_applied: "已写入工作区",
-  confirmed: "已确认（仍不上线）",
+  drafted: "已有改稿，未上线",
+  draft_applied: "改稿已交付站点",
+  confirmed: "已确认上线，待回抓",
+  verified: "观察已验收",
   wont_fix: "不做",
 };
 
@@ -77,6 +78,18 @@ export default function OnsiteEditorPage() {
     setNote(`${res.note} 新建 ${res.created}。`);
     if (res.ai_status === "未配置") setError("LLM 未配置，未编造分析。");
     load();
+  }
+
+  async function fetchThis() {
+    if (!page) return;
+    setError("");
+    try {
+      const res = await api<FetchRegistered>(`/api/onsite/pages/${page.id}/fetch`, { method: "POST" });
+      setNote(`${res.note} 状态 ${res.results[0]?.crawl_status ?? ""}`);
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "回抓失败");
+    }
   }
 
   async function aiIssue(id: string) {
@@ -137,12 +150,21 @@ export default function OnsiteEditorPage() {
         </Link>
         <h1 className="mt-2 text-2xl font-semibold">{page.title}</h1>
         <p className="text-sm text-slate-500">
-          {page.path} · 收录 {page.index_status === "untested" ? "未测" : page.index_status} · Canonical{" "}
-          {page.canonical || "未登记"}
+          {page.path} · 抓取 {crawlStatusLabel[page.crawl_status] ?? page.crawl_status}
+          {page.http_status ? ` ${page.http_status}` : ""} ·{" "}
+          {page.fetched_at ? new Date(page.fetched_at).toLocaleString("zh-CN") : "尚未抓取"}
+          {page.final_url ? ` · ${page.final_url}` : ""} · 收录{" "}
+          {page.index_status === "untested" ? "未测" : page.index_status}
         </p>
-        <Button className="mt-3" variant="outline" onClick={analyze}>
-          分析本页（不应用）
-        </Button>
+        {page.crawl_error ? <p className="mt-1 text-xs text-amber-700">{page.crawl_error}</p> : null}
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Button variant="outline" onClick={fetchThis}>
+            回抓本页
+          </Button>
+          <Button variant="outline" onClick={analyze}>
+            按当前观察重跑分析
+          </Button>
+        </div>
         {note ? <p className="mt-2 text-sm text-slate-600">{note}</p> : null}
       </div>
 
@@ -179,7 +201,7 @@ export default function OnsiteEditorPage() {
                     保存改稿
                   </Button>
                   <Button size="sm" onClick={() => apply(i)}>
-                    {i.severity === "low" ? "应用到工作区" : "确认应用（仍不上线）"}
+                    {i.severity === "low" ? "标记改稿已交付" : "确认已上线（回抓验收）"}
                   </Button>
                 </div>
               </div>
@@ -191,7 +213,7 @@ export default function OnsiteEditorPage() {
       <form className="grid gap-6 lg:grid-cols-2" onSubmit={save}>
         <Card>
           <CardHeader>
-            <CardTitle>工作区字段（应用后才写入）</CardTitle>
+            <CardTitle>线上观察（抓取覆盖；改稿不写这里）</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <div>
@@ -206,6 +228,12 @@ export default function OnsiteEditorPage() {
               <Label>Canonical</Label>
               <Input value={page.canonical ?? ""} onChange={(e) => setPage({ ...page, canonical: e.target.value })} />
             </div>
+            <p className="text-xs text-slate-500">
+              html lang {page.html_lang || "—"} · viewport {page.viewport || "—"} · JSON-LD{" "}
+              {page.json_ld_types || "—"}
+              {page.needs_js ? " · 需要 JS" : ""}
+            </p>
+            {page.hreflang ? <p className="text-xs text-slate-500">hreflang {page.hreflang}</p> : null}
           </CardContent>
         </Card>
         <Card>
@@ -225,7 +253,7 @@ export default function OnsiteEditorPage() {
               <Label>结构化数据草稿</Label>
               <Textarea value={page.structured_data} onChange={(e) => setPage({ ...page, structured_data: e.target.value })} />
             </div>
-            <Button type="submit">保存工作区（不改线上）</Button>
+            <Button type="submit">手改观察（不改线上，也不改改稿）</Button>
           </CardContent>
         </Card>
       </form>

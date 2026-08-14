@@ -44,11 +44,13 @@ def get_current_user(
 
 
 def user_out(user: User, tenant: Tenant | None = None) -> dict:
+    row = tenant or user.tenant
     return {
         "id": user.id,
         "email": user.email,
         "name": user.name,
         "role": user.role,
         "tenant_id": user.tenant_id,
-        "tenant_name": tenant.name if tenant else user.tenant.name,
+        "tenant_name": row.name if row else "",
+        "site_origin": (row.site_origin if row else "") or "",
     }

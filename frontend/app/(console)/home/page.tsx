@@ -25,7 +25,7 @@ export default function HomePage() {
       title: "站内改页 + 人审",
       value: data.onsite_pages,
       hint: `Critical ${data.onsite_open_critical} · High ${data.onsite_open_high} · Low ${data.onsite_open_low}`,
-      body: "种子/内链清单 → 按严重级别看问题 → 写改稿 → 再应用。分析不改字段。无 GSC 显示未测。",
+      body: "抓已登记页 → 按观察出问题 → 改稿与观察分层 → 确认上线后再抓验收。无 GSC 显示未测。",
     },
     {
       href: "/geo",

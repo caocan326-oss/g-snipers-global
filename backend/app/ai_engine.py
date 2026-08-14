@@ -12,10 +12,8 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.geo_helpers import apply_proposed_change
-from app.llm import ERROR, OK, UNCONFIGURED, UNTESTED, LlmResult, complete, configured
+from app.llm import OK, UNCONFIGURED, UNTESTED, LlmResult, complete, configured
 from app.models import AiRun, BacklinkGap, GeoAsset, GeoPrompt, GeoTicket, OnsiteIssue, SitePage
-from app.risk import needs_confirm
 
 SYSTEM = (
     "你是出海站内/GEO/外链交付引擎。只根据给定观察作答。"
@@ -107,12 +105,21 @@ def _payload(
 
 
 def observe_onsite(page: SitePage, issue: OnsiteIssue) -> str:
+    """Current observation snapshot only. Do not replay stale issue.detail."""
+    fetched = page.fetched_at.isoformat() if getattr(page, "fetched_at", None) else "未抓取"
     return (
-        f"path={page.path}; title={page.title}; meta_title={page.meta_title or '（空）'}; "
+        "当前线上观察（不是工单旧 detail）："
+        f"path={page.path}; title={page.meta_title or page.title or '（空）'}; "
         f"meta_description={page.meta_description or '（空）'}; headings={page.headings or '（空）'}; "
-        f"internal_links={page.internal_links or '（空）'}; schema={page.structured_data or '（空）'}; "
-        f"canonical={page.canonical or '（空）'}; index={page.index_status}; "
-        f"issue={issue.category}/{issue.title}; severity={issue.severity}"
+        f"internal_links={page.internal_links or '（空）'}; schema={page.structured_data or page.json_ld_types or '（空）'}; "
+        f"canonical={page.canonical or '（空）'}; html_lang={getattr(page, 'html_lang', '') or '（空）'}; "
+        f"hreflang={getattr(page, 'hreflang', '') or '（空）'}; json_ld_types={getattr(page, 'json_ld_types', '') or '（空）'}; "
+        f"viewport={getattr(page, 'viewport', '') or '（空）'}; crawl_status={page.crawl_status}; "
+        f"http_status={getattr(page, 'http_status', None) or '未抓取'}; final_url={getattr(page, 'final_url', '') or '（空）'}; "
+        f"needs_js={getattr(page, 'needs_js', False)}; fetched_at={fetched}; "
+        f"index={page.index_status}（HTML 不能当 GSC）; "
+        f"issue={issue.category}/{issue.title}; severity={issue.severity}; "
+        f"draft={issue.proposed_change or '（无改稿，勿把观察当改稿）'}"
     )
 
 
@@ -165,7 +172,6 @@ def assist_onsite_issue(db: Session, issue: OnsiteIssue, page: SitePage, *, step
     issue.evidence = evidence
     if parsed.get("diagnosis"):
         issue.ai_diagnosis = parsed["diagnosis"]
-        issue.detail = parsed["diagnosis"]
     if parsed.get("review"):
         issue.ai_review = parsed["review"]
     verdict = parsed.get("verdict", UNTESTED)
@@ -175,10 +181,6 @@ def assist_onsite_issue(db: Session, issue: OnsiteIssue, page: SitePage, *, step
         issue.proposed_change = parsed["draft"]
         if issue.status == "open":
             issue.status = "drafted"
-        if not needs_confirm(issue.severity, issue.risk):
-            apply_proposed_change(page, issue)
-            issue.status = "draft_applied"
-            applied = True
     _record(
         db,
         tenant_id=issue.tenant_id,

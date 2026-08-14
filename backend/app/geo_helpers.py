@@ -47,7 +47,7 @@ DIAGNOSES = {
 
 TICKET_STATUSES = {"open", "in_progress", "verify", "done", "reopened"}
 
-# Low-risk drafts write into the workspace page; never a live HTTP publish.
+# Historical map only. Observation and draft are separate layers now.
 CATEGORY_WORKSPACE_FIELD = {
     "tdk": "meta_description",
     "heading": "headings",
@@ -100,14 +100,10 @@ def ensure_engine_slots(db, tenant_id: str, prompt: GeoPrompt) -> None:
 
 
 def apply_proposed_change(page: SitePage, issue: OnsiteIssue) -> None:
-    """Write the change draft onto workspace fields. Does not touch a live site."""
-    text = (issue.proposed_change or "").strip()
-    if not text:
-        return
-    field = CATEGORY_WORKSPACE_FIELD.get(issue.category)
-    if field:
-        setattr(page, field, text)
-        return
-    if issue.category in {"index", "crawl", "canonical"}:
-        note = f"[已确认方案 · {issue.category}] {text}"
-        page.notes = "\n".join(x for x in (page.notes or "", note) if x).strip()
+    """Draft stays on the issue. Never copy proposed_change onto observation fields.
+
+    confirm-apply / apply-draft used to write long 改稿说明 into canonical /
+    meta_description (varchar) and 500. Observation is only updated by live fetch
+    or an explicit observation edit.
+    """
+    return

@@ -20,6 +20,7 @@ class UserOut(BaseModel):
     role: str
     tenant_id: str
     tenant_name: str
+    site_origin: str = ""
 
 
 class DashboardSummary(BaseModel):
@@ -441,11 +442,46 @@ class CrawlOrSeedOut(BaseModel):
     note: str
 
 
+class SiteOriginIn(BaseModel):
+    site_origin: str
+
+
+class SiteSettingsOut(BaseModel):
+    site_origin: str
+    note: str = "只抓已登记页。主机名必须与 origin 一致，不猜 www。"
+
+
+class FetchPageResultOut(BaseModel):
+    page_id: str | None = None
+    path: str
+    url: str
+    crawl_status: str
+    http_status: int | None = None
+    final_url: str = ""
+    needs_js: bool = False
+    error: str = ""
+    verified: int = 0
+    created: int = 0
+
+
+class FetchRegisteredOut(BaseModel):
+    origin: str
+    fetched: int
+    failed: int
+    verified: int
+    created: int
+    pages: int
+    note: str
+    results: list[FetchPageResultOut] = []
+    ai_status: str = "未配置"
+
+
 class AnalyzeOut(BaseModel):
     created: int
     skipped: int
+    verified: int = 0
     pages: int
-    note: str = "分析未改工作区字段，也未应用到线上。"
+    note: str = "分析只读观察层，不改改稿，也不应用到线上。"
     ai_status: str = "未配置"
 
 
@@ -490,6 +526,15 @@ class SitePageOut(BaseModel):
     canonical: str = ""
     index_status: str
     crawl_status: str
+    fetched_at: datetime | None = None
+    final_url: str = ""
+    http_status: int | None = None
+    needs_js: bool = False
+    html_lang: str = ""
+    hreflang: str = ""
+    viewport: str = ""
+    json_ld_types: str = ""
+    crawl_error: str = ""
     notes: str | None
     open_issue_count: int = 0
     analyzed_at: datetime | None = None

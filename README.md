@@ -12,12 +12,12 @@
 
 骨架对齐公开站内审计工具（清单 → 按严重级别分组 → 改稿 → 确认），**不是** Semrush 克隆，也不是一张裸 URL 表。
 
-1. **crawl-or-seed**：从已登记页的内链扩清单（不请求客户站点，不接 GSC）
-2. **分析**：按 critical / high / low 产出问题（TDK、标题、内链、schema、收录 / Canonical）。分析 **不改** 工作区字段
-3. **改稿草稿**：另一步，写 `proposed_change`
-4. **应用**：低风险写入工作区；critical / high 必须确认，且仍不向线上发 HTTP
+1. **抓这一站**（`POST /api/onsite/fetch-registered`）：只对已登记 URL（站点根 + `SitePage.path`）做 HTTP GET。认 robots.txt，跟随同主机跳转，抽出 TDK / H1 / canonical / hreflang / JSON-LD 到**观察层**。不爬全站，不启无头浏览器（空壳标「需要 JS」）。
+2. **分析**：按当前观察出 critical / high / low（TDK、标题、内链、schema、收录 / Canonical）。观察已满足的工单标 **已验收**。分析不改改稿，也不改线上。
+3. **改稿草稿**：另一步，写在工单 `proposed_change`。**不准**写进 title / canonical / description 观察字段。
+4. **确认上线**：人确认后回抓该页做验收。系统不向客户站 POST/PUT。
 
-没有 GSC：收录 / Canonical 指标显示 **未测**，禁止用 0 页充数。关键词 → SERP 特征提纲是次要区块，SERP 特征未测。
+没有 GSC：收录显示 **未测**，禁止从 HTML 编收录数。关键词 → SERP 特征提纲是次要区块，SERP 特征未测。
 
 ### 2. GEO：中西引擎采样 → 工单 → 验收
 
@@ -79,7 +79,7 @@ docker compose up --build
 | `backlink_gaps` / `outreach_items` | 外链核验与跟进 |
 | `distribution_jobs` / `distribution_attempts` | 分发队列与尝试 |
 
-迁移：`001` … `005_onsite_severity` → `006_ai_engine`。
+迁移：`001` … `006_ai_engine` → `007_onsite_live_fetch`。
 
 ## 测试
 

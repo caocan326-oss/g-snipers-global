@@ -8,7 +8,16 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { api, type AiAssist, type ContentBrief, type OnsiteBoard, type OnsiteIssue, type SitePage } from "@/lib/api";
+import {
+  api,
+  crawlStatusLabel,
+  type AiAssist,
+  type ContentBrief,
+  type FetchRegistered,
+  type OnsiteBoard,
+  type OnsiteIssue,
+  type SitePage,
+} from "@/lib/api";
 
 const catLabel: Record<string, string> = {
   tdk: "TDK",
@@ -24,9 +33,10 @@ const sevLabel: Record<string, string> = { critical: "Critical", high: "High", l
 const sevTone: Record<string, "red" | "amber" | "green"> = { critical: "red", high: "amber", low: "green" };
 const statusLabel: Record<string, string> = {
   open: "已分析，待改稿",
-  drafted: "已有改稿，未应用",
-  draft_applied: "已写入工作区",
-  confirmed: "已确认（仍不上线）",
+  drafted: "已有改稿，未上线",
+  draft_applied: "改稿已交付站点",
+  confirmed: "已确认上线，待回抓",
+  verified: "观察已验收",
 };
 
 export default function OnsiteBoardPage() {
@@ -38,17 +48,20 @@ export default function OnsiteBoardPage() {
   const [note, setNote] = useState("");
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [form, setForm] = useState({ path: "/", locale: "en-US", title: "" });
+  const [origin, setOrigin] = useState("");
 
   function load() {
     Promise.all([
       api<OnsiteBoard>("/api/onsite/board"),
       api<SitePage[]>("/api/onsite/pages"),
       api<ContentBrief[]>("/api/onsite/briefs"),
+      api<{ site_origin: string }>("/api/onsite/settings"),
     ])
-      .then(([b, p, br]) => {
+      .then(([b, p, br, s]) => {
         setBoard(b);
         setPages(p);
         setBriefs(br);
+        setOrigin(s.site_origin || "");
       })
       .catch((e) => setError(e.message));
   }
@@ -56,6 +69,31 @@ export default function OnsiteBoardPage() {
   useEffect(() => {
     load();
   }, []);
+
+  async function saveOrigin() {
+    setError("");
+    try {
+      const res = await api<{ site_origin: string }>("/api/onsite/settings", {
+        method: "PATCH",
+        body: JSON.stringify({ site_origin: origin }),
+      });
+      setOrigin(res.site_origin);
+      setNote(`已保存站点 origin：${res.site_origin}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "保存 origin 失败");
+    }
+  }
+
+  async function fetchSite() {
+    setError("");
+    try {
+      const res = await api<FetchRegistered>("/api/onsite/fetch-registered", { method: "POST" });
+      setNote(`${res.note} 成功 ${res.fetched} · 失败 ${res.failed} · 验收 ${res.verified}`);
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "抓取失败");
+    }
+  }
 
   async function crawlOrSeed() {
     setError("");
@@ -130,10 +168,30 @@ export default function OnsiteBoardPage() {
       <div>
         <h1 className="text-2xl font-semibold">站内改页 + 人审</h1>
         <p className="mt-1 text-sm text-slate-500">
-          种子/工作区内链扩清单 → 按严重级别看问题（TDK / 标题 / 内链 / schema / 收录与
-          Canonical）→ 写改稿 → 再应用。分析不会改字段。无 GSC 的指标保持未测。
+          只抓已登记页。观察层来自线上回抓，改稿写在工单里，互不覆盖。确认上线后会再抓一次做验收。无
+          GSC 的收录保持未测。
         </p>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>站点 origin</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-wrap items-end gap-2">
+          <Input
+            className="min-w-[280px] flex-1"
+            placeholder="https://www.snipers.com.cn"
+            value={origin}
+            onChange={(e) => setOrigin(e.target.value)}
+          />
+          <Button type="button" variant="outline" onClick={saveOrigin}>
+            保存 origin
+          </Button>
+          <Button type="button" onClick={fetchSite}>
+            抓这一站
+          </Button>
+        </CardContent>
+      </Card>
 
       <div className="flex flex-wrap gap-2">
         <Button onClick={crawlOrSeed} variant="outline">
@@ -202,11 +260,11 @@ export default function OnsiteBoardPage() {
                   </Button>
                   {i.severity === "low" ? (
                     <Button size="sm" variant="outline" onClick={() => apply(i)}>
-                      写入工作区
+                      标记改稿已交付
                     </Button>
                   ) : (
                     <Button size="sm" onClick={() => apply(i)}>
-                      确认应用（仍不上线）
+                      确认已上线（回抓验收）
                     </Button>
                   )}
                 </div>
@@ -227,7 +285,20 @@ export default function OnsiteBoardPage() {
             <Input placeholder="标题" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
             <Button type="submit">加入清单</Button>
           </form>
-          <p className="mt-3 text-xs text-slate-500">已登记 {pages.length} 页。点问题里的标题进入单页工作区。</p>
+          <ul className="mt-3 space-y-1 text-xs text-slate-500">
+            {pages.map((p) => (
+              <li key={p.id}>
+                <Link className="text-brand-700" href={`/onsite/${p.id}`}>
+                  {p.path}
+                </Link>
+                {" · "}
+                {crawlStatusLabel[p.crawl_status] ?? p.crawl_status}
+                {" · "}
+                {p.fetched_at ? new Date(p.fetched_at).toLocaleString("zh-CN") : "尚未抓取"}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-xs text-slate-500">已登记 {pages.length} 页。点路径进入单页观察与改稿。</p>
         </CardContent>
       </Card>
 
