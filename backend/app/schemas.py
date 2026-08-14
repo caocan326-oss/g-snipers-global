@@ -41,6 +41,7 @@ class DashboardSummary(BaseModel):
     onsite_open_low: int
     onsite_open_high: int
     onsite_open_critical: int = 0
+    llm_status: str = "未配置"
     offsite_gaps: int
     offsite_outreach_open: int
     links_unverified: int
@@ -268,6 +269,8 @@ class GeoPromptOut(BaseModel):
     created_at: datetime | None = None
     cite_rate: str = "未测"
     absorption_rate: str = "未测"
+    ai_status: str = "untested"
+    evidence: str = ""
 
 
 class GeoDiagnosisIn(BaseModel):
@@ -292,6 +295,9 @@ class GeoTicketOut(BaseModel):
     acceptance_criteria: str
     status: str
     verified_note: str | None
+    ai_status: str = "untested"
+    ai_review: str = ""
+    evidence: str = ""
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
@@ -307,6 +313,7 @@ class GeoAssetOut(BaseModel):
     title: str
     body: str
     status: str
+    ai_status: str = "untested"
     updated_at: datetime | None = None
 
 
@@ -391,6 +398,11 @@ class OnsiteIssueOut(BaseModel):
     risk: str
     status: str
     metric_status: str
+    ai_status: str = "untested"
+    ai_diagnosis: str = ""
+    ai_review: str = ""
+    ai_review_verdict: str = "untested"
+    evidence: str = ""
 
 
 class OnsiteIssueCreate(BaseModel):
@@ -434,6 +446,32 @@ class AnalyzeOut(BaseModel):
     skipped: int
     pages: int
     note: str = "分析未改工作区字段，也未应用到线上。"
+    ai_status: str = "未配置"
+
+
+class AiStatusOut(BaseModel):
+    configured: bool
+    status: str
+    env_var: str
+    base_url: str
+    model: str
+    note: str
+
+
+class AiAssistOut(BaseModel):
+    status: str
+    step: str
+    applied_draft: bool = False
+    diagnosis: str = ""
+    draft: str = ""
+    review: str = ""
+    review_verdict: str = "未测"
+    evidence: str = ""
+    detail: str = ""
+
+
+class AiStepIn(BaseModel):
+    step: str = "all"
 
 
 class SitePageOut(BaseModel):
@@ -508,6 +546,9 @@ class BacklinkGapOut(BaseModel):
     domain_metric: str
     status: str
     notes: str | None
+    ai_status: str = "untested"
+    ai_review: str = ""
+    evidence: str = ""
     outreach: list[OutreachOut] = []
 
 

@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session, selectinload
 
+from app.ai_engine import assist_geo_asset, assist_geo_prompt, assist_geo_ticket
 from app.auth import get_current_user
 from app.database import get_db
 from app.geo_helpers import (
@@ -31,6 +32,8 @@ from app.models import (
 )
 from app.risk import require_confirm
 from app.schemas import (
+    AiAssistOut,
+    AiStepIn,
     ConfirmReadyIn,
     GeoAssetOut,
     GeoAssetUpdate,
@@ -78,6 +81,8 @@ def _prompt_out(row: GeoPrompt) -> GeoPromptOut:
         observations=[_obs_out(o) for o in row.observations],
         cite_rate="未测",
         absorption_rate="未测",
+        ai_status=row.ai_status or "untested",
+        evidence=row.evidence or "",
     )
 
 
@@ -92,6 +97,9 @@ def _ticket_out(row: GeoTicket) -> GeoTicketOut:
         acceptance_criteria=row.acceptance_criteria,
         status=row.status,
         verified_note=row.verified_note,
+        ai_status=row.ai_status or "untested",
+        ai_review=row.ai_review or "",
+        evidence=row.evidence or "",
         created_at=row.created_at,
         updated_at=row.updated_at,
     )
@@ -458,3 +466,53 @@ def prompt_from_signal(
     _create_untested_slots(db, user, row)
     db.commit()
     return _prompt_out(_load_prompt(db, row.id))
+
+
+@router.post("/prompts/{prompt_id}/ai", response_model=AiAssistOut)
+def ai_prompt(
+    prompt_id: str,
+    body: AiStepIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> AiAssistOut:
+    row = (
+        db.query(GeoPrompt)
+        .options(selectinload(GeoPrompt.observations))
+        .filter(GeoPrompt.id == prompt_id, GeoPrompt.tenant_id == user.tenant_id)
+        .first()
+    )
+    if row is None:
+        raise HTTPException(status_code=404, detail="问句不存在")
+    payload = assist_geo_prompt(db, row, step=body.step)
+    db.commit()
+    return AiAssistOut(**payload)
+
+
+@router.post("/tickets/{ticket_id}/ai", response_model=AiAssistOut)
+def ai_ticket(
+    ticket_id: str,
+    body: AiStepIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> AiAssistOut:
+    row = db.get(GeoTicket, ticket_id)
+    if row is None or row.tenant_id != user.tenant_id:
+        raise HTTPException(status_code=404, detail="工单不存在")
+    payload = assist_geo_ticket(db, row, step=body.step or "review")
+    db.commit()
+    return AiAssistOut(**payload)
+
+
+@router.post("/assets/{asset_id}/ai", response_model=AiAssistOut)
+def ai_asset(
+    asset_id: str,
+    body: AiStepIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> AiAssistOut:
+    row = db.get(GeoAsset, asset_id)
+    if row is None or row.tenant_id != user.tenant_id:
+        raise HTTPException(status_code=404, detail="资产不存在")
+    payload = assist_geo_asset(db, row, step=body.step or "content")
+    db.commit()
+    return AiAssistOut(**payload)

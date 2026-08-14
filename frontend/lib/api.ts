@@ -73,6 +73,28 @@ export type DashboardSummary = {
   offsite_outreach_open: number;
   links_unverified: number;
   distribution_jobs: number;
+  llm_status: string;
+};
+
+export type AiStatus = {
+  configured: boolean;
+  status: string;
+  env_var: string;
+  base_url: string;
+  model: string;
+  note: string;
+};
+
+export type AiAssist = {
+  status: string;
+  step: string;
+  applied_draft: boolean;
+  diagnosis: string;
+  draft: string;
+  review: string;
+  review_verdict: string;
+  evidence: string;
+  detail: string;
 };
 
 export type Market = {
@@ -192,6 +214,8 @@ export type GeoPrompt = {
   observations: GeoObservation[];
   cite_rate?: string;
   absorption_rate?: string;
+  ai_status?: string;
+  evidence?: string;
 };
 
 export type GeoTicket = {
@@ -204,6 +228,9 @@ export type GeoTicket = {
   acceptance_criteria: string;
   status: string;
   verified_note: string | null;
+  ai_status?: string;
+  ai_review?: string;
+  evidence?: string;
 };
 
 export type GeoAsset = {
@@ -247,6 +274,11 @@ export type OnsiteIssue = {
   risk: string;
   status: string;
   metric_status: string;
+  ai_status?: string;
+  ai_diagnosis?: string;
+  ai_review?: string;
+  ai_review_verdict?: string;
+  evidence?: string;
 };
 
 export type OnsiteBoard = {
@@ -289,6 +321,9 @@ export type BacklinkGap = {
   domain_metric: string;
   status: string;
   notes: string | null;
+  ai_status?: string;
+  ai_review?: string;
+  evidence?: string;
   outreach: OutreachItem[];
 };
 

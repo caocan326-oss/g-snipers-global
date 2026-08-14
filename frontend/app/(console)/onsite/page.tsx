@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { api, type ContentBrief, type OnsiteBoard, type OnsiteIssue, type SitePage } from "@/lib/api";
+import { api, type AiAssist, type ContentBrief, type OnsiteBoard, type OnsiteIssue, type SitePage } from "@/lib/api";
 
 const catLabel: Record<string, string> = {
   tdk: "TDK",
@@ -66,9 +66,25 @@ export default function OnsiteBoardPage() {
 
   async function analyze() {
     setError("");
-    const res = await api<{ created: number; skipped: number; note: string }>("/api/onsite/analyze", { method: "POST" });
-    setNote(`${res.note} 新建 ${res.created}，已有 ${res.skipped}。`);
+    const res = await api<AiAssist>("/api/onsite/ai", { method: "POST", body: JSON.stringify({ step: "all" }) });
+    setNote(`${res.detail || res.status} ${res.evidence ? "· 见各条论证" : ""}`);
+    if (res.status === "未配置") setError(res.detail || "LLM 未配置，未编造分析。");
     load();
+  }
+
+  async function aiIssue(id: string, step: string) {
+    setError("");
+    try {
+      const res = await api<AiAssist>(`/api/onsite/issues/${id}/ai`, {
+        method: "POST",
+        body: JSON.stringify({ step }),
+      });
+      setNote(res.detail || res.status);
+      if (res.status === "未配置") setError(res.detail);
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "AI 失败");
+    }
   }
 
   async function saveDraft(id: string) {
@@ -123,7 +139,7 @@ export default function OnsiteBoardPage() {
         <Button onClick={crawlOrSeed} variant="outline">
           从内链扩清单（不抓线上）
         </Button>
-        <Button onClick={analyze}>分析清单（不应用）</Button>
+        <Button onClick={analyze}>AI 分析 / 内容 / 审核 / 论证</Button>
       </div>
       {note ? <p className="text-sm text-slate-600">{note}</p> : null}
 
@@ -168,6 +184,8 @@ export default function OnsiteBoardPage() {
                 </div>
                 <p className="mt-1 text-sm">{i.title}</p>
                 <p className="text-sm text-slate-500">{i.detail}</p>
+                {i.evidence ? <pre className="mt-2 whitespace-pre-wrap text-xs text-slate-500">{i.evidence}</pre> : null}
+                {i.ai_review ? <p className="mt-1 text-xs text-slate-600">初审：{i.ai_review}</p> : null}
                 {i.proposed_change ? <p className="mt-1 text-xs text-slate-500">已写改稿：{i.proposed_change}</p> : null}
                 <Textarea
                   className="mt-2"
@@ -175,13 +193,22 @@ export default function OnsiteBoardPage() {
                   value={drafts[i.id] ?? i.proposed_change}
                   onChange={(e) => setDrafts({ ...drafts, [i.id]: e.target.value })}
                 />
-                <div className="mt-2 flex gap-2">
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <Button size="sm" onClick={() => aiIssue(i.id, "all")}>
+                    AI 本条
+                  </Button>
                   <Button size="sm" variant="outline" onClick={() => saveDraft(i.id)}>
                     保存改稿
                   </Button>
-                  <Button size="sm" onClick={() => apply(i)}>
-                    {i.severity === "low" ? "应用改稿到工作区" : "确认应用（仍不上线）"}
-                  </Button>
+                  {i.severity === "low" ? (
+                    <Button size="sm" variant="outline" onClick={() => apply(i)}>
+                      写入工作区
+                    </Button>
+                  ) : (
+                    <Button size="sm" onClick={() => apply(i)}>
+                      确认应用（仍不上线）
+                    </Button>
+                  )}
                 </div>
               </div>
             ))}

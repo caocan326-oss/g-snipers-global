@@ -21,6 +21,7 @@ from app.models import (
     User,
     WorkOrder,
 )
+from app.llm import status_label
 from app.schemas import DashboardSummary
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
@@ -139,4 +140,5 @@ def summary(user: User = Depends(get_current_user), db: Session = Depends(get_db
         offsite_outreach_open=offsite_outreach_open,
         links_unverified=links_unverified,
         distribution_jobs=distribution_jobs,
+        llm_status=status_label(),
     )

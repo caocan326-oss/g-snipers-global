@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
   api,
+  type AiAssist,
   type GeoAsset,
   type GeoChecklistItem,
   type GeoPrompt,
@@ -81,6 +82,27 @@ export default function GeoPage() {
     loadAssets();
     api<SeoPage[]>("/api/seo-pages").then(setPages).catch(() => undefined);
   }, []);
+
+  async function aiPrompt(id: string) {
+    setError("");
+    const res = await api<AiAssist>(`/api/geo/prompts/${id}/ai`, { method: "POST", body: JSON.stringify({ step: "analyze" }) });
+    if (res.status === "未配置" || res.status === "未测") setError(res.detail || res.status);
+    loadPrompts();
+  }
+
+  async function aiTicket(id: string) {
+    setError("");
+    const res = await api<AiAssist>(`/api/geo/tickets/${id}/ai`, { method: "POST", body: JSON.stringify({ step: "review" }) });
+    if (res.status === "未配置") setError(res.detail);
+    loadTickets();
+  }
+
+  async function aiAsset(id: string) {
+    setError("");
+    const res = await api<AiAssist>(`/api/geo/assets/${id}/ai`, { method: "POST", body: JSON.stringify({ step: "content" }) });
+    if (res.status === "未配置") setError(res.detail);
+    loadAssets();
+  }
 
   async function addPrompt(e: FormEvent) {
     e.preventDefault();
@@ -216,7 +238,11 @@ export default function GeoPage() {
                 <p className="text-xs text-slate-500">
                   {p.locale} · 引用率 {p.cite_rate ?? "未测"} · 吸收率 {p.absorption_rate ?? "未测"}
                 </p>
+                {p.evidence ? <pre className="mt-2 whitespace-pre-wrap text-xs text-slate-500">{p.evidence}</pre> : null}
                 <div className="mt-2 flex items-center gap-2">
+                  <Button size="sm" onClick={() => aiPrompt(p.id)}>
+                    AI 诊断
+                  </Button>
                   <span className="text-xs text-slate-500">诊断</span>
                   <select
                     className="h-8 rounded-md border border-slate-200 px-2 text-sm"
@@ -279,7 +305,12 @@ export default function GeoPage() {
                 <p className="text-sm text-slate-600">理由：{t.rationale}</p>
                 <p className="text-sm text-slate-600">验收：{t.acceptance_criteria}</p>
                 {t.verified_note ? <p className="text-xs text-slate-500">备注：{t.verified_note}</p> : null}
+                {t.evidence ? <pre className="whitespace-pre-wrap text-xs text-slate-500">{t.evidence}</pre> : null}
+                {t.ai_review ? <p className="text-sm text-slate-600">初审：{t.ai_review}</p> : null}
                 <div className="flex flex-wrap gap-2">
+                  <Button size="sm" onClick={() => aiTicket(t.id)}>
+                    AI 初审
+                  </Button>
                   <Button size="sm" variant="outline" onClick={() => verifyTicket(t.id, false)}>
                     未确认
                   </Button>
@@ -368,6 +399,9 @@ export default function GeoPage() {
                     key={llms.updated_at ?? llms.id}
                     onBlur={(e) => saveAsset(llms.id, e.target.value)}
                   />
+                  <Button variant="outline" onClick={() => aiAsset(llms.id)}>
+                    AI 改稿
+                  </Button>
                   <Button onClick={() => readyAsset(llms.id)}>我已确认，标记可交付</Button>
                 </>
               ) : (

@@ -1,10 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, selectinload
 
+from app.ai_engine import assist_offsite_gap
 from app.auth import get_current_user
 from app.database import get_db
 from app.models import BacklinkGap, OutreachItem, User
 from app.schemas import (
+    AiAssistOut,
+    AiStepIn,
     BacklinkGapCreate,
     BacklinkGapOut,
     BacklinkGapUpdate,
@@ -35,6 +38,9 @@ def _gap_out(row: BacklinkGap) -> BacklinkGapOut:
         domain_metric=row.domain_metric,
         status=row.status,
         notes=row.notes,
+        ai_status=row.ai_status or "untested",
+        ai_review=row.ai_review or "",
+        evidence=row.evidence or "",
         outreach=[OutreachOut.model_validate(o, from_attributes=True) for o in row.outreach],
     )
 
@@ -178,3 +184,18 @@ def update_outreach(
     db.commit()
     db.refresh(row)
     return row
+
+
+@router.post("/gaps/{gap_id}/ai", response_model=AiAssistOut)
+def ai_gap(
+    gap_id: str,
+    body: AiStepIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> AiAssistOut:
+    row = db.get(BacklinkGap, gap_id)
+    if row is None or row.tenant_id != user.tenant_id:
+        raise HTTPException(status_code=404, detail="链接不存在")
+    payload = assist_offsite_gap(db, row, step=body.step or "evidence")
+    db.commit()
+    return AiAssistOut(**payload)

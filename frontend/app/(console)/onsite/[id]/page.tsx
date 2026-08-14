@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { api, type OnsiteIssue, type SitePageDetail } from "@/lib/api";
+import { api, type AiAssist, type OnsiteIssue, type SitePageDetail } from "@/lib/api";
 
 const catLabel: Record<string, string> = {
   tdk: "TDK",
@@ -70,8 +70,19 @@ export default function OnsiteEditorPage() {
 
   async function analyze() {
     if (!page) return;
-    const res = await api<{ created: number; note: string }>(`/api/onsite/pages/${page.id}/analyze`, { method: "POST" });
+    const res = await api<{ created: number; note: string; ai_status?: string }>(
+      `/api/onsite/pages/${page.id}/analyze`,
+      { method: "POST" }
+    );
     setNote(`${res.note} 新建 ${res.created}。`);
+    if (res.ai_status === "未配置") setError("LLM 未配置，未编造分析。");
+    load();
+  }
+
+  async function aiIssue(id: string) {
+    const res = await api<AiAssist>(`/api/onsite/issues/${id}/ai`, { method: "POST", body: JSON.stringify({ step: "all" }) });
+    setNote(res.detail || res.status);
+    if (res.status === "未配置") setError(res.detail);
     load();
   }
 
@@ -153,6 +164,7 @@ export default function OnsiteEditorPage() {
                   <Badge tone="blue">{statusLabel[i.status] ?? i.status}</Badge>
                 </div>
                 <p className="mt-1 text-sm text-slate-600">{i.detail}</p>
+                {i.evidence ? <pre className="mt-2 whitespace-pre-wrap text-xs text-slate-500">{i.evidence}</pre> : null}
                 <Textarea
                   className="mt-2"
                   placeholder="改稿草稿"
@@ -160,6 +172,9 @@ export default function OnsiteEditorPage() {
                   onChange={(e) => setDrafts({ ...drafts, [i.id]: e.target.value })}
                 />
                 <div className="mt-2 flex gap-2">
+                  <Button size="sm" onClick={() => aiIssue(i.id)}>
+                    AI 本条
+                  </Button>
                   <Button size="sm" variant="outline" onClick={() => saveDraft(i.id)}>
                     保存改稿
                   </Button>

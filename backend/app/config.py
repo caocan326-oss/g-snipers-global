@@ -13,6 +13,10 @@ class Settings(BaseSettings):
     distribution_directory_api_key: str = ""
     distribution_guest_api_key: str = ""
     distribution_syndication_api_key: str = ""
+    # One OpenAI-compatible gateway. Empty key = app still boots; AI returns 未配置.
+    llm_api_key: str = ""
+    llm_base_url: str = "https://api.openai.com/v1"
+    llm_model: str = "gpt-4o-mini"
 
 
 settings = Settings()

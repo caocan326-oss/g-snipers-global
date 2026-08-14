@@ -182,6 +182,8 @@ class GeoPrompt(Base):
     locale: Mapped[str] = mapped_column(String(16), nullable=False)
     diagnosis: Mapped[str] = mapped_column(String(40), default="untested")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    ai_status: Mapped[str] = mapped_column(String(20), default="untested")
+    evidence: Mapped[str] = mapped_column(Text, default="")
 
     observations: Mapped[list["GeoObservation"]] = relationship(
         back_populates="prompt", cascade="all, delete-orphan"
@@ -217,6 +219,7 @@ class GeoAsset(Base):
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     body: Mapped[str] = mapped_column(Text, default="")
     status: Mapped[str] = mapped_column(String(20), default="draft")
+    ai_status: Mapped[str] = mapped_column(String(20), default="untested")
     updated_by: Mapped[str | None] = mapped_column(ForeignKey("users.id"))
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -252,6 +255,9 @@ class GeoTicket(Base):
     acceptance_criteria: Mapped[str] = mapped_column(Text, default="")
     status: Mapped[str] = mapped_column(String(20), default="open", index=True)
     verified_note: Mapped[str | None] = mapped_column(Text)
+    ai_status: Mapped[str] = mapped_column(String(20), default="untested")
+    ai_review: Mapped[str] = mapped_column(Text, default="")
+    evidence: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -305,6 +311,11 @@ class OnsiteIssue(Base):
     risk: Mapped[str] = mapped_column(String(10), default="low")
     status: Mapped[str] = mapped_column(String(30), default="open", index=True)
     metric_status: Mapped[str] = mapped_column(String(20), default="untested")
+    ai_status: Mapped[str] = mapped_column(String(20), default="untested")
+    ai_diagnosis: Mapped[str] = mapped_column(Text, default="")
+    ai_review: Mapped[str] = mapped_column(Text, default="")
+    ai_review_verdict: Mapped[str] = mapped_column(String(20), default="untested")
+    evidence: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     page: Mapped[SitePage] = relationship(back_populates="issues")
@@ -326,6 +337,9 @@ class BacklinkGap(Base):
     domain_metric: Mapped[str] = mapped_column(String(20), default="untested")
     status: Mapped[str] = mapped_column(String(20), default="identified", index=True)
     notes: Mapped[str | None] = mapped_column(Text)
+    ai_status: Mapped[str] = mapped_column(String(20), default="untested")
+    ai_review: Mapped[str] = mapped_column(Text, default="")
+    evidence: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     outreach: Mapped[list["OutreachItem"]] = relationship(back_populates="gap", cascade="all, delete-orphan")
@@ -385,4 +399,22 @@ class PublishConfirmation(Base):
     confirmed_by: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False)
     confirmed: Mapped[bool] = mapped_column(Boolean, default=True)
     note: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class AiRun(Base):
+    """One AI engine step. Unconfigured / 未测 is stored honestly."""
+
+    __tablename__ = "ai_runs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
+    chain: Mapped[str] = mapped_column(String(20), nullable=False)
+    step: Mapped[str] = mapped_column(String(20), nullable=False)
+    target_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    target_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(20), default="untested")
+    output: Mapped[str] = mapped_column(Text, default="")
+    evidence: Mapped[str] = mapped_column(Text, default="")
+    detail: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

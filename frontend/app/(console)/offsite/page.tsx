@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { api, type BacklinkGap, type DistJob, type DistProvider } from "@/lib/api";
+import { api, type AiAssist, type BacklinkGap, type DistJob, type DistProvider } from "@/lib/api";
 
 const verifyLabel: Record<string, string> = {
   unverified: "未核验",
@@ -82,6 +82,13 @@ export default function OffsitePage() {
     e.preventDefault();
     await api("/api/offsite/gaps", { method: "POST", body: JSON.stringify(form) });
     setForm({ competitor_name: "", referring_domain: "", link_url: "", kind: "inbound", notes: "" });
+    loadGaps();
+  }
+
+  async function aiGap(id: string) {
+    setError("");
+    const res = await api<AiAssist>(`/api/offsite/gaps/${id}/ai`, { method: "POST", body: JSON.stringify({ step: "evidence" }) });
+    if (res.status === "未配置") setError(res.detail);
     loadGaps();
   }
 
@@ -170,6 +177,7 @@ export default function OffsitePage() {
                   </CardTitle>
                   <p className="mt-1 text-xs text-slate-500">{g.link_url || g.competitor_url || "未登记 URL"}</p>
                   <p className="mt-1 text-xs text-slate-500">{g.notes}</p>
+                  {g.evidence ? <pre className="mt-2 whitespace-pre-wrap text-xs text-slate-500">{g.evidence}</pre> : null}
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <Badge tone={verifyTone[g.verify_status]}>{verifyLabel[g.verify_status] ?? g.verify_status}</Badge>
@@ -198,6 +206,9 @@ export default function OffsitePage() {
                     value={contact}
                     onChange={(e) => setContact(e.target.value)}
                   />
+                  <Button size="sm" onClick={() => aiGap(g.id)}>
+                    AI 论证
+                  </Button>
                   <Button size="sm" variant="outline" onClick={() => addOutreach(g.id)}>
                     加跟进
                   </Button>

@@ -51,7 +51,7 @@ export default function HomePage() {
       <div>
         <h1 className="text-2xl font-semibold">三条交付链</h1>
         <p className="mt-1 text-sm text-slate-500">
-          {data.tenant_name} · 洞察只负责投喂。低风险落工作区草稿，高风险须客户经理确认。没有数据源就写未测，不用 0 充数。
+          {data.tenant_name} · AI 引擎 {data.llm_status}。低风险 AI 稿落工作区；改线上 / 分发 / 可交付须人确认。没有数据源就写未测。
         </p>
       </div>
       <div className="grid gap-4 lg:grid-cols-3">

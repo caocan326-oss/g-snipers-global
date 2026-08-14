@@ -4,6 +4,8 @@
 
 本仓库只做 **三条可操作交付链**。洞察只负责投喂，不另做机会分 / Share of Voice 看板。
 
+**AI 是引擎，不是旁边的「生成草稿」按钮。** 分析 / 内容 / 审核 / 论证都走同一套 OpenAI 兼容网关（`LLM_API_KEY`）。人确认只用于：改线上、分发外发、标记可交付。低风险 AI 稿只落工作区。Key 未配时应用照常启动，AI 步骤返回 **未配置**，不编造分析。
+
 ## 三条链（产品本身）
 
 ### 1. 站内改页 + 人审
@@ -63,7 +65,7 @@ docker compose up --build
 
 必填：`DATABASE_URL`、`SECRET_KEY`、演示账号。
 
-可选（留空 = 未配置）：`DISTRIBUTION_DIRECTORY_API_KEY`、`DISTRIBUTION_GUEST_API_KEY`、`DISTRIBUTION_SYNDICATION_API_KEY`。
+可选（留空 = 未配置）：`LLM_API_KEY`（及 `LLM_BASE_URL` / `LLM_MODEL`）、`DISTRIBUTION_*_API_KEY`。
 
 不要配置 `GOOGLE_ADS_*`。
 
@@ -77,7 +79,7 @@ docker compose up --build
 | `backlink_gaps` / `outreach_items` | 外链核验与跟进 |
 | `distribution_jobs` / `distribution_attempts` | 分发队列与尝试 |
 
-迁移：`001_initial` → `002_geo` → `003_onsite_offsite_dist` → `004_three_chains` → `005_onsite_severity`。
+迁移：`001` … `005_onsite_severity` → `006_ai_engine`。
 
 ## 测试
 

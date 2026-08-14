@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { api, clearToken, getToken, type User } from "@/lib/api";
+import { api, clearToken, getToken, type AiStatus, type User } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const nav = [
@@ -21,6 +21,7 @@ export default function ConsoleLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
+  const [ai, setAi] = useState<AiStatus | null>(null);
 
   useEffect(() => {
     if (!getToken()) {
@@ -28,7 +29,10 @@ export default function ConsoleLayout({ children }: { children: ReactNode }) {
       return;
     }
     api<User>("/api/auth/me")
-      .then(setUser)
+      .then((u) => {
+        setUser(u);
+        api<AiStatus>("/api/ai/status").then(setAi).catch(() => undefined);
+      })
       .catch(() => router.replace("/login"));
   }, [router]);
 
@@ -37,7 +41,8 @@ export default function ConsoleLayout({ children }: { children: ReactNode }) {
       <aside className="flex w-60 flex-col border-r border-slate-200 bg-white">
         <div className="px-5 py-5">
           <div className="text-sm font-semibold text-brand-700">G-Snipers 海外版</div>
-          <div className="mt-1 text-xs text-slate-500">三条交付链 · 人审后才动线上</div>
+          <div className="mt-1 text-xs text-slate-500">AI 引擎 · 三条链 · 高风险才人审</div>
+          <div className="mt-2 text-xs text-slate-500">LLM {ai?.status ?? "…"}</div>
         </div>
         <nav className="flex-1 space-y-0.5 px-3">
           {nav.map((item) => (

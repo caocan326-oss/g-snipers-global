@@ -6,11 +6,15 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.auth import get_current_user
 from app.database import get_db
+from app.ai_engine import assist_onsite_issue
 from app.geo_helpers import apply_proposed_change
+from app.llm import UNCONFIGURED, configured
 from app.models import OnsiteIssue, SeoPage, SitePage, User
 from app.onsite_analyzer import analyze_page, parse_internal_paths
 from app.risk import RISKS, SEVERITIES, default_severity, needs_confirm, require_confirm, severity_to_risk
 from app.schemas import (
+    AiAssistOut,
+    AiStepIn,
     AnalyzeOut,
     ConfirmReadyIn,
     ContentBriefOut,
@@ -47,6 +51,11 @@ def _issue_out(row: OnsiteIssue, page: SitePage | None = None) -> OnsiteIssueOut
         risk=row.risk,
         status=row.status,
         metric_status=row.metric_status,
+        ai_status=row.ai_status or "untested",
+        ai_diagnosis=row.ai_diagnosis or "",
+        ai_review=row.ai_review or "",
+        ai_review_verdict=row.ai_review_verdict or "untested",
+        evidence=row.evidence or "",
     )
 
 
@@ -249,7 +258,23 @@ def _analyze_one(db: Session, user: User, page: SitePage) -> tuple[int, int]:
         existing.add(key)
         created += 1
     page.analyzed_at = datetime.now(timezone.utc)
+    db.flush()
     return created, skipped
+
+
+def _ai_after_analyze(db: Session, user: User, pages: list[SitePage]) -> str:
+    issues = (
+        db.query(OnsiteIssue)
+        .filter(OnsiteIssue.tenant_id == user.tenant_id, OnsiteIssue.status.in_(["open", "drafted"]))
+        .all()
+    )
+    by_id = {p.id: p for p in pages}
+    for issue in issues:
+        page = by_id.get(issue.page_id) or db.get(SitePage, issue.page_id)
+        if page is None:
+            continue
+        assist_onsite_issue(db, issue, page, step="analyze")
+    return UNCONFIGURED if not configured() else "ok"
 
 
 @router.post("/analyze", response_model=AnalyzeOut)
@@ -260,8 +285,12 @@ def analyze_inventory(user: User = Depends(get_current_user), db: Session = Depe
         c, s = _analyze_one(db, user, page)
         created += c
         skipped += s
+    ai_status = _ai_after_analyze(db, user, pages)
     db.commit()
-    return AnalyzeOut(created=created, skipped=skipped, pages=len(pages))
+    note = "分析未改工作区字段，也未应用到线上。"
+    if ai_status == UNCONFIGURED:
+        note += " LLM 未配置，诊断/改稿未编造。"
+    return AnalyzeOut(created=created, skipped=skipped, pages=len(pages), note=note, ai_status=ai_status)
 
 
 @router.post("/pages/{page_id}/analyze", response_model=AnalyzeOut)
@@ -272,8 +301,12 @@ def analyze_one_page(
 ) -> AnalyzeOut:
     page = _owned_page(db, user, page_id)
     created, skipped = _analyze_one(db, user, page)
+    ai_status = _ai_after_analyze(db, user, [page])
     db.commit()
-    return AnalyzeOut(created=created, skipped=skipped, pages=1)
+    note = "分析未改工作区字段，也未应用到线上。"
+    if ai_status == UNCONFIGURED:
+        note += " LLM 未配置，诊断/改稿未编造。"
+    return AnalyzeOut(created=created, skipped=skipped, pages=1, note=note, ai_status=ai_status)
 
 
 @router.post("/pages/{page_id}/issues", response_model=OnsiteIssueOut, status_code=201)
@@ -376,3 +409,51 @@ def confirm_apply(
     db.commit()
     db.refresh(row)
     return _issue_out(row, page)
+
+
+@router.post("/issues/{issue_id}/ai", response_model=AiAssistOut)
+def ai_issue(
+    issue_id: str,
+    body: AiStepIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> AiAssistOut:
+    row = db.get(OnsiteIssue, issue_id)
+    if row is None or row.tenant_id != user.tenant_id:
+        raise HTTPException(status_code=404, detail="任务不存在")
+    page = db.get(SitePage, row.page_id)
+    if page is None:
+        raise HTTPException(status_code=404, detail="页面不存在")
+    payload = assist_onsite_issue(db, row, page, step=body.step)
+    db.commit()
+    return AiAssistOut(**payload)
+
+
+@router.post("/ai", response_model=AiAssistOut)
+def ai_onsite_engine(
+    body: AiStepIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> AiAssistOut:
+    pages = db.query(SitePage).filter(SitePage.tenant_id == user.tenant_id).all()
+    created = skipped = 0
+    if body.step in {"analyze", "all"}:
+        for page in pages:
+            c, s = _analyze_one(db, user, page)
+            created += c
+            skipped += s
+    issues = (
+        db.query(OnsiteIssue)
+        .filter(OnsiteIssue.tenant_id == user.tenant_id, OnsiteIssue.status.in_(["open", "drafted"]))
+        .all()
+    )
+    last: dict = {"status": UNCONFIGURED, "step": body.step, "detail": "没有待处理问题。"}
+    by_id = {p.id: p for p in pages}
+    for issue in issues:
+        page = by_id.get(issue.page_id)
+        if page is None:
+            continue
+        last = assist_onsite_issue(db, issue, page, step=body.step)
+    db.commit()
+    last["detail"] = (last.get("detail") or "") + f" 分析新建 {created}，跳过 {skipped}。"
+    return AiAssistOut(**last)
