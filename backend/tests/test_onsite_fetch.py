@@ -243,6 +243,7 @@ def test_fetch_registered_updates_observation_and_verifies(client: TestClient, d
     fetched = client.post("/api/onsite/fetch-registered", headers=headers)
     assert fetched.status_code == 200, fetched.text
     body = fetched.json()
+    assert body["ai_status"] == "skipped"
     assert body["fetched"] >= 1
     assert all(r["crawl_status"] != "ok" or r["url"].startswith(ORIGIN) for r in body["results"])
 
@@ -293,3 +294,84 @@ def test_analyze_reads_current_observation_not_old_detail(client: TestClient, de
 def test_normalize_origin_does_not_guess_www() -> None:
     assert normalize_origin("https://snipers.com.cn") == "https://snipers.com.cn"
     assert normalize_origin("https://www.snipers.com.cn/") == "https://www.snipers.com.cn"
+
+
+def test_fetch_many_does_not_share_client_across_urls(monkeypatch) -> None:
+    """Would fail if fetch_many handed one Client to a thread pool (httpx is not thread-safe)."""
+    import threading
+    import time
+
+    import app.onsite_fetch as onsite_fetch
+    from app.onsite_fetch import fetch_many
+
+    page_clients: list[int] = []
+    in_flight: dict[int, int] = {}
+    max_in_flight: dict[int, int] = {}
+    lock = threading.Lock()
+    orig_fetch = onsite_fetch.fetch_url
+    orig_request = httpx.Client.request
+
+    def tracked_fetch(url, allowed, *, client, robots=None):
+        page_clients.append(id(client))
+        return orig_fetch(url, allowed, client=client, robots=robots)
+
+    def tracked_request(self, method, url, *args, **kwargs):
+        cid = id(self)
+        with lock:
+            in_flight[cid] = in_flight.get(cid, 0) + 1
+            max_in_flight[cid] = max(max_in_flight.get(cid, 0), in_flight[cid])
+        try:
+            time.sleep(0.02)
+            return orig_request(self, method, url, *args, **kwargs)
+        finally:
+            with lock:
+                in_flight[cid] -= 1
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/robots.txt":
+            return httpx.Response(200, text="User-agent: *\nAllow: /\n")
+        return httpx.Response(200, text=SAMPLE_HTML)
+
+    monkeypatch.setattr(onsite_fetch, "fetch_url", tracked_fetch)
+    monkeypatch.setattr(httpx.Client, "request", tracked_request)
+
+    targets = [(f"{ORIGIN}/a", None), (f"{ORIGIN}/b", None), (f"{ORIGIN}/c", None)]
+    rows = fetch_many(targets, ORIGIN, transport=httpx.MockTransport(handler))
+    assert len(rows) == 3
+    assert all(snap.crawl_status == CRAWL_OK for _url, _page, snap in rows)
+    assert len(page_clients) == 3
+    assert len(set(page_clients)) == 3
+    assert all(count == 1 for count in max_in_flight.values())
+
+
+def test_fetch_registered_does_not_call_llm(client: TestClient, demo_user, monkeypatch) -> None:
+    headers = auth_header(client)
+    client.patch("/api/onsite/settings", headers=headers, json={"site_origin": ORIGIN})
+    client.post(
+        "/api/onsite/pages",
+        headers=headers,
+        json={"path": "/en", "locale": "en-US", "title": "Live"},
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/robots.txt":
+            return httpx.Response(200, text="User-agent: *\nAllow: /\n")
+        return httpx.Response(200, text=SAMPLE_HTML)
+
+    import app.onsite_fetch as onsite_fetch
+    import app.routers.onsite as onsite_router
+
+    monkeypatch.setattr(onsite_fetch, "TEST_TRANSPORT", httpx.MockTransport(handler))
+
+    def boom(*_args, **_kwargs):
+        raise AssertionError("抓取接口不得调用 LLM")
+
+    monkeypatch.setattr(onsite_router, "assist_onsite_issue", boom)
+    monkeypatch.setattr(onsite_router, "_ai_after_analyze", boom)
+
+    fetched = client.post("/api/onsite/fetch-registered", headers=headers)
+    assert fetched.status_code == 200, fetched.text
+    body = fetched.json()
+    assert body["ai_status"] == "skipped"
+    assert "不跑 LLM" in body["note"]
+    assert body["fetched"] >= 1

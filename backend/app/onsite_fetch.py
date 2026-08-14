@@ -9,7 +9,6 @@ from __future__ import annotations
 import json
 import re
 import ssl
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from html.parser import HTMLParser
@@ -24,7 +23,6 @@ from app.models import SitePage
 USER_AGENT = "G-Snipers-Overseas/0.1 (+onsite-fetch; read-only)"
 FETCH_TIMEOUT = 15.0
 MAX_REDIRECTS = 5
-MAX_WORKERS = 3
 MAX_BODY = 1_500_000
 SHELL_TEXT_LIMIT = 80
 # Tests may assign a MockTransport. Production stays None.
@@ -439,29 +437,18 @@ def fetch_many(
     origin: str,
     *,
     transport: httpx.BaseTransport | None = None,
-    max_workers: int = MAX_WORKERS,
 ) -> list[tuple[str, SitePage | None, PageSnapshot]]:
+    """Serial GET. Each URL gets its own Client — httpx.Client is not thread-safe."""
     allowed = allowed_hosts_from_origin(origin)
     items = list(targets)
-    with make_client(transport=transport) as client:
-        robots = load_robots(origin, client)
-        results: list[tuple[str, SitePage | None, PageSnapshot] | None] = [None] * len(items)
-
-        def _one(index: int, url: str, page: SitePage | None) -> tuple[int, PageSnapshot]:
-            return index, fetch_url(url, allowed, client=client, robots=robots)
-
-        workers = max(1, min(max_workers, len(items) or 1))
-        if workers == 1 or len(items) <= 1:
-            for i, (url, page) in enumerate(items):
-                results[i] = (url, page, fetch_url(url, allowed, client=client, robots=robots))
-        else:
-            with ThreadPoolExecutor(max_workers=workers) as pool:
-                futs = [pool.submit(_one, i, url, page) for i, (url, page) in enumerate(items)]
-                for fut in as_completed(futs):
-                    index, snap = fut.result()
-                    url, page = items[index]
-                    results[index] = (url, page, snap)
-    return [row for row in results if row is not None]
+    with make_client(transport=transport) as robots_client:
+        robots = load_robots(origin, robots_client)
+    results: list[tuple[str, SitePage | None, PageSnapshot]] = []
+    for url, page in items:
+        with make_client(transport=transport) as client:
+            snap = fetch_url(url, allowed, client=client, robots=robots)
+        results.append((url, page, snap))
+    return results
 
 
 def apply_observation(page: SitePage, snap: PageSnapshot) -> None:

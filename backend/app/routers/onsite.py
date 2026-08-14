@@ -280,14 +280,11 @@ def fetch_registered(user: User = Depends(get_current_user), db: Session = Depen
     rows = fetch_many(targets, origin)
     fetched, failed, verified, created, results = _ingest_snapshots(db, user, rows)
     pages_after = db.query(SitePage).filter(SitePage.tenant_id == user.tenant_id).all()
-    ai_status = _ai_after_analyze(db, user, pages_after)
     db.commit()
     note = (
         f"只抓已登记页（含站点根），主机名必须是 {origin_host(origin)}。"
-        "观察层已覆盖；改稿未动。收录仍未测。"
+        "观察层已覆盖并按规则验收。改稿未动，本请求不跑 LLM。收录仍未测。"
     )
-    if ai_status == UNCONFIGURED:
-        note += " LLM 未配置，未编造诊断。"
     return FetchRegisteredOut(
         origin=origin,
         fetched=fetched,
@@ -297,7 +294,7 @@ def fetch_registered(user: User = Depends(get_current_user), db: Session = Depen
         pages=len(pages_after),
         note=note,
         results=results,
-        ai_status=ai_status,
+        ai_status="skipped",
     )
 
 
@@ -311,13 +308,10 @@ def fetch_one_page(
     origin = _require_origin(tenant)
     page = _owned_page(db, user, page_id)
     snap, created, verified = _fetch_one_registered(db, user, page, origin)
-    ai_status = _ai_after_analyze(db, user, [page])
     db.commit()
     failed = 0 if snap.usable else 1
     fetched = 1 if snap.usable else 0
-    note = "已回抓本页观察层。改稿未覆盖。收录仍未测。"
-    if ai_status == UNCONFIGURED:
-        note += " LLM 未配置，未编造诊断。"
+    note = "已回抓本页观察层并按规则验收。改稿未覆盖，本请求不跑 LLM。收录仍未测。"
     return FetchRegisteredOut(
         origin=origin,
         fetched=fetched,
@@ -340,7 +334,7 @@ def fetch_one_page(
                 created=created,
             )
         ],
-        ai_status=ai_status,
+        ai_status="skipped",
     )
 
 
