@@ -20,6 +20,8 @@ export default function MarketDetailPage() {
   const [brief, setBrief] = useState({ summary: "", opportunities: "", risks: "", recommended_actions: "" });
   const [competitor, setCompetitor] = useState({ name: "", website: "", positioning: "" });
   const [signal, setSignal] = useState({ theme: "", locale: "", intensity: 3, intent: "informational" });
+  const [settings, setSettings] = useState({ status: "watching", opportunity_score: 50, notes: "" });
+  const [seoPages, setSeoPages] = useState<SeoPage[]>([]);
 
   function load() {
     api<MarketDetail>(`/api/markets/${params.id}`)
@@ -32,8 +34,12 @@ export default function MarketDetailPage() {
           recommended_actions: m.brief?.recommended_actions ?? "",
         });
         setSignal((s) => ({ ...s, locale: m.primary_locale }));
+        setSettings({ status: m.status, opportunity_score: m.opportunity_score, notes: m.notes ?? "" });
       })
       .catch((e) => setError(e.message));
+    api<SeoPage[]>(`/api/seo-pages?market_id=${params.id}`)
+      .then(setSeoPages)
+      .catch(() => setSeoPages([]));
   }
 
   useEffect(() => {
@@ -68,6 +74,19 @@ export default function MarketDetailPage() {
     router.push(`/seo/${page.id}`);
   }
 
+  async function saveSettings(e: FormEvent) {
+    e.preventDefault();
+    await api(`/api/markets/${params.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        status: settings.status,
+        opportunity_score: Number(settings.opportunity_score),
+        notes: settings.notes,
+      }),
+    });
+    load();
+  }
+
   if (error) return <p className="text-red-600">{error}</p>;
   if (!market) return <p className="text-sm text-slate-500">加载中…</p>;
 
@@ -86,6 +105,39 @@ export default function MarketDetailPage() {
         </p>
         {market.notes ? <p className="mt-2 text-sm text-slate-600">{market.notes}</p> : null}
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>市场状态</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form className="grid gap-3 md:grid-cols-4" onSubmit={saveSettings}>
+            <select
+              className="h-9 rounded-md border border-slate-200 px-2 text-sm"
+              value={settings.status}
+              onChange={(e) => setSettings({ ...settings, status: e.target.value })}
+            >
+              <option value="priority">优先</option>
+              <option value="watching">观察</option>
+              <option value="paused">暂停</option>
+            </select>
+            <Input
+              type="number"
+              min={0}
+              max={100}
+              value={settings.opportunity_score}
+              onChange={(e) => setSettings({ ...settings, opportunity_score: Number(e.target.value) })}
+            />
+            <Input
+              placeholder="备注"
+              value={settings.notes}
+              onChange={(e) => setSettings({ ...settings, notes: e.target.value })}
+            />
+            <Button type="submit">保存状态</Button>
+          </form>
+          <p className="mt-2 text-xs text-slate-500">机会分由客户经理评估，不是搜索份额或第三方抓取。</p>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
@@ -190,7 +242,7 @@ export default function MarketDetailPage() {
               </li>
             ))}
           </ul>
-          <form className="grid gap-2 md:grid-cols-4" onSubmit={addSignal}>
+          <form className="grid gap-2 md:grid-cols-5" onSubmit={addSignal}>
             <Input
               className="md:col-span-2"
               placeholder="主题 / 关键词"
@@ -203,10 +255,37 @@ export default function MarketDetailPage() {
               value={signal.locale}
               onChange={(e) => setSignal({ ...signal, locale: e.target.value })}
             />
+            <select
+              className="h-9 rounded-md border border-slate-200 px-2 text-sm"
+              value={signal.intent}
+              onChange={(e) => setSignal({ ...signal, intent: e.target.value })}
+            >
+              <option value="informational">了解</option>
+              <option value="commercial">比较</option>
+              <option value="transactional">转化</option>
+            </select>
             <Button type="submit" variant="outline">
               录入信号
             </Button>
           </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>本市场的 SEO 选题</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {seoPages.length === 0 ? <p className="text-sm text-slate-500">还没有选题。从上方需求信号开一篇即可。</p> : null}
+          {seoPages.map((p) => (
+            <Link key={p.id} href={`/seo/${p.id}`} className="flex items-center justify-between rounded-md border p-3 hover:border-brand-600">
+              <div>
+                <div className="font-medium">{p.title}</div>
+                <div className="text-xs text-slate-500">{p.locale}</div>
+              </div>
+              <Badge>{p.status}</Badge>
+            </Link>
+          ))}
         </CardContent>
       </Card>
     </div>

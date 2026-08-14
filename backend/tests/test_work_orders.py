@@ -37,11 +37,11 @@ def test_work_order_create_claim_status(client: TestClient, demo_user) -> None:
     assert done.json()["status"] == "done"
 
 
-def test_reject_ads_typed_work_order(client: TestClient, demo_user) -> None:
+def test_reject_unknown_work_order_type(client: TestClient, demo_user) -> None:
     headers = auth_header(client)
     res = client.post(
         "/api/work-orders",
         headers=headers,
-        json={"title": "改预算", "type": "ads_setup"},
+        json={"title": "无效类型", "type": "not_a_real_type"},
     )
     assert res.status_code == 400

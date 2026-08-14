@@ -17,3 +17,15 @@ def test_login_and_me(client: TestClient, demo_user) -> None:
 
 def test_health(client: TestClient) -> None:
     assert client.get("/api/health").json()["status"] == "ok"
+
+
+def test_boot_does_not_require_google_ads_env(client: TestClient, monkeypatch) -> None:
+    for key in (
+        "GOOGLE_ADS_CLIENT_ID",
+        "GOOGLE_ADS_CLIENT_SECRET",
+        "GOOGLE_ADS_DEVELOPER_TOKEN",
+        "GOOGLE_ADS_MCC_ID",
+        "GOOGLE_ADS_REDIRECT_URI",
+    ):
+        monkeypatch.delenv(key, raising=False)
+    assert client.get("/api/health").json()["status"] == "ok"

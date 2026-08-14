@@ -54,6 +54,18 @@ def test_outline_draft_meta_and_confirm_gate(client: TestClient, demo_user) -> N
     assert ready.json()["status"] == "ready"
 
 
+def test_create_work_order_for_seo_page(client: TestClient, demo_user) -> None:
+    headers = auth_header(client)
+    page_id = _create_page(client, headers)
+    order = client.post(
+        "/api/work-orders",
+        headers=headers,
+        json={"title": "写大纲", "type": "seo_outline", "seo_page_id": page_id},
+    )
+    assert order.status_code == 201
+    assert order.json()["seo_page_id"] == page_id
+
+
 def test_list_filter_by_status(client: TestClient, demo_user) -> None:
     headers = auth_header(client)
     _create_page(client, headers)

@@ -37,6 +37,15 @@ def test_market_crud_and_brief(client: TestClient, demo_user) -> None:
     assert brief.status_code == 200
     assert brief.json()["summary"] == "先做英文指南"
 
+    patched = client.patch(
+        f"/api/markets/{market_id}",
+        headers=headers,
+        json={"status": "watching", "opportunity_score": 55},
+    )
+    assert patched.status_code == 200
+    assert patched.json()["status"] == "watching"
+    assert patched.json()["opportunity_score"] == 55
+
     detail = client.get(f"/api/markets/{market_id}", headers=headers)
     assert detail.status_code == 200
     assert detail.json()["brief"]["summary"] == "先做英文指南"

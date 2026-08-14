@@ -60,7 +60,7 @@ export default function InquiriesPage() {
       <div>
         <h1 className="text-2xl font-semibold">询盘</h1>
         <p className="mt-1 text-sm text-slate-500">
-          轻量记录，可挂到市场或 SEO 选题。本切片用它观察内容是否带来线索，不是广告转化看板。
+          轻量记录，可挂到市场或 SEO 选题，用来看内容是否带来线索。
         </p>
       </div>
 

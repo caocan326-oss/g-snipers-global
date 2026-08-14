@@ -3,15 +3,37 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { api, type DashboardSummary } from "@/lib/api";
+import { api, type DashboardSummary, type Market, type SeoPage } from "@/lib/api";
+
+const seoLabel: Record<string, string> = {
+  idea: "选题",
+  outline: "大纲",
+  draft: "正文",
+  meta: "Meta",
+  review: "审核中",
+  ready: "可交付",
+};
 
 export default function HomePage() {
   const [data, setData] = useState<DashboardSummary | null>(null);
+  const [markets, setMarkets] = useState<Market[]>([]);
+  const [pages, setPages] = useState<SeoPage[]>([]);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    api<DashboardSummary>("/api/dashboard/summary").then(setData).catch((e) => setError(e.message));
+    Promise.all([
+      api<DashboardSummary>("/api/dashboard/summary"),
+      api<Market[]>("/api/markets"),
+      api<SeoPage[]>("/api/seo-pages"),
+    ])
+      .then(([summary, marketList, seoList]) => {
+        setData(summary);
+        setMarkets(marketList);
+        setPages(seoList);
+      })
+      .catch((e) => setError(e.message));
   }, []);
 
   if (error) return <p className="text-red-600">{error}</p>;
@@ -30,7 +52,7 @@ export default function HomePage() {
       <div>
         <h1 className="text-2xl font-semibold">工作台首页</h1>
         <p className="mt-1 text-sm text-slate-500">
-          {data.tenant_name} · 本切片只做全球洞察与多语言 SEO 执行，不接广告账户。
+          {data.tenant_name} · 全球洞察与多语言 SEO 执行。数字来自本工作区 seed / 录入数据。
         </p>
       </div>
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
@@ -47,6 +69,45 @@ export default function HomePage() {
             </Card>
           </Link>
         ))}
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>优先市场</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {markets.slice(0, 5).map((m) => (
+              <Link key={m.id} href={`/insights/${m.id}`} className="flex items-center justify-between rounded-md border p-3 hover:border-brand-600">
+                <div>
+                  <div className="font-medium">{m.name}</div>
+                  <div className="text-xs text-slate-500">
+                    {m.primary_locale} · 需求 {m.demand_count} · 选题 {m.seo_count}
+                  </div>
+                </div>
+                <Badge tone={m.status === "priority" ? "green" : "amber"}>机会 {m.opportunity_score}</Badge>
+              </Link>
+            ))}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>SEO 选题进度</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {pages.slice(0, 5).map((p) => (
+              <Link key={p.id} href={`/seo/${p.id}`} className="flex items-center justify-between rounded-md border p-3 hover:border-brand-600">
+                <div>
+                  <div className="font-medium">{p.title}</div>
+                  <div className="text-xs text-slate-500">
+                    {p.locale} · {p.target_keyword}
+                  </div>
+                </div>
+                <Badge>{seoLabel[p.status] ?? p.status}</Badge>
+              </Link>
+            ))}
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

@@ -61,7 +61,7 @@ export default function WorkOrdersPage() {
       <div>
         <h1 className="text-2xl font-semibold">工单</h1>
         <p className="mt-1 text-sm text-slate-500">
-          支撑洞察调研与 SEO 执行（大纲 / 正文 / Meta）。本切片没有广告投放类工单。
+          支撑洞察调研与 SEO 执行（大纲 / 正文 / Meta）。类型仅限工作台需要的几种。
         </p>
       </div>
 

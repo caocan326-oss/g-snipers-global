@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { api, type SeoPage } from "@/lib/api";
+import { api, type SeoPage, type WorkOrder } from "@/lib/api";
 
 const steps = ["outline", "draft", "meta", "review"] as const;
 const stepLabel: Record<string, string> = {
@@ -27,6 +27,7 @@ export default function SeoEditorPage() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [confirmNote, setConfirmNote] = useState("");
+  const [orderMsg, setOrderMsg] = useState("");
 
   function load() {
     api<SeoPage>(`/api/seo-pages/${params.id}`).then(setPage).catch((e) => setError(e.message));
@@ -88,18 +89,42 @@ export default function SeoEditorPage() {
     }
   }
 
-  async function markReady(confirmed: boolean) {
+  async function markReady() {
     if (!page) return;
     setBusy(true);
     setError("");
     try {
       const updated = await api<SeoPage>(`/api/seo-pages/${page.id}/mark-ready`, {
         method: "POST",
-        body: JSON.stringify({ confirmed, note: confirmNote }),
+        body: JSON.stringify({ confirmed: true, note: confirmNote }),
       });
       setPage(updated);
     } catch (e) {
       setError(e instanceof Error ? e.message : "确认失败");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function openWorkOrder() {
+    if (!page) return;
+    const type = tab === "meta" || tab === "review" ? "seo_meta" : tab === "draft" ? "seo_draft" : "seo_outline";
+    setBusy(true);
+    setOrderMsg("");
+    try {
+      const order = await api<WorkOrder>("/api/work-orders", {
+        method: "POST",
+        body: JSON.stringify({
+          title: `${page.title} · ${stepLabel[tab] ?? "执行"}`,
+          type,
+          seo_page_id: page.id,
+          market_id: page.market_id,
+          acceptance_criteria: "大纲、正文、Meta 齐全后提交审核，由客户经理确认可交付。",
+        }),
+      });
+      setOrderMsg(`已开工事单，可在工单列表领取（${order.id.slice(0, 8)}…）`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "开单失败");
     } finally {
       setBusy(false);
     }
@@ -118,7 +143,23 @@ export default function SeoEditorPage() {
           <Badge>{page.locale}</Badge>
           <Badge tone="brand">{page.status}</Badge>
         </div>
-        <p className="mt-1 text-sm text-slate-500">关键词：{page.target_keyword}</p>
+        <p className="mt-1 text-sm text-slate-500">
+          关键词：{page.target_keyword}
+          {page.market_id ? (
+            <>
+              {" · "}
+              <Link className="text-brand-700" href={`/insights/${page.market_id}`}>
+                查看来源市场
+              </Link>
+            </>
+          ) : null}
+        </p>
+        <div className="mt-3">
+          <Button size="sm" variant="outline" disabled={busy} onClick={openWorkOrder}>
+            为当前步骤开执行工单
+          </Button>
+          {orderMsg ? <span className="ml-3 text-sm text-slate-500">{orderMsg}</span> : null}
+        </div>
       </div>
 
       <div className="flex gap-2">
@@ -213,7 +254,7 @@ export default function SeoEditorPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm text-slate-600">
-              本切片不会把内容推送到任何 CMS 或广告平台。标记「可交付」必须由客户经理确认，禁止自动发布。
+              标记「可交付」必须由客户经理确认。本切片不会自动发布到客户站点。
             </p>
             <div className="grid gap-3 text-sm md:grid-cols-3">
               <div className="rounded-md bg-slate-50 p-3">大纲 {page.outline ? "已有" : "缺失"}</div>
@@ -226,14 +267,9 @@ export default function SeoEditorPage() {
             <div className="space-y-2 border-t pt-4">
               <Label>确认备注</Label>
               <Input value={confirmNote} onChange={(e) => setConfirmNote(e.target.value)} />
-              <div className="flex gap-2">
-                <Button disabled={busy} onClick={() => markReady(true)}>
-                  我已确认，标记可交付
-                </Button>
-                <Button variant="outline" disabled={busy} onClick={() => markReady(false)}>
-                  未确认（应被拒绝）
-                </Button>
-              </div>
+              <Button disabled={busy} onClick={markReady}>
+                我已确认，标记可交付
+              </Button>
             </div>
           </CardContent>
         </Card>
