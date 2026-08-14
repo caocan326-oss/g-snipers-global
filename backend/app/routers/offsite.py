@@ -4,7 +4,14 @@ from sqlalchemy.orm import Session, selectinload
 from app.auth import get_current_user
 from app.database import get_db
 from app.models import BacklinkGap, OutreachItem, User
-from app.schemas import BacklinkGapCreate, BacklinkGapOut, BacklinkGapUpdate, OutreachCreate, OutreachOut
+from app.schemas import (
+    BacklinkGapCreate,
+    BacklinkGapOut,
+    BacklinkGapUpdate,
+    LinkCheckerOut,
+    OutreachCreate,
+    OutreachOut,
+)
 
 router = APIRouter(prefix="/api/offsite", tags=["offsite"])
 
@@ -35,6 +42,7 @@ def _gap_out(row: BacklinkGap) -> BacklinkGapOut:
 @router.get("/gaps", response_model=list[BacklinkGapOut])
 def list_gaps(
     status: str | None = None,
+    verify_status: str | None = None,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[BacklinkGapOut]:
@@ -45,7 +53,25 @@ def list_gaps(
     )
     if status:
         q = q.filter(BacklinkGap.status == status)
+    if verify_status:
+        q = q.filter(BacklinkGap.verify_status == verify_status)
     return [_gap_out(r) for r in q.order_by(BacklinkGap.created_at.desc()).all()]
+
+
+@router.get("/checker", response_model=LinkCheckerOut)
+def link_checker(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> LinkCheckerOut:
+    rows = (
+        db.query(BacklinkGap)
+        .options(selectinload(BacklinkGap.outreach))
+        .filter(BacklinkGap.tenant_id == user.tenant_id)
+        .order_by(BacklinkGap.created_at.desc())
+        .all()
+    )
+    counts = {key: 0 for key in VERIFY_STATUSES}
+    for row in rows:
+        key = row.verify_status if row.verify_status in counts else "unverified"
+        counts[key] += 1
+    return LinkCheckerOut(counts=counts, domain_metric="未测", links=[_gap_out(r) for r in rows])
 
 
 @router.post("/gaps", response_model=BacklinkGapOut, status_code=201)

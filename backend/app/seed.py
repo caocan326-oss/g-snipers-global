@@ -8,6 +8,7 @@ from app.config import settings
 from app.content_templates import generate_draft, generate_meta, generate_outline
 from app.database import SessionLocal
 from app.geo_helpers import CHECKLIST_DEFS, ENGINES, build_llms_txt
+from app.risk import default_severity, severity_to_risk
 from app.models import (
     BacklinkGap,
     Competitor,
@@ -368,6 +369,7 @@ def _seed_onsite_offsite_dist(db: Session, tenant: Tenant, user: User) -> None:
         headings="H1 Installation\nH2 Tools",
         internal_links="/en-us/compatibility",
         structured_data="",
+        canonical="",
         index_status="untested",
         crawl_status="untested",
         notes="演示页。收录/抓取未接 GSC，保持未测。",
@@ -441,8 +443,9 @@ def _seed_onsite_offsite_dist(db: Session, tenant: Tenant, user: User) -> None:
             title="Meta 描述过短",
             detail="工作区草稿，未接 Search Console。",
             proposed_change="补到 140–160 字符，含 renter / installation。",
+            severity="low",
             risk="low",
-            status="open",
+            status="drafted",
             metric_status="untested",
         ),
         OnsiteIssue(
@@ -450,10 +453,11 @@ def _seed_onsite_offsite_dist(db: Session, tenant: Tenant, user: User) -> None:
             page_id=p1.id,
             category="schema",
             title="缺少 HowTo / FAQ 结构化数据",
-            detail="上线会改 HTML，属高风险。",
+            detail="上线会改 HTML，属 critical。分析与应用分开。",
             proposed_change="先出 JSON-LD 方案，确认后再给站点。",
+            severity="critical",
             risk="high",
-            status="open",
+            status="drafted",
             metric_status="untested",
         ),
         OnsiteIssue(
@@ -463,6 +467,19 @@ def _seed_onsite_offsite_dist(db: Session, tenant: Tenant, user: User) -> None:
             title="收录状态未知",
             detail="无 GSC，不能填已收录或 0 页。",
             proposed_change="有 Search Console 后再测。",
+            severity="critical",
+            risk="high",
+            status="open",
+            metric_status="untested",
+        ),
+        OnsiteIssue(
+            tenant_id=tenant.id,
+            page_id=p1.id,
+            category="canonical",
+            title="Canonical 未登记",
+            detail="无 GSC 不判断规范 URL。",
+            proposed_change="/en-us/smart-lock-installation-renters",
+            severity="critical",
             risk="high",
             status="open",
             metric_status="untested",
@@ -474,8 +491,9 @@ def _seed_onsite_offsite_dist(db: Session, tenant: Tenant, user: User) -> None:
             title="缺少 H1",
             detail="兼容页还没有标题层级。",
             proposed_change="补 H1 Compatibility + H2 门型。",
-            risk="low",
-            status="open",
+            severity="high",
+            risk="high",
+            status="drafted",
             metric_status="untested",
         ),
         OnsiteIssue(
@@ -485,6 +503,7 @@ def _seed_onsite_offsite_dist(db: Session, tenant: Tenant, user: User) -> None:
             title="未链到安装指南",
             detail="监测到的内链缺口。",
             proposed_change="正文加入 /en-us/smart-lock-installation-renters",
+            severity="low",
             risk="low",
             status="draft_applied",
             metric_status="untested",
@@ -496,6 +515,7 @@ def _seed_onsite_offsite_dist(db: Session, tenant: Tenant, user: User) -> None:
             title="抓取状态未测",
             detail="未接爬虫日志 / GSC。",
             proposed_change="有数据源后再标。",
+            severity="critical",
             risk="high",
             status="open",
             metric_status="untested",
@@ -506,8 +526,9 @@ def _seed_onsite_offsite_dist(db: Session, tenant: Tenant, user: User) -> None:
             category="tdk",
             title="德文 Description 为空",
             proposed_change="用本地化隐私表述补描述。",
+            severity="low",
             risk="low",
-            status="open",
+            status="drafted",
             metric_status="untested",
         ),
         OnsiteIssue(
@@ -516,6 +537,7 @@ def _seed_onsite_offsite_dist(db: Session, tenant: Tenant, user: User) -> None:
             category="schema",
             title="首页 Organization 标记缺失",
             proposed_change="方案先写在工作区，确认后才改线上。",
+            severity="critical",
             risk="high",
             status="open",
             metric_status="untested",
@@ -794,6 +816,14 @@ def _seed_three_chains(db: Session, tenant: Tenant, user: User) -> None:
                 updated_by=user.id,
             )
         )
+
+    for issue in db.query(OnsiteIssue).filter(OnsiteIssue.tenant_id == tenant.id).all():
+        if not issue.severity or (issue.severity == "low" and issue.category in {"schema", "index", "crawl", "canonical"}):
+            issue.severity = default_severity(issue.category)
+            issue.risk = severity_to_risk(issue.severity)
+    for page in db.query(SitePage).filter(SitePage.tenant_id == tenant.id).all():
+        if page.canonical is None:
+            page.canonical = ""
 
     gaps = db.query(BacklinkGap).filter(BacklinkGap.tenant_id == tenant.id).all()
     for gap in gaps:

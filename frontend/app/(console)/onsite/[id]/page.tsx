@@ -19,12 +19,16 @@ const catLabel: Record<string, string> = {
   schema: "JSON-LD",
   index: "收录",
   crawl: "抓取",
+  canonical: "Canonical",
 };
 
+const sevLabel: Record<string, string> = { critical: "Critical", high: "High", low: "Low" };
+const sevTone: Record<string, "red" | "amber" | "green"> = { critical: "red", high: "amber", low: "green" };
 const statusLabel: Record<string, string> = {
-  open: "待处理",
-  draft_applied: "已落工作区草稿",
-  confirmed: "已确认（仍不自动上线）",
+  open: "已分析，待改稿",
+  drafted: "已有改稿，未应用",
+  draft_applied: "已写入工作区",
+  confirmed: "已确认（仍不上线）",
   wont_fix: "不做",
 };
 
@@ -32,6 +36,8 @@ export default function OnsiteEditorPage() {
   const params = useParams<{ id: string }>();
   const [page, setPage] = useState<SitePageDetail | null>(null);
   const [error, setError] = useState("");
+  const [note, setNote] = useState("");
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [issueForm, setIssueForm] = useState({ category: "tdk", title: "", proposed_change: "" });
 
   function load() {
@@ -55,9 +61,17 @@ export default function OnsiteEditorPage() {
         headings: page.headings,
         internal_links: page.internal_links,
         structured_data: page.structured_data,
+        canonical: page.canonical,
         notes: page.notes,
       }),
     });
+    load();
+  }
+
+  async function analyze() {
+    if (!page) return;
+    const res = await api<{ created: number; note: string }>(`/api/onsite/pages/${page.id}/analyze`, { method: "POST" });
+    setNote(`${res.note} 新建 ${res.created}。`);
     load();
   }
 
@@ -69,23 +83,27 @@ export default function OnsiteEditorPage() {
     load();
   }
 
-  async function applyDraft(id: string) {
-    setError("");
-    try {
-      await api(`/api/onsite/issues/${id}/apply-draft`, { method: "POST" });
-      load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "失败");
+  async function saveDraft(id: string) {
+    const text = drafts[id];
+    if (!text?.trim()) {
+      setError("请先写改稿");
+      return;
     }
+    await api(`/api/onsite/issues/${id}/draft`, { method: "PATCH", body: JSON.stringify({ proposed_change: text }) });
+    load();
   }
 
-  async function confirmHigh(id: string) {
+  async function apply(issue: OnsiteIssue) {
     setError("");
     try {
-      await api(`/api/onsite/issues/${id}/confirm-apply`, {
-        method: "POST",
-        body: JSON.stringify({ confirmed: true }),
-      });
+      if (issue.severity === "low" && issue.risk === "low") {
+        await api(`/api/onsite/issues/${issue.id}/apply-draft`, { method: "POST" });
+      } else {
+        await api(`/api/onsite/issues/${issue.id}/confirm-apply`, {
+          method: "POST",
+          body: JSON.stringify({ confirmed: true }),
+        });
+      }
       load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "失败");
@@ -94,23 +112,71 @@ export default function OnsiteEditorPage() {
 
   if (!page) return <p className="text-sm text-slate-500">{error || "加载中…"}</p>;
 
+  const grouped = {
+    critical: page.issues.filter((i) => i.severity === "critical"),
+    high: page.issues.filter((i) => i.severity === "high"),
+    low: page.issues.filter((i) => i.severity !== "critical" && i.severity !== "high"),
+  };
+
   return (
     <div className="space-y-6">
       <div>
         <Link href="/onsite" className="text-sm text-brand-700">
-          ← 页面清单
+          ← 问题看板
         </Link>
         <h1 className="mt-2 text-2xl font-semibold">{page.title}</h1>
         <p className="text-sm text-slate-500">
-          {page.path} · 收录 {page.index_status === "untested" ? "未测" : page.index_status} · 抓取{" "}
-          {page.crawl_status === "untested" ? "未测" : page.crawl_status}
+          {page.path} · 收录 {page.index_status === "untested" ? "未测" : page.index_status} · Canonical{" "}
+          {page.canonical || "未登记"}
         </p>
+        <Button className="mt-3" variant="outline" onClick={analyze}>
+          分析本页（不应用）
+        </Button>
+        {note ? <p className="mt-2 text-sm text-slate-600">{note}</p> : null}
       </div>
+
+      {(["critical", "high", "low"] as const).map((sev) => (
+        <Card key={sev}>
+          <CardHeader>
+            <CardTitle>
+              <Badge tone={sevTone[sev]}>{sevLabel[sev]}</Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {grouped[sev].length === 0 ? <p className="text-sm text-slate-500">无</p> : null}
+            {grouped[sev].map((i) => (
+              <div key={i.id} className="rounded-md border p-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-medium">{i.title}</span>
+                  <Badge>{catLabel[i.category] ?? i.category}</Badge>
+                  <Badge tone="amber">{i.metric_status === "untested" ? "未测" : i.metric_status}</Badge>
+                  <Badge tone="blue">{statusLabel[i.status] ?? i.status}</Badge>
+                </div>
+                <p className="mt-1 text-sm text-slate-600">{i.detail}</p>
+                <Textarea
+                  className="mt-2"
+                  placeholder="改稿草稿"
+                  value={drafts[i.id] ?? i.proposed_change}
+                  onChange={(e) => setDrafts({ ...drafts, [i.id]: e.target.value })}
+                />
+                <div className="mt-2 flex gap-2">
+                  <Button size="sm" variant="outline" onClick={() => saveDraft(i.id)}>
+                    保存改稿
+                  </Button>
+                  <Button size="sm" onClick={() => apply(i)}>
+                    {i.severity === "low" ? "应用到工作区" : "确认应用（仍不上线）"}
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      ))}
 
       <form className="grid gap-6 lg:grid-cols-2" onSubmit={save}>
         <Card>
           <CardHeader>
-            <CardTitle>TDK 工作区</CardTitle>
+            <CardTitle>工作区字段（应用后才写入）</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <div>
@@ -122,8 +188,8 @@ export default function OnsiteEditorPage() {
               <Textarea value={page.meta_description} onChange={(e) => setPage({ ...page, meta_description: e.target.value })} />
             </div>
             <div>
-              <Label>Keywords</Label>
-              <Input value={page.meta_keywords} onChange={(e) => setPage({ ...page, meta_keywords: e.target.value })} />
+              <Label>Canonical</Label>
+              <Input value={page.canonical ?? ""} onChange={(e) => setPage({ ...page, canonical: e.target.value })} />
             </div>
           </CardContent>
         </Card>
@@ -151,36 +217,9 @@ export default function OnsiteEditorPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>问题列表 · 改稿草稿 · 人审</CardTitle>
+          <CardTitle>手工记一条</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
-          <p className="text-sm text-slate-500">
-            「落草稿」会把方案写入上方对应字段。高风险确认只记录人审，不会对客户站点发 HTTP。
-          </p>
-          {page.issues.map((i: OnsiteIssue) => (
-            <div key={i.id} className="rounded-md border p-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="font-medium">{i.title}</span>
-                <Badge>{catLabel[i.category] ?? i.category}</Badge>
-                <Badge tone={i.risk === "high" ? "red" : "green"}>{i.risk === "high" ? "高风险" : "低风险"}</Badge>
-                <Badge tone="amber">{i.metric_status === "untested" ? "指标未测" : i.metric_status}</Badge>
-                <Badge tone="blue">{statusLabel[i.status] ?? i.status}</Badge>
-              </div>
-              <p className="mt-1 text-sm text-slate-600">{i.detail}</p>
-              <p className="mt-1 text-sm text-slate-500">改稿草稿：{i.proposed_change}</p>
-              <div className="mt-2 flex gap-2">
-                {i.risk === "low" ? (
-                  <Button size="sm" variant="outline" onClick={() => applyDraft(i.id)}>
-                    低风险：写入工作区草稿
-                  </Button>
-                ) : (
-                  <Button size="sm" onClick={() => confirmHigh(i.id)}>
-                    高风险：我已确认（仍不上线）
-                  </Button>
-                )}
-              </div>
-            </div>
-          ))}
+        <CardContent>
           <form className="grid gap-2 md:grid-cols-4" onSubmit={addIssue}>
             <select
               className="h-9 rounded-md border border-slate-200 px-2 text-sm"
@@ -200,15 +239,15 @@ export default function OnsiteEditorPage() {
               required
             />
             <Input
-              placeholder="改稿草稿"
+              placeholder="改稿（可后补）"
               value={issueForm.proposed_change}
               onChange={(e) => setIssueForm({ ...issueForm, proposed_change: e.target.value })}
             />
             <Button type="submit" variant="outline">
-              记一条问题
+              记问题
             </Button>
           </form>
-          {error ? <p className="text-sm text-red-600">{error}</p> : null}
+          {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
         </CardContent>
       </Card>
     </div>

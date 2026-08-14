@@ -88,7 +88,17 @@ def summary(user: User = Depends(get_current_user), db: Session = Depends(get_db
     )
     onsite_open_high = (
         db.query(func.count(OnsiteIssue.id))
-        .filter(OnsiteIssue.tenant_id == tid, OnsiteIssue.risk == "high", OnsiteIssue.status == "open")
+        .filter(OnsiteIssue.tenant_id == tid, OnsiteIssue.risk == "high", OnsiteIssue.status.in_(["open", "drafted"]))
+        .scalar()
+        or 0
+    )
+    onsite_open_critical = (
+        db.query(func.count(OnsiteIssue.id))
+        .filter(
+            OnsiteIssue.tenant_id == tid,
+            OnsiteIssue.severity == "critical",
+            OnsiteIssue.status.in_(["open", "drafted"]),
+        )
         .scalar()
         or 0
     )
@@ -124,6 +134,7 @@ def summary(user: User = Depends(get_current_user), db: Session = Depends(get_db
         onsite_pages=onsite_pages,
         onsite_open_low=onsite_open_low,
         onsite_open_high=onsite_open_high,
+        onsite_open_critical=onsite_open_critical,
         offsite_gaps=offsite_gaps,
         offsite_outreach_open=offsite_outreach_open,
         links_unverified=links_unverified,

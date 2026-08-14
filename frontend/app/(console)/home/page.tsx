@@ -24,8 +24,8 @@ export default function HomePage() {
       href: "/onsite",
       title: "站内改页 + 人审",
       value: data.onsite_pages,
-      hint: `低风险待落草稿 ${data.onsite_open_low} · 高风险待确认 ${data.onsite_open_high}`,
-      body: "页面清单 → 问题 → 改稿草稿。低风险只写工作区；改线上 schema / 收录须确认。收录未接 GSC 显示未测。",
+      hint: `Critical ${data.onsite_open_critical} · High ${data.onsite_open_high} · Low ${data.onsite_open_low}`,
+      body: "种子/内链清单 → 按严重级别看问题 → 写改稿 → 再应用。分析不改字段。无 GSC 显示未测。",
     },
     {
       href: "/geo",

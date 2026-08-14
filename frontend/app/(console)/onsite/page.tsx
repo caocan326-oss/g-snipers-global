@@ -7,85 +7,224 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { api, type SitePage } from "@/lib/api";
+import { Textarea } from "@/components/ui/textarea";
+import { api, type ContentBrief, type OnsiteBoard, type OnsiteIssue, type SitePage } from "@/lib/api";
 
-export default function OnsiteListPage() {
+const catLabel: Record<string, string> = {
+  tdk: "TDK",
+  heading: "标题",
+  internal_link: "内链",
+  schema: "JSON-LD",
+  index: "收录",
+  crawl: "抓取",
+  canonical: "Canonical",
+};
+
+const sevLabel: Record<string, string> = { critical: "Critical", high: "High", low: "Low" };
+const sevTone: Record<string, "red" | "amber" | "green"> = { critical: "red", high: "amber", low: "green" };
+const statusLabel: Record<string, string> = {
+  open: "已分析，待改稿",
+  drafted: "已有改稿，未应用",
+  draft_applied: "已写入工作区",
+  confirmed: "已确认（仍不上线）",
+};
+
+export default function OnsiteBoardPage() {
+  const [board, setBoard] = useState<OnsiteBoard | null>(null);
   const [pages, setPages] = useState<SitePage[]>([]);
+  const [briefs, setBriefs] = useState<ContentBrief[]>([]);
+  const [filter, setFilter] = useState<"critical" | "high" | "low" | "all">("all");
   const [error, setError] = useState("");
+  const [note, setNote] = useState("");
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [form, setForm] = useState({ path: "/", locale: "en-US", title: "" });
 
   function load() {
-    api<SitePage[]>("/api/onsite/pages").then(setPages).catch((e) => setError(e.message));
+    Promise.all([
+      api<OnsiteBoard>("/api/onsite/board"),
+      api<SitePage[]>("/api/onsite/pages"),
+      api<ContentBrief[]>("/api/onsite/briefs"),
+    ])
+      .then(([b, p, br]) => {
+        setBoard(b);
+        setPages(p);
+        setBriefs(br);
+      })
+      .catch((e) => setError(e.message));
   }
 
   useEffect(() => {
     load();
   }, []);
 
+  async function crawlOrSeed() {
+    setError("");
+    const res = await api<{ seeded: number; note: string }>("/api/onsite/crawl-or-seed", { method: "POST" });
+    setNote(res.note + `（新增 ${res.seeded} 页）`);
+    load();
+  }
+
+  async function analyze() {
+    setError("");
+    const res = await api<{ created: number; skipped: number; note: string }>("/api/onsite/analyze", { method: "POST" });
+    setNote(`${res.note} 新建 ${res.created}，已有 ${res.skipped}。`);
+    load();
+  }
+
+  async function saveDraft(id: string) {
+    const text = drafts[id];
+    if (!text?.trim()) {
+      setError("请先写改稿，分析与应用是两步");
+      return;
+    }
+    await api(`/api/onsite/issues/${id}/draft`, { method: "PATCH", body: JSON.stringify({ proposed_change: text }) });
+    load();
+  }
+
+  async function apply(issue: OnsiteIssue) {
+    setError("");
+    try {
+      if (issue.severity === "low" && issue.risk === "low") {
+        await api(`/api/onsite/issues/${issue.id}/apply-draft`, { method: "POST" });
+      } else {
+        await api(`/api/onsite/issues/${issue.id}/confirm-apply`, {
+          method: "POST",
+          body: JSON.stringify({ confirmed: true }),
+        });
+      }
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "失败");
+    }
+  }
+
   async function create(e: FormEvent) {
     e.preventDefault();
-    const created = await api<SitePage>("/api/onsite/pages", { method: "POST", body: JSON.stringify(form) });
-    window.location.href = `/onsite/${created.id}`;
+    await api<SitePage>("/api/onsite/pages", { method: "POST", body: JSON.stringify(form) });
+    setForm({ path: "/", locale: "en-US", title: "" });
+    load();
   }
+
+  if (!board) return <p className="text-sm text-slate-500">{error || "加载中…"}</p>;
+
+  const groups = (["critical", "high", "low"] as const).filter((k) => filter === "all" || filter === k);
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">站内改页 + 人审</h1>
         <p className="mt-1 text-sm text-slate-500">
-          页面清单 → 问题列表 → 改稿草稿。低风险只写入工作区；高风险（JSON-LD / 收录 / 抓取处置）必须确认，且本切片不会改客户线上站。没有
-          GSC 时收录与抓取保持未测，不用 0 页充数。
+          种子/工作区内链扩清单 → 按严重级别看问题（TDK / 标题 / 内链 / schema / 收录与
+          Canonical）→ 写改稿 → 再应用。分析不会改字段。无 GSC 的指标保持未测。
         </p>
       </div>
-      <Card>
-        <CardContent className="p-0">
-          <table className="w-full text-sm">
-            <thead className="border-b bg-slate-50 text-left text-slate-500">
-              <tr>
-                <th className="px-5 py-3 font-medium">页面</th>
-                <th className="px-5 py-3 font-medium">语言</th>
-                <th className="px-5 py-3 font-medium">收录</th>
-                <th className="px-5 py-3 font-medium">抓取</th>
-                <th className="px-5 py-3 font-medium">待办</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pages.map((p) => (
-                <tr key={p.id} className="border-b last:border-0">
-                  <td className="px-5 py-3">
-                    <Link className="font-medium text-brand-700" href={`/onsite/${p.id}`}>
-                      {p.title}
-                    </Link>
-                    <div className="text-xs text-slate-400">{p.path}</div>
-                  </td>
-                  <td className="px-5 py-3">{p.locale}</td>
-                  <td className="px-5 py-3">
-                    <Badge tone="amber">{p.index_status === "untested" ? "未测" : p.index_status}</Badge>
-                  </td>
-                  <td className="px-5 py-3">
-                    <Badge tone="amber">{p.crawl_status === "untested" ? "未测" : p.crawl_status}</Badge>
-                  </td>
-                  <td className="px-5 py-3">{p.open_issue_count}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </CardContent>
-      </Card>
+
+      <div className="flex flex-wrap gap-2">
+        <Button onClick={crawlOrSeed} variant="outline">
+          从内链扩清单（不抓线上）
+        </Button>
+        <Button onClick={analyze}>分析清单（不应用）</Button>
+      </div>
+      {note ? <p className="text-sm text-slate-600">{note}</p> : null}
+
+      <div className="grid gap-3 md:grid-cols-3">
+        {(["critical", "high", "low"] as const).map((k) => (
+          <button key={k} type="button" onClick={() => setFilter(filter === k ? "all" : k)} className="text-left">
+            <Card className={filter === k ? "border-brand-600" : ""}>
+              <CardHeader>
+                <CardTitle className="text-sm">{sevLabel[k]}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-semibold">{board.counts[k]}</div>
+                <p className="mt-1 text-xs text-slate-500">
+                  {board.analyzed_pages}/{board.pages} 页已分析
+                </p>
+              </CardContent>
+            </Card>
+          </button>
+        ))}
+      </div>
+
+      {groups.map((sev) => (
+        <Card key={sev}>
+          <CardHeader>
+            <CardTitle>
+              <Badge tone={sevTone[sev]}>{sevLabel[sev]}</Badge>
+              <span className="ml-2 text-sm font-normal text-slate-500">{board.groups[sev].length} 条待处理</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {board.groups[sev].length === 0 ? <p className="text-sm text-slate-500">这一档没有待处理问题。</p> : null}
+            {board.groups[sev].map((i) => (
+              <div key={i.id} className="rounded-md border p-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Link className="font-medium text-brand-700" href={`/onsite/${i.page_id}`}>
+                    {i.page_title || i.page_path}
+                  </Link>
+                  <span className="text-xs text-slate-400">{i.page_path}</span>
+                  <Badge>{catLabel[i.category] ?? i.category}</Badge>
+                  <Badge tone="amber">{i.metric_status === "untested" ? "未测" : i.metric_status}</Badge>
+                  <Badge tone="blue">{statusLabel[i.status] ?? i.status}</Badge>
+                </div>
+                <p className="mt-1 text-sm">{i.title}</p>
+                <p className="text-sm text-slate-500">{i.detail}</p>
+                {i.proposed_change ? <p className="mt-1 text-xs text-slate-500">已写改稿：{i.proposed_change}</p> : null}
+                <Textarea
+                  className="mt-2"
+                  placeholder="改稿草稿（分析不会自动写入）"
+                  value={drafts[i.id] ?? i.proposed_change}
+                  onChange={(e) => setDrafts({ ...drafts, [i.id]: e.target.value })}
+                />
+                <div className="mt-2 flex gap-2">
+                  <Button size="sm" variant="outline" onClick={() => saveDraft(i.id)}>
+                    保存改稿
+                  </Button>
+                  <Button size="sm" onClick={() => apply(i)}>
+                    {i.severity === "low" ? "应用改稿到工作区" : "确认应用（仍不上线）"}
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      ))}
+
       <Card>
         <CardHeader>
-          <CardTitle>登记一页（演示清单）</CardTitle>
+          <CardTitle>登记种子页</CardTitle>
         </CardHeader>
         <CardContent>
           <form className="grid gap-3 md:grid-cols-4" onSubmit={create}>
             <Input placeholder="路径" value={form.path} onChange={(e) => setForm({ ...form, path: e.target.value })} required />
             <Input placeholder="语言" value={form.locale} onChange={(e) => setForm({ ...form, locale: e.target.value })} />
             <Input placeholder="标题" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
-            <Button type="submit">进入改页台</Button>
+            <Button type="submit">加入清单</Button>
           </form>
-          {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
+          <p className="mt-3 text-xs text-slate-500">已登记 {pages.length} 页。点问题里的标题进入单页工作区。</p>
         </CardContent>
       </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>内容提纲（次要）</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <p className="text-sm text-slate-500">关键词 → SERP 特征。没有搜索源时特征为未测，不编造精选摘要。</p>
+          {briefs.length === 0 ? <p className="text-sm text-slate-500">还没有提纲。站内问题优先。</p> : null}
+          {briefs.map((b) => (
+            <div key={b.id} className="flex items-center justify-between rounded-md border p-3">
+              <div>
+                <div className="font-medium">{b.title}</div>
+                <div className="text-xs text-slate-500">
+                  {b.target_keyword} · {b.locale}
+                </div>
+              </div>
+              <Badge tone="amber">SERP {b.serp_features}</Badge>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+      {error ? <p className="text-sm text-red-600">{error}</p> : null}
     </div>
   );
 }

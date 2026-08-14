@@ -8,13 +8,14 @@
 
 ### 1. 站内改页 + 人审
 
-页面清单 → 问题列表 → 改稿草稿 → 人审后才允许「会碰到线上站」的动作。
+骨架对齐公开站内审计工具（清单 → 按严重级别分组 → 改稿 → 确认），**不是** Semrush 克隆，也不是一张裸 URL 表。
 
-覆盖：TDK、标题层级、内链、schema / JSON-LD、收录与抓取备注。
+1. **crawl-or-seed**：从已登记页的内链扩清单（不请求客户站点，不接 GSC）
+2. **分析**：按 critical / high / low 产出问题（TDK、标题、内链、schema、收录 / Canonical）。分析 **不改** 工作区字段
+3. **改稿草稿**：另一步，写 `proposed_change`
+4. **应用**：低风险写入工作区；critical / high 必须确认，且仍不向线上发 HTTP
 
-- **低风险**（补 TDK / 标题 / 内链草稿）：写入工作区对应字段，不碰线上。
-- **高风险**（JSON-LD、收录 / 抓取处置）：必须 `confirmed: true`。本切片仍不向客户站点发 HTTP。
-- 没有 GSC：收录 / 抓取显示 **未测**，禁止用 0 页或假排名充数。
+没有 GSC：收录 / Canonical 指标显示 **未测**，禁止用 0 页充数。关键词 → SERP 特征提纲是次要区块，SERP 特征未测。
 
 ### 2. GEO：中西引擎采样 → 工单 → 验收
 
@@ -30,7 +31,7 @@
 
 国内 G-Snipers 公开逻辑：一条一条核验 + 跟进，**不是**一键打到十几个平台。
 
-- 清单：我方 inbound / 竞品链；状态 **未核验 / 有效 / 失效 / 垃圾**；备注与跟进。
+- 断链式核验：我方 inbound / 待核验链接；状态 **未核验 / 有效 / 失效 / 垃圾**；跟进。不是 Ahrefs 外链指数，没有 DR。
 - 分发：适配器接口 + 若干未配置占位。确认后若 Key 未配 → **未配置**，`sent: false`，不发 HTTP、不刷成功。
 - 禁止代买、禁止静默外发。
 
@@ -40,8 +41,8 @@
 
 ## 明确延期
 
-- **SEM / Google Ads / MCC / OAuth：** 不接，含死按钮。启动不需要 `GOOGLE_ADS_*`。
-- **真实 GSC / Ahrefs / Semrush / 引擎 API：** 没有密钥就不算。显示未测。
+- **SEM / Google Ads / MCC / OAuth / GSC：** 不接（负责人暂无广告/GSC 测试账号）。需要这些源的指标显示 **未测**。
+- **Ahrefs / Semrush 外链指数：** 不做。
 - **真实分发 HTTP：** 适配器已在，Key 后补。未配置时确认也不会发。
 - **生产客户库：** 本期 Postgres + Alembic + 演示 seed。
 - 旧路由（SEO 选题台、工单、询盘）仍可直接打开，**不在主导航**，避免空壳菜单。
@@ -76,7 +77,7 @@ docker compose up --build
 | `backlink_gaps` / `outreach_items` | 外链核验与跟进 |
 | `distribution_jobs` / `distribution_attempts` | 分发队列与尝试 |
 
-迁移：`001_initial` → `002_geo` → `003_onsite_offsite_dist` → `004_three_chains`。
+迁移：`001_initial` → `002_geo` → `003_onsite_offsite_dist` → `004_three_chains` → `005_onsite_severity`。
 
 ## 测试
 

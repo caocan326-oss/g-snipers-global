@@ -40,6 +40,7 @@ class DashboardSummary(BaseModel):
     onsite_pages: int
     onsite_open_low: int
     onsite_open_high: int
+    onsite_open_critical: int = 0
     offsite_gaps: int
     offsite_outreach_open: int
     links_unverified: int
@@ -361,6 +362,7 @@ class SitePageCreate(BaseModel):
     headings: str = ""
     internal_links: str = ""
     structured_data: str = ""
+    canonical: str = ""
     notes: str | None = None
 
 
@@ -372,16 +374,20 @@ class SitePageUpdate(BaseModel):
     headings: str | None = None
     internal_links: str | None = None
     structured_data: str | None = None
+    canonical: str | None = None
     notes: str | None = None
 
 
 class OnsiteIssueOut(BaseModel):
     id: str
     page_id: str
+    page_path: str = ""
+    page_title: str = ""
     category: str
     title: str
     detail: str
     proposed_change: str
+    severity: str = "low"
     risk: str
     status: str
     metric_status: str
@@ -392,7 +398,42 @@ class OnsiteIssueCreate(BaseModel):
     title: str
     detail: str = ""
     proposed_change: str = ""
+    severity: str | None = None
     risk: str | None = None
+
+
+class OnsiteDraftIn(BaseModel):
+    proposed_change: str
+
+
+class OnsiteBoardOut(BaseModel):
+    pages: int
+    analyzed_pages: int
+    counts: dict[str, int]
+    groups: dict[str, list[OnsiteIssueOut]]
+
+
+class ContentBriefOut(BaseModel):
+    id: str
+    title: str
+    target_keyword: str
+    locale: str
+    status: str
+    serp_features: str = "未测"
+    note: str = "无 SERP / GSC 源，不编造精选摘要或 People Also Ask。"
+
+
+class CrawlOrSeedOut(BaseModel):
+    seeded: int
+    pages: int
+    note: str
+
+
+class AnalyzeOut(BaseModel):
+    created: int
+    skipped: int
+    pages: int
+    note: str = "分析未改工作区字段，也未应用到线上。"
 
 
 class SitePageOut(BaseModel):
@@ -408,10 +449,12 @@ class SitePageOut(BaseModel):
     headings: str
     internal_links: str
     structured_data: str
+    canonical: str = ""
     index_status: str
     crawl_status: str
     notes: str | None
     open_issue_count: int = 0
+    analyzed_at: datetime | None = None
 
 
 class SitePageDetailOut(SitePageOut):
@@ -466,6 +509,13 @@ class BacklinkGapOut(BaseModel):
     status: str
     notes: str | None
     outreach: list[OutreachOut] = []
+
+
+class LinkCheckerOut(BaseModel):
+    counts: dict[str, int]
+    domain_metric: str = "未测"
+    note: str = "这是断链式核验清单，不是 Ahrefs / Semrush 外链指数。"
+    links: list[BacklinkGapOut] = []
 
 
 class ChainFeedOut(BaseModel):

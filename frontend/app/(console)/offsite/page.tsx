@@ -38,6 +38,7 @@ const gapLabel: Record<string, string> = {
 
 export default function OffsitePage() {
   const [tab, setTab] = useState<"verify" | "dist">("verify");
+  const [filter, setFilter] = useState<"all" | "unverified" | "valid" | "dead" | "spam">("all");
   const [gaps, setGaps] = useState<BacklinkGap[]>([]);
   const [providers, setProviders] = useState<DistProvider[]>([]);
   const [jobs, setJobs] = useState<DistJob[]>([]);
@@ -125,7 +126,8 @@ export default function OffsitePage() {
       <div>
         <h1 className="text-2xl font-semibold">外链核验 + 分发台</h1>
         <p className="mt-1 text-sm text-slate-500">
-          逐条核验与跟进，不是一键群发。分发走适配器：未配置 = 未配置，确认也不会假装成功或发 HTTP。禁止代买外链。
+          断链式逐条核验（未核验 / 有效 / 失效 / 垃圾）+ 跟进。不是 Ahrefs 外链指数，没有域名评分。分发未配置
+          Key = 未配置，确认也不会发 HTTP。
         </p>
       </div>
 
@@ -140,7 +142,22 @@ export default function OffsitePage() {
 
       {tab === "verify" ? (
         <div className="space-y-4">
-          {gaps.map((g) => (
+          <div className="grid gap-3 md:grid-cols-4">
+            {(["unverified", "valid", "dead", "spam"] as const).map((s) => (
+              <button key={s} type="button" className="text-left" onClick={() => setFilter(filter === s ? "all" : s)}>
+                <Card className={filter === s ? "border-brand-600" : ""}>
+                  <CardHeader>
+                    <CardTitle className="text-sm">{verifyLabel[s]}</CardTitle>
+                  </CardHeader>
+                  <CardContent className="text-2xl font-semibold">
+                    {gaps.filter((g) => g.verify_status === s).length}
+                  </CardContent>
+                </Card>
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-slate-500">域名权重未测。本台不提供外链指数或 DR。</p>
+          {(filter === "all" ? gaps : gaps.filter((g) => g.verify_status === filter)).map((g) => (
             <Card key={g.id}>
               <CardHeader className="flex flex-row items-start justify-between">
                 <div>
@@ -157,7 +174,6 @@ export default function OffsitePage() {
                 <div className="flex flex-wrap gap-2">
                   <Badge tone={verifyTone[g.verify_status]}>{verifyLabel[g.verify_status] ?? g.verify_status}</Badge>
                   <Badge>{gapLabel[g.status] ?? g.status}</Badge>
-                  <Badge tone="amber">权重 {g.domain_metric === "untested" ? "未测" : g.domain_metric}</Badge>
                 </div>
               </CardHeader>
               <CardContent className="space-y-3">

@@ -60,3 +60,11 @@ def test_offsite_gap_and_outreach(client: TestClient, demo_user) -> None:
 
     updated = client.patch(f"/api/offsite/outreach/{item.json()['id']}?status=sent_manual", headers=headers)
     assert updated.json()["status"] == "sent_manual"
+
+    checker = client.get("/api/offsite/checker", headers=headers).json()
+    assert checker["domain_metric"] == "未测"
+    assert "Ahrefs" in checker["note"] or "指数" in checker["note"]
+    assert "unverified" in checker["counts"]
+    assert checker["counts"]["valid"] >= 1
+    assert "share_of_voice" not in checker
+    assert "domain_rating" not in checker

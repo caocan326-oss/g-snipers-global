@@ -53,6 +53,7 @@ CATEGORY_WORKSPACE_FIELD = {
     "heading": "headings",
     "internal_link": "internal_links",
     "schema": "structured_data",
+    "canonical": "canonical",
 }
 
 
@@ -107,6 +108,6 @@ def apply_proposed_change(page: SitePage, issue: OnsiteIssue) -> None:
     if field:
         setattr(page, field, text)
         return
-    if issue.category in {"index", "crawl"}:
+    if issue.category in {"index", "crawl", "canonical"}:
         note = f"[已确认方案 · {issue.category}] {text}"
         page.notes = "\n".join(x for x in (page.notes or "", note) if x).strip()

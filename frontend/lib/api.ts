@@ -68,6 +68,7 @@ export type DashboardSummary = {
   onsite_pages: number;
   onsite_open_low: number;
   onsite_open_high: number;
+  onsite_open_critical: number;
   offsite_gaps: number;
   offsite_outreach_open: number;
   links_unverified: number;
@@ -225,22 +226,44 @@ export type SitePage = {
   headings: string;
   internal_links: string;
   structured_data: string;
+  canonical?: string;
   index_status: string;
   crawl_status: string;
   notes: string | null;
   open_issue_count: number;
+  analyzed_at?: string | null;
 };
 
 export type OnsiteIssue = {
   id: string;
   page_id: string;
+  page_path?: string;
+  page_title?: string;
   category: string;
   title: string;
   detail: string;
   proposed_change: string;
+  severity: string;
   risk: string;
   status: string;
   metric_status: string;
+};
+
+export type OnsiteBoard = {
+  pages: number;
+  analyzed_pages: number;
+  counts: { critical: number; high: number; low: number };
+  groups: { critical: OnsiteIssue[]; high: OnsiteIssue[]; low: OnsiteIssue[] };
+};
+
+export type ContentBrief = {
+  id: string;
+  title: string;
+  target_keyword: string;
+  locale: string;
+  status: string;
+  serp_features: string;
+  note: string;
 };
 
 export type SitePageDetail = SitePage & { issues: OnsiteIssue[] };

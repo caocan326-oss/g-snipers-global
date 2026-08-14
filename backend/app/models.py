@@ -276,8 +276,10 @@ class SitePage(Base):
     headings: Mapped[str] = mapped_column(Text, default="")
     internal_links: Mapped[str] = mapped_column(Text, default="")
     structured_data: Mapped[str] = mapped_column(Text, default="")
+    canonical: Mapped[str] = mapped_column(String(500), default="")
     index_status: Mapped[str] = mapped_column(String(20), default="untested")
     crawl_status: Mapped[str] = mapped_column(String(20), default="untested")
+    analyzed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     notes: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
@@ -299,6 +301,7 @@ class OnsiteIssue(Base):
     title: Mapped[str] = mapped_column(String(300), nullable=False)
     detail: Mapped[str] = mapped_column(Text, default="")
     proposed_change: Mapped[str] = mapped_column(Text, default="")
+    severity: Mapped[str] = mapped_column(String(10), default="low")
     risk: Mapped[str] = mapped_column(String(10), default="low")
     status: Mapped[str] = mapped_column(String(30), default="open", index=True)
     metric_status: Mapped[str] = mapped_column(String(20), default="untested")
