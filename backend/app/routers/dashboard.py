@@ -1,0 +1,54 @@
+from fastapi import APIRouter, Depends
+from sqlalchemy import func
+from sqlalchemy.orm import Session
+
+from app.auth import get_current_user
+from app.database import get_db
+from app.models import Inquiry, Market, SeoPage, Tenant, User, WorkOrder
+from app.schemas import DashboardSummary
+
+router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
+
+
+@router.get("/summary", response_model=DashboardSummary)
+def summary(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> DashboardSummary:
+    tid = user.tenant_id
+    tenant = db.get(Tenant, tid)
+    markets = db.query(func.count(Market.id)).filter(Market.tenant_id == tid).scalar() or 0
+    priority = (
+        db.query(func.count(Market.id)).filter(Market.tenant_id == tid, Market.status == "priority").scalar() or 0
+    )
+    seo_in_progress = (
+        db.query(func.count(SeoPage.id))
+        .filter(SeoPage.tenant_id == tid, SeoPage.status.in_(["outline", "draft", "meta"]))
+        .scalar()
+        or 0
+    )
+    seo_review = (
+        db.query(func.count(SeoPage.id)).filter(SeoPage.tenant_id == tid, SeoPage.status == "review").scalar() or 0
+    )
+    seo_ready = (
+        db.query(func.count(SeoPage.id)).filter(SeoPage.tenant_id == tid, SeoPage.status == "ready").scalar() or 0
+    )
+    open_wo = (
+        db.query(func.count(WorkOrder.id))
+        .filter(WorkOrder.tenant_id == tid, WorkOrder.status.in_(["open", "claimed", "in_progress", "blocked"]))
+        .scalar()
+        or 0
+    )
+    inquiries = db.query(func.count(Inquiry.id)).filter(Inquiry.tenant_id == tid).scalar() or 0
+    qualified = (
+        db.query(func.count(Inquiry.id)).filter(Inquiry.tenant_id == tid, Inquiry.quality == "qualified").scalar()
+        or 0
+    )
+    return DashboardSummary(
+        tenant_name=tenant.name if tenant else "",
+        markets_count=markets,
+        priority_markets=priority,
+        seo_in_progress=seo_in_progress,
+        seo_pending_review=seo_review,
+        seo_ready=seo_ready,
+        open_work_orders=open_wo,
+        inquiries_total=inquiries,
+        qualified_inquiries=qualified,
+    )
