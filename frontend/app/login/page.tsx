@@ -11,7 +11,7 @@ import { api, setToken } from "@/lib/api";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("am@demo.local");
+  const [email, setEmail] = useState("am@demo.gsnipers.com");
   const [password, setPassword] = useState("demo1234");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);

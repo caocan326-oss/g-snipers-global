@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     secret_key: str = "dev-only-change-me"
     access_token_expire_minutes: int = 720
     frontend_origin: str = "http://localhost:3000"
-    demo_am_email: str = "am@demo.local"
+    demo_am_email: str = "am@demo.gsnipers.com"
     demo_am_password: str = "demo1234"
 
 

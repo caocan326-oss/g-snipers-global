@@ -56,7 +56,7 @@ def demo_user(db: Session) -> User:
     db.flush()
     user = User(
         tenant_id=tenant.id,
-        email="am@demo.local",
+        email="am@demo.gsnipers.com",
         hashed_password=hash_password("demo1234"),
         name="测试经理",
         role="account_manager",
@@ -67,7 +67,7 @@ def demo_user(db: Session) -> User:
     return user
 
 
-def auth_header(client: TestClient, email: str = "am@demo.local", password: str = "demo1234") -> dict[str, str]:
+def auth_header(client: TestClient, email: str = "am@demo.gsnipers.com", password: str = "demo1234") -> dict[str, str]:
     res = client.post("/api/auth/login", json={"email": email, "password": password})
     assert res.status_code == 200, res.text
     return {"Authorization": f"Bearer {res.json()['access_token']}"}

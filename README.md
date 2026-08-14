@@ -43,7 +43,7 @@ docker compose up --build
 
 演示客户经理（seed 写入，无需注册）：
 
-- 邮箱：`am@demo.local`
+- 邮箱：`am@demo.gsnipers.com`
 - 密码：`demo1234`
 
 登录后首页是洞察 / SEO / 工单 / 询盘数字；侧栏进入「全球洞察中心」与「SEO 工作台」。
