@@ -8,7 +8,7 @@ from app.schemas import WorkOrderCreate, WorkOrderOut, WorkOrderStatusIn, WorkOr
 
 router = APIRouter(prefix="/api/work-orders", tags=["work-orders"])
 
-TYPES = {"insight", "seo_outline", "seo_draft", "seo_meta", "other"}
+TYPES = {"insight", "seo_outline", "seo_draft", "seo_meta", "geo_monitor", "geo_asset", "other"}
 STATUSES = {"open", "claimed", "in_progress", "done", "blocked"}
 
 

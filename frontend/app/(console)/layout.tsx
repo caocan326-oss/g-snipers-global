@@ -13,6 +13,7 @@ const nav = [
   { href: "/home", label: "首页" },
   { href: "/insights", label: "全球洞察中心" },
   { href: "/seo", label: "SEO 工作台" },
+  { href: "/geo", label: "GEO 监测" },
   { href: "/work-orders", label: "工单" },
   { href: "/inquiries", label: "询盘" },
 ];
@@ -37,7 +38,7 @@ export default function ConsoleLayout({ children }: { children: ReactNode }) {
       <aside className="flex w-60 flex-col border-r border-slate-200 bg-white">
         <div className="px-5 py-5">
           <div className="text-sm font-semibold text-brand-700">G-Snipers 海外版</div>
-          <div className="mt-1 text-xs text-slate-500">洞察 + 多语言 SEO</div>
+          <div className="mt-1 text-xs text-slate-500">洞察 · SEO · GEO</div>
         </div>
         <nav className="flex-1 space-y-0.5 px-3">
           {nav.map((item) => (

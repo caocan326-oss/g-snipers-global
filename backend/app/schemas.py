@@ -32,6 +32,10 @@ class DashboardSummary(BaseModel):
     open_work_orders: int
     inquiries_total: int
     qualified_inquiries: int
+    geo_prompts: int
+    geo_untested: int
+    geo_recorded: int
+    geo_assets_draft: int
 
 
 class MarketCreate(BaseModel):
@@ -216,6 +220,74 @@ class InquiryCreate(BaseModel):
     related_work_order_id: str | None = None
     related_market_id: str | None = None
     notes: str | None = None
+
+
+class GeoObservationOut(BaseModel):
+    id: str
+    prompt_id: str
+    engine: str
+    status: str
+    notes: str | None
+    observed_at: datetime | None = None
+
+
+class GeoObservationUpdate(BaseModel):
+    status: str
+    notes: str | None = None
+
+
+class GeoPromptCreate(BaseModel):
+    prompt_text: str
+    locale: str
+    market_id: str | None = None
+    seo_page_id: str | None = None
+    demand_signal_id: str | None = None
+
+
+class GeoPromptOut(BaseModel):
+    id: str
+    prompt_text: str
+    locale: str
+    market_id: str | None
+    seo_page_id: str | None
+    demand_signal_id: str | None
+    observations: list[GeoObservationOut] = []
+    created_at: datetime | None = None
+
+
+class GeoAssetOut(BaseModel):
+    id: str
+    kind: str
+    title: str
+    body: str
+    status: str
+    updated_at: datetime | None = None
+
+
+class GeoAssetUpdate(BaseModel):
+    body: str
+
+
+class GeoChecklistItemOut(BaseModel):
+    id: str
+    seo_page_id: str
+    item_key: str
+    label: str
+    status: str
+    notes: str | None
+
+
+class GeoChecklistItemUpdate(BaseModel):
+    status: str
+    notes: str | None = None
+
+
+class GeoSummary(BaseModel):
+    prompts: int
+    untested: int
+    recorded: int
+    checklist_untested: int
+    assets_draft: int
 
 
 class InquiryOut(BaseModel):

@@ -60,6 +60,10 @@ export type DashboardSummary = {
   open_work_orders: number;
   inquiries_total: number;
   qualified_inquiries: number;
+  geo_prompts: number;
+  geo_untested: number;
+  geo_recorded: number;
+  geo_assets_draft: number;
 };
 
 export type Market = {
@@ -148,4 +152,40 @@ export type Inquiry = {
   related_market_id: string | null;
   notes: string | null;
   created_at: string | null;
+};
+
+export type GeoObservation = {
+  id: string;
+  prompt_id: string;
+  engine: string;
+  status: string;
+  notes: string | null;
+  observed_at: string | null;
+};
+
+export type GeoPrompt = {
+  id: string;
+  prompt_text: string;
+  locale: string;
+  market_id: string | null;
+  seo_page_id: string | null;
+  observations: GeoObservation[];
+};
+
+export type GeoAsset = {
+  id: string;
+  kind: string;
+  title: string;
+  body: string;
+  status: string;
+  updated_at?: string | null;
+};
+
+export type GeoChecklistItem = {
+  id: string;
+  seo_page_id: string;
+  item_key: string;
+  label: string;
+  status: string;
+  notes: string | null;
 };

@@ -154,11 +154,14 @@ export default function SeoEditorPage() {
             </>
           ) : null}
         </p>
-        <div className="mt-3">
+        <div className="mt-3 flex flex-wrap items-center gap-2">
           <Button size="sm" variant="outline" disabled={busy} onClick={openWorkOrder}>
             为当前步骤开执行工单
           </Button>
-          {orderMsg ? <span className="ml-3 text-sm text-slate-500">{orderMsg}</span> : null}
+          <Link href="/geo" className="text-sm text-brand-700">
+            本页 GEO 清单 / 监测 →
+          </Link>
+          {orderMsg ? <span className="text-sm text-slate-500">{orderMsg}</span> : null}
         </div>
       </div>
 

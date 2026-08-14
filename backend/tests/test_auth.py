@@ -19,6 +19,18 @@ def test_health(client: TestClient) -> None:
     assert client.get("/api/health").json()["status"] == "ok"
 
 
+def test_dashboard_has_geo_counts_not_rates(client: TestClient, demo_user) -> None:
+    token = client.post("/api/auth/login", json={"email": "am@demo.gsnipers.com", "password": "demo1234"}).json()[
+        "access_token"
+    ]
+    res = client.get("/api/dashboard/summary", headers={"Authorization": f"Bearer {token}"})
+    assert res.status_code == 200
+    body = res.json()
+    assert "geo_untested" in body
+    assert "citation_rate" not in body
+    assert "share_of_voice" not in body
+
+
 def test_boot_does_not_require_google_ads_env(client: TestClient, monkeypatch) -> None:
     for key in (
         "GOOGLE_ADS_CLIENT_ID",

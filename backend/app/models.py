@@ -168,6 +168,72 @@ class Inquiry(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class GeoPrompt(Base):
+    """A question to spot-check in AI answers. Results are AM-recorded, never invented."""
+
+    __tablename__ = "geo_prompts"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
+    market_id: Mapped[str | None] = mapped_column(ForeignKey("markets.id"), index=True)
+    seo_page_id: Mapped[str | None] = mapped_column(ForeignKey("seo_pages.id"))
+    demand_signal_id: Mapped[str | None] = mapped_column(ForeignKey("demand_signals.id"))
+    prompt_text: Mapped[str] = mapped_column(String(500), nullable=False)
+    locale: Mapped[str] = mapped_column(String(16), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    observations: Mapped[list["GeoObservation"]] = relationship(
+        back_populates="prompt", cascade="all, delete-orphan"
+    )
+
+
+class GeoObservation(Base):
+    __tablename__ = "geo_observations"
+    __table_args__ = (UniqueConstraint("prompt_id", "engine", name="uq_geo_obs_prompt_engine"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
+    prompt_id: Mapped[str] = mapped_column(ForeignKey("geo_prompts.id"), nullable=False, index=True)
+    engine: Mapped[str] = mapped_column(String(40), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="untested")
+    notes: Mapped[str | None] = mapped_column(Text)
+    observed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    observed_by: Mapped[str | None] = mapped_column(ForeignKey("users.id"))
+
+    prompt: Mapped[GeoPrompt] = relationship(back_populates="observations")
+
+
+class GeoAsset(Base):
+    __tablename__ = "geo_assets"
+    __table_args__ = (UniqueConstraint("tenant_id", "kind", name="uq_geo_assets_tenant_kind"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
+    kind: Mapped[str] = mapped_column(String(40), nullable=False)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    body: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(String(20), default="draft")
+    updated_by: Mapped[str | None] = mapped_column(ForeignKey("users.id"))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class GeoChecklistItem(Base):
+    __tablename__ = "geo_checklist_items"
+    __table_args__ = (UniqueConstraint("seo_page_id", "item_key", name="uq_geo_check_page_key"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
+    seo_page_id: Mapped[str] = mapped_column(ForeignKey("seo_pages.id"), nullable=False, index=True)
+    item_key: Mapped[str] = mapped_column(String(40), nullable=False)
+    label: Mapped[str] = mapped_column(String(200), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="untested")
+    notes: Mapped[str | None] = mapped_column(Text)
+
+    seo_page: Mapped[SeoPage] = relationship()
+
+
 class PublishConfirmation(Base):
     """Human confirm gate: content is never auto-published."""
 

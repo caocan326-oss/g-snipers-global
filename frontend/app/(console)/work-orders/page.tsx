@@ -13,6 +13,8 @@ const typeLabel: Record<string, string> = {
   seo_outline: "SEO 大纲",
   seo_draft: "SEO 正文",
   seo_meta: "SEO Meta",
+  geo_monitor: "GEO 监测",
+  geo_asset: "GEO 资产",
   other: "其他",
 };
 

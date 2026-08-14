@@ -45,6 +45,12 @@ export default function HomePage() {
     { label: "待审核选题", value: data.seo_pending_review, href: "/seo", hint: `可交付 ${data.seo_ready}` },
     { label: "未完工单", value: data.open_work_orders, href: "/work-orders", hint: "洞察与 SEO 执行" },
     { label: "询盘", value: data.inquiries_total, href: "/inquiries", hint: `合格 ${data.qualified_inquiries}` },
+    {
+      label: "GEO 未测",
+      value: data.geo_prompts === 0 ? "未测" : data.geo_untested,
+      href: "/geo",
+      hint: data.geo_recorded > 0 ? `已记录 ${data.geo_recorded}（非引用率）` : "尚无抽查，不显示 0%",
+    },
   ];
 
   return (
@@ -52,10 +58,10 @@ export default function HomePage() {
       <div>
         <h1 className="text-2xl font-semibold">工作台首页</h1>
         <p className="mt-1 text-sm text-slate-500">
-          {data.tenant_name} · 全球洞察与多语言 SEO 执行。数字来自本工作区 seed / 录入数据。
+          {data.tenant_name} · 洞察喂给 SEO；GEO 是旁路监测与资产，不是验收 KPI。
         </p>
       </div>
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {cards.map((c) => (
           <Link key={c.label} href={c.href}>
             <Card className="h-full hover:border-brand-600">

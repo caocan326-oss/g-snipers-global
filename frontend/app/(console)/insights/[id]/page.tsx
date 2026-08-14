@@ -74,6 +74,11 @@ export default function MarketDetailPage() {
     router.push(`/seo/${page.id}`);
   }
 
+  async function toGeo(signalId: string) {
+    await api(`/api/geo/from-demand-signal/${signalId}`, { method: "POST" });
+    router.push("/geo");
+  }
+
   async function saveSettings(e: FormEvent) {
     e.preventDefault();
     await api(`/api/markets/${params.id}`, {
@@ -236,9 +241,14 @@ export default function MarketDetailPage() {
                     <span>来源 {s.source}</span>
                   </div>
                 </div>
-                <Button size="sm" onClick={() => toSeo(s.id)}>
-                  开选题
-                </Button>
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={() => toSeo(s.id)}>
+                    开选题
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => toGeo(s.id)}>
+                    加入 GEO 监测
+                  </Button>
+                </div>
               </li>
             ))}
           </ul>

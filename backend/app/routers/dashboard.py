@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
 from app.database import get_db
-from app.models import Inquiry, Market, SeoPage, Tenant, User, WorkOrder
+from app.models import GeoAsset, GeoObservation, GeoPrompt, Inquiry, Market, SeoPage, Tenant, User, WorkOrder
 from app.schemas import DashboardSummary
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
@@ -41,6 +41,22 @@ def summary(user: User = Depends(get_current_user), db: Session = Depends(get_db
         db.query(func.count(Inquiry.id)).filter(Inquiry.tenant_id == tid, Inquiry.quality == "qualified").scalar()
         or 0
     )
+    geo_prompts = db.query(func.count(GeoPrompt.id)).filter(GeoPrompt.tenant_id == tid).scalar() or 0
+    geo_untested = (
+        db.query(func.count(GeoObservation.id))
+        .filter(GeoObservation.tenant_id == tid, GeoObservation.status == "untested")
+        .scalar()
+        or 0
+    )
+    geo_recorded = (
+        db.query(func.count(GeoObservation.id))
+        .filter(GeoObservation.tenant_id == tid, GeoObservation.status != "untested")
+        .scalar()
+        or 0
+    )
+    geo_assets_draft = (
+        db.query(func.count(GeoAsset.id)).filter(GeoAsset.tenant_id == tid, GeoAsset.status == "draft").scalar() or 0
+    )
     return DashboardSummary(
         tenant_name=tenant.name if tenant else "",
         markets_count=markets,
@@ -51,4 +67,8 @@ def summary(user: User = Depends(get_current_user), db: Session = Depends(get_db
         open_work_orders=open_wo,
         inquiries_total=inquiries,
         qualified_inquiries=qualified,
+        geo_prompts=geo_prompts,
+        geo_untested=geo_untested,
+        geo_recorded=geo_recorded,
+        geo_assets_draft=geo_assets_draft,
     )

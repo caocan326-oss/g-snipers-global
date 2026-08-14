@@ -7,9 +7,14 @@ from app.auth import hash_password
 from app.config import settings
 from app.content_templates import generate_draft, generate_meta, generate_outline
 from app.database import SessionLocal
+from app.geo_helpers import CHECKLIST_DEFS, ENGINES, build_llms_txt
 from app.models import (
     Competitor,
     DemandSignal,
+    GeoAsset,
+    GeoChecklistItem,
+    GeoObservation,
+    GeoPrompt,
     Inquiry,
     InsightBrief,
     Market,
@@ -41,6 +46,7 @@ def seed(db: Session) -> None:
         db.flush()
 
     if db.scalar(select(Market).where(Market.tenant_id == tenant.id)) is not None:
+        _seed_geo(db, tenant, user)
         db.commit()
         return
 
@@ -231,7 +237,84 @@ def seed(db: Session) -> None:
             notes="询问多门锁批量安装，来自英文指南预览页（演示）。",
         )
     )
+    _seed_geo(db, tenant, user)
     db.commit()
+
+
+def _seed_geo(db: Session, tenant: Tenant, user: User) -> None:
+    if db.scalar(select(GeoPrompt).where(GeoPrompt.tenant_id == tenant.id)) is not None:
+        return
+
+    us = db.scalar(select(Market).where(Market.tenant_id == tenant.id, Market.country_code == "US"))
+    jp = db.scalar(select(Market).where(Market.tenant_id == tenant.id, Market.country_code == "JP"))
+    us_signal = db.scalar(select(DemandSignal).where(DemandSignal.tenant_id == tenant.id, DemandSignal.locale == "en-US"))
+    us_page = db.scalar(select(SeoPage).where(SeoPage.tenant_id == tenant.id, SeoPage.locale == "en-US"))
+    jp_page = db.scalar(select(SeoPage).where(SeoPage.tenant_id == tenant.id, SeoPage.locale == "ja-JP"))
+
+    us_prompt = GeoPrompt(
+        tenant_id=tenant.id,
+        market_id=us.id if us else None,
+        seo_page_id=us_page.id if us_page else None,
+        demand_signal_id=us_signal.id if us_signal else None,
+        prompt_text="How do renters install a smart lock without replacing the whole door?",
+        locale="en-US",
+    )
+    jp_prompt = GeoPrompt(
+        tenant_id=tenant.id,
+        market_id=jp.id if jp else None,
+        seo_page_id=jp_page.id if jp_page else None,
+        prompt_text="賃貸でスマートロックを付けるには管理組合の許可が必要ですか？",
+        locale="ja-JP",
+    )
+    db.add_all([us_prompt, jp_prompt])
+    db.flush()
+
+    for prompt in (us_prompt, jp_prompt):
+        for engine in ENGINES:
+            db.add(
+                GeoObservation(
+                    tenant_id=tenant.id,
+                    prompt_id=prompt.id,
+                    engine=engine,
+                    status="untested",
+                )
+            )
+
+    pages = db.query(SeoPage).filter(SeoPage.tenant_id == tenant.id).all()
+    db.add(
+        GeoAsset(
+            tenant_id=tenant.id,
+            kind="llms_txt",
+            title="llms.txt 草稿",
+            body=build_llms_txt(tenant, pages),
+            status="draft",
+            updated_by=user.id,
+        )
+    )
+
+    if us_page:
+        for key, label in CHECKLIST_DEFS:
+            db.add(
+                GeoChecklistItem(
+                    tenant_id=tenant.id,
+                    seo_page_id=us_page.id,
+                    item_key=key,
+                    label=label,
+                    status="untested",
+                )
+            )
+
+    db.add(
+        WorkOrder(
+            tenant_id=tenant.id,
+            title="抽查英文安装问句（先标未测，有记录再改）",
+            type="geo_monitor",
+            status="open",
+            seo_page_id=us_page.id if us_page else None,
+            market_id=us.id if us else None,
+            acceptance_criteria="只记录实际抽查；未抽查保持未测，禁止填 0%。",
+        )
+    )
 
 
 def main() -> None:
