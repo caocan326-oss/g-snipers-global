@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.routers import auth, dashboard, geo, inquiries, insights, seo, work_orders
+from app.routers import auth, dashboard, distribution, geo, inquiries, insights, offsite, onsite, seo, work_orders
 
 app = FastAPI(title="G-Snipers Overseas", version="0.1.0")
 
@@ -19,6 +19,9 @@ app.include_router(dashboard.router)
 app.include_router(insights.router)
 app.include_router(seo.router)
 app.include_router(geo.router)
+app.include_router(onsite.router)
+app.include_router(offsite.router)
+app.include_router(distribution.router)
 app.include_router(work_orders.router)
 app.include_router(inquiries.router)
 

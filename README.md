@@ -2,43 +2,39 @@
 
 面向中国企业出海的 SaaS。标准版 = **软件 + 专属客户经理**。
 
-本仓库一期切片：
+一期切片（同一产品，不是第二套系统）：
 
-1. **全球洞察中心** — 目标市场、机会分、需求信号、竞品、简报；信号喂给 SEO 选题（也可加入 GEO 监测）
-2. **多语言 SEO 工作台** — 选题 → 大纲 → 正文 → Meta → 审核 → 人工确认可交付
-3. **GEO 监测 + 资产** — 问句抽查、llms.txt 草稿、可引用清单。挂在 SEO 旁边，**不是英雄模块，也不是验收 KPI**
+1. **全球洞察中心** — 市场 / 需求信号 / 竞品 / 简报，喂给 SEO（也可加入 GEO 监测）
+2. **多语言 SEO 工作台** — 大纲 → 正文 → Meta → 人工确认可交付
+3. **站内优化** — TDK、标题、内链、结构化数据、收录/抓取任务
+4. **站外优化** — 竞品外链 / 引荐域缺口 + 外联跟进
+5. **外链分发台** — 多渠道适配器；未配 Key 显示未配置
+6. **GEO** — 旁路监测与资产，不是英雄模块，也不是验收 KPI
 
-工单与询盘是细骨干。本地 **seed 演示数据**即可登录验收；你们之后会接真实数据库。
+工单与询盘是细骨干。**seed 演示数据即可点开验收**；真实数据库由你们之后提供。
+
+## 监测 → 执行分级
+
+公开资料里，国内 G-Snipers 把工作分成监测（发现问题）和执行（落地），并按风险分级：低风险优化可自动/半自动推进，高风险页面改动先出方案、**人工确认后再上线**（例如批量 noindex）。海外版沿用同一纪律，不抄任何专有代码：
+
+| 风险 | 本切片怎么做 |
+| --- | --- |
+| 低风险（补 TDK 草稿、记内链） | 可在工作区「落草稿」，不碰线上站点 |
+| 高风险（结构化数据上线、收录/抓取处置、分发外发） | 必须 `confirmed: true`，且本切片仍不自动改客户线上站 |
+
+没有 GSC / Ahrefs / Semrush 时，指标显示 **未测**，不用 0 或 0% 充数。
 
 ## 明确延期
 
-**SEM / Google Ads：** 不实现 OAuth、MCC、广告账户连接、广告系列同步（包括死按钮）。没有 Ads 测试账号前不做。启动**不需要** `GOOGLE_ADS_*`。
+- **SEM / Google Ads：** 无 OAuth、MCC、广告连接（含死按钮）。启动不需要 `GOOGLE_ADS_*`。
+- **真实生产库：** 本期 Postgres + Alembic + seed。
+- **分发渠道真实调用：** 适配器已在，Key 由你们后补。未配置时确认也不会发、不会刷成功数。
 
-**真实生产库：** 本期用 Postgres + Alembic + seed。上线后由你们提供/切换数据库再测。
+## GEO
 
-## GEO 怎么读（避免误售）
+问句默认未测；不算引用率 / Share of Voice；不是「已让 ChatGPT 引用」交付。
 
-- 问句按引擎建观测槽，默认 **未测**。客户经理抽查后才改成「出现 / 未出现 / 被引用」。
-- **不计算、不展示引用率或 Share of Voice。** 算不出来就显示未测，**禁止用 0% 冒充没被引用**。
-- 不是「已让 ChatGPT 引用你们」的交付。llms.txt 只是草稿，确认后也不自动挂到客户域名。
-
-## 本切片做了什么
-
-- 多租户 + JWT 登录；演示账号可直接用
-- 洞察 → SEO 选题；洞察 → GEO 监测问句
-- SEO 执行器（大纲 / 正文 / Meta）+ 人工确认门
-- GEO：监测、llms.txt、可引用清单（均从 未测 起）
-- 工单类型含 `geo_monitor` / `geo_asset`
-- 中文浅色后台
-
-## 本切片不做
-
-- Google Ads / Meta 深度管理
-- 虚构的 Google / SERP / 模型引用 API
-- 新媒体中心、ROI 总看板、关键词研究大盘
-- 把 GEO 做成「引用率仪表盘」
-
-## 本地一键启动
+## 本地启动
 
 ```bash
 cp .env.example .env
@@ -46,24 +42,27 @@ docker compose up --build
 ```
 
 - 前端 http://localhost:3000
-- 后端 http://localhost:8000/docs
-- 演示：`am@demo.gsnipers.com` / `demo1234`
+- 演示 `am@demo.gsnipers.com` / `demo1234`
 
-无 Docker 时：起 Postgres → `alembic upgrade head` → `python -m app.seed` → uvicorn + `npm run dev`。
-
-前端 `/api/*` rewrite 到后端，没有 mock-only 服务层。
+无 Docker：Postgres → `alembic upgrade head` → `python -m app.seed` → uvicorn + `npm run dev`。
 
 ## 环境变量
 
-见 `.env.example`。`DATABASE_URL`、`SECRET_KEY`、演示账号即可。不要提交 `.env`。
+`.env.example`：`DATABASE_URL`、`SECRET_KEY`、演示账号即可。
 
-## 数据表
+可选（留空 = 未配置）：`DISTRIBUTION_DIRECTORY_API_KEY`、`DISTRIBUTION_GUEST_API_KEY`、`DISTRIBUTION_SYNDICATION_API_KEY`。
 
-洞察 / SEO：`tenants` `users` `markets` `competitors` `demand_signals` `insight_briefs` `seo_pages` `work_orders` `inquiries` `publish_confirmations`
+## 主要数据表
 
-GEO：`geo_prompts` `geo_observations` `geo_assets` `geo_checklist_items`
+原有洞察 / SEO / GEO 表之外：
 
-迁移：`001_initial.py`、`002_geo.py`。
+| 表 | 作用 |
+| --- | --- |
+| `site_pages` / `onsite_issues` | 站内页与监测任务 |
+| `backlink_gaps` / `outreach_items` | 站外缺口与外联 |
+| `distribution_jobs` / `distribution_attempts` | 分发队列与尝试记录 |
+
+迁移：`001_initial`、`002_geo`、`003_onsite_offsite_dist`。
 
 ## 测试
 
@@ -71,7 +70,7 @@ GEO：`geo_prompts` `geo_observations` `geo_assets` `geo_checklist_items`
 cd backend && pytest -q
 ```
 
-含登录、洞察、SEO 确认门、GEO 未测槽位 / 禁止假引用率、llms.txt 确认门、清单默认未测。
+覆盖站内列表/创建与风险门、站外缺口/外联、分发未配置不发送、以及原有洞察 / SEO / GEO。
 
 ## 技术选择
 

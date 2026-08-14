@@ -9,8 +9,10 @@ from app.content_templates import generate_draft, generate_meta, generate_outlin
 from app.database import SessionLocal
 from app.geo_helpers import CHECKLIST_DEFS, ENGINES, build_llms_txt
 from app.models import (
+    BacklinkGap,
     Competitor,
     DemandSignal,
+    DistributionJob,
     GeoAsset,
     GeoChecklistItem,
     GeoObservation,
@@ -18,7 +20,10 @@ from app.models import (
     Inquiry,
     InsightBrief,
     Market,
+    OnsiteIssue,
+    OutreachItem,
     SeoPage,
+    SitePage,
     Tenant,
     User,
     WorkOrder,
@@ -47,6 +52,7 @@ def seed(db: Session) -> None:
 
     if db.scalar(select(Market).where(Market.tenant_id == tenant.id)) is not None:
         _seed_geo(db, tenant, user)
+        _seed_onsite_offsite_dist(db, tenant, user)
         db.commit()
         return
 
@@ -238,6 +244,7 @@ def seed(db: Session) -> None:
         )
     )
     _seed_geo(db, tenant, user)
+    _seed_onsite_offsite_dist(db, tenant, user)
     db.commit()
 
 
@@ -314,6 +321,343 @@ def _seed_geo(db: Session, tenant: Tenant, user: User) -> None:
             market_id=us.id if us else None,
             acceptance_criteria="只记录实际抽查；未抽查保持未测，禁止填 0%。",
         )
+    )
+
+
+def _seed_onsite_offsite_dist(db: Session, tenant: Tenant, user: User) -> None:
+    if db.scalar(select(SitePage).where(SitePage.tenant_id == tenant.id)) is not None:
+        return
+
+    us = db.scalar(select(Market).where(Market.tenant_id == tenant.id, Market.country_code == "US"))
+    jp = db.scalar(select(Market).where(Market.tenant_id == tenant.id, Market.country_code == "JP"))
+    de = db.scalar(select(Market).where(Market.tenant_id == tenant.id, Market.country_code == "DE"))
+    us_seo = db.scalar(select(SeoPage).where(SeoPage.tenant_id == tenant.id, SeoPage.locale == "en-US"))
+    jp_seo = db.scalar(select(SeoPage).where(SeoPage.tenant_id == tenant.id, SeoPage.locale == "ja-JP"))
+    de_seo = db.scalar(select(SeoPage).where(SeoPage.tenant_id == tenant.id, SeoPage.locale == "de-DE"))
+
+    p1 = SitePage(
+        tenant_id=tenant.id,
+        market_id=us.id if us else None,
+        seo_page_id=us_seo.id if us_seo else None,
+        path="/en-us/smart-lock-installation-renters",
+        locale="en-US",
+        title="Smart lock installation for renters",
+        meta_title="Smart lock installation for renters",
+        meta_description="Short draft — AM to expand.",
+        headings="H1 Installation\nH2 Tools",
+        internal_links="/en-us/compatibility",
+        structured_data="",
+        index_status="untested",
+        crawl_status="untested",
+        notes="演示页。收录/抓取未接 GSC，保持未测。",
+    )
+    p2 = SitePage(
+        tenant_id=tenant.id,
+        market_id=us.id if us else None,
+        path="/en-us/smart-lock-compatibility",
+        locale="en-US",
+        title="Smart lock compatibility",
+        meta_title="",
+        meta_description="",
+        headings="",
+        internal_links="",
+        structured_data="",
+        index_status="untested",
+        crawl_status="untested",
+    )
+    p3 = SitePage(
+        tenant_id=tenant.id,
+        market_id=jp.id if jp else None,
+        seo_page_id=jp_seo.id if jp_seo else None,
+        path="/ja-jp/chintai-smart-lock",
+        locale="ja-JP",
+        title="賃貸スマートロックの許可",
+        meta_title="賃貸 スマートロック 許可",
+        meta_description="管理組合向け説明（草稿）",
+        headings="H1 許可\nH2 申請",
+        internal_links="",
+        structured_data="",
+        index_status="untested",
+        crawl_status="untested",
+    )
+    p4 = SitePage(
+        tenant_id=tenant.id,
+        market_id=de.id if de else None,
+        seo_page_id=de_seo.id if de_seo else None,
+        path="/de-de/smart-lock-dsgvo",
+        locale="de-DE",
+        title="Smart Lock und DSGVO",
+        meta_title="Smart Lock DSGVO",
+        meta_description="",
+        headings="H1 Datenschutz",
+        internal_links="/de-de/home",
+        structured_data="",
+        index_status="untested",
+        crawl_status="untested",
+    )
+    p5 = SitePage(
+        tenant_id=tenant.id,
+        market_id=us.id if us else None,
+        path="/en-us/",
+        locale="en-US",
+        title="Home",
+        meta_title="Demo lock brand",
+        meta_description="Homepage draft",
+        headings="H1 Welcome",
+        internal_links="/en-us/smart-lock-installation-renters",
+        structured_data="",
+        index_status="untested",
+        crawl_status="untested",
+    )
+    db.add_all([p1, p2, p3, p4, p5])
+    db.flush()
+
+    issues = [
+        OnsiteIssue(
+            tenant_id=tenant.id,
+            page_id=p1.id,
+            category="tdk",
+            title="Meta 描述过短",
+            detail="工作区草稿，未接 Search Console。",
+            proposed_change="补到 140–160 字符，含 renter / installation。",
+            risk="low",
+            status="open",
+            metric_status="untested",
+        ),
+        OnsiteIssue(
+            tenant_id=tenant.id,
+            page_id=p1.id,
+            category="schema",
+            title="缺少 HowTo / FAQ 结构化数据",
+            detail="上线会改 HTML，属高风险。",
+            proposed_change="先出 JSON-LD 方案，确认后再给站点。",
+            risk="high",
+            status="open",
+            metric_status="untested",
+        ),
+        OnsiteIssue(
+            tenant_id=tenant.id,
+            page_id=p1.id,
+            category="index",
+            title="收录状态未知",
+            detail="无 GSC，不能填已收录或 0 页。",
+            proposed_change="有 Search Console 后再测。",
+            risk="high",
+            status="open",
+            metric_status="untested",
+        ),
+        OnsiteIssue(
+            tenant_id=tenant.id,
+            page_id=p2.id,
+            category="heading",
+            title="缺少 H1",
+            detail="兼容页还没有标题层级。",
+            proposed_change="补 H1 Compatibility + H2 门型。",
+            risk="low",
+            status="open",
+            metric_status="untested",
+        ),
+        OnsiteIssue(
+            tenant_id=tenant.id,
+            page_id=p2.id,
+            category="internal_link",
+            title="未链到安装指南",
+            detail="监测到的内链缺口。",
+            proposed_change="正文加入 /en-us/smart-lock-installation-renters",
+            risk="low",
+            status="draft_applied",
+            metric_status="untested",
+        ),
+        OnsiteIssue(
+            tenant_id=tenant.id,
+            page_id=p3.id,
+            category="crawl",
+            title="抓取状态未测",
+            detail="未接爬虫日志 / GSC。",
+            proposed_change="有数据源后再标。",
+            risk="high",
+            status="open",
+            metric_status="untested",
+        ),
+        OnsiteIssue(
+            tenant_id=tenant.id,
+            page_id=p4.id,
+            category="tdk",
+            title="德文 Description 为空",
+            proposed_change="用本地化隐私表述补描述。",
+            risk="low",
+            status="open",
+            metric_status="untested",
+        ),
+        OnsiteIssue(
+            tenant_id=tenant.id,
+            page_id=p5.id,
+            category="schema",
+            title="首页 Organization 标记缺失",
+            proposed_change="方案先写在工作区，确认后才改线上。",
+            risk="high",
+            status="open",
+            metric_status="untested",
+        ),
+    ]
+    db.add_all(issues)
+
+    g1 = BacklinkGap(
+        tenant_id=tenant.id,
+        market_id=us.id if us else None,
+        competitor_name="August Home",
+        referring_domain="reddit.com",
+        competitor_url="https://www.reddit.com/r/smarthome/",
+        our_presence="none",
+        domain_metric="untested",
+        status="outreach",
+        notes="客户经理从公开讨论记下的缺口。域名权重未测，不是 Ahrefs 数字。",
+    )
+    g2 = BacklinkGap(
+        tenant_id=tenant.id,
+        market_id=us.id if us else None,
+        competitor_name="Level Lock",
+        referring_domain="theverge.com",
+        competitor_url=None,
+        our_presence="untested",
+        domain_metric="untested",
+        status="identified",
+        notes="是否真有稿件未核实，保持未测。",
+    )
+    g3 = BacklinkGap(
+        tenant_id=tenant.id,
+        market_id=jp.id if jp else None,
+        competitor_name="Qrio",
+        referring_domain="kakaku.com",
+        our_presence="none",
+        domain_metric="untested",
+        status="identified",
+    )
+    g4 = BacklinkGap(
+        tenant_id=tenant.id,
+        market_id=us.id if us else None,
+        competitor_name="August Home",
+        referring_domain="wirecutter.com",
+        our_presence="none",
+        domain_metric="untested",
+        status="skipped",
+        notes="评测周期长，本季不外联。",
+    )
+    g5 = BacklinkGap(
+        tenant_id=tenant.id,
+        market_id=de.id if de else None,
+        competitor_name="Nuki",
+        referring_domain="heise.de",
+        our_presence="none",
+        domain_metric="untested",
+        status="identified",
+    )
+    g6 = BacklinkGap(
+        tenant_id=tenant.id,
+        market_id=us.id if us else None,
+        competitor_name="Level Lock",
+        referring_domain="houzz.com",
+        our_presence="none",
+        domain_metric="untested",
+        status="replied",
+    )
+    db.add_all([g1, g2, g3, g4, g5, g6])
+    db.flush()
+
+    db.add_all(
+        [
+            OutreachItem(
+                tenant_id=tenant.id,
+                gap_id=g1.id,
+                contact="r/smarthome 版主（公开版规）",
+                channel="forum",
+                status="todo",
+                notes="只做跟进清单，禁止群发。",
+            ),
+            OutreachItem(
+                tenant_id=tenant.id,
+                gap_id=g2.id,
+                contact="tips@example.com",
+                channel="email",
+                status="todo",
+            ),
+            OutreachItem(
+                tenant_id=tenant.id,
+                gap_id=g6.id,
+                contact="houzz 商家页",
+                channel="form",
+                status="sent_manual",
+                notes="客户经理手发，系统未代发。",
+            ),
+            OutreachItem(
+                tenant_id=tenant.id,
+                gap_id=g3.id,
+                contact="価格.com 登录页",
+                channel="form",
+                status="todo",
+            ),
+        ]
+    )
+
+    db.add_all(
+        [
+            DistributionJob(
+                tenant_id=tenant.id,
+                title="提交英文安装指南到目录",
+                target_url="/en-us/smart-lock-installation-renters",
+                provider_key="directory",
+                payload_summary="标题 + 摘要。渠道未配置，确认后也不会真发。",
+                status="draft",
+                last_result="未发送",
+            ),
+            DistributionJob(
+                tenant_id=tenant.id,
+                title="客座网络排队（日语许可页）",
+                target_url="/ja-jp/chintai-smart-lock",
+                provider_key="guest_network",
+                payload_summary="待人工确认。",
+                status="draft",
+                last_result="未发送",
+            ),
+            DistributionJob(
+                tenant_id=tenant.id,
+                title="聚合渠道草稿",
+                target_url="/de-de/smart-lock-dsgvo",
+                provider_key="syndication",
+                payload_summary="未配置 API。",
+                status="draft",
+                last_result="未发送",
+            ),
+        ]
+    )
+
+    db.add_all(
+        [
+            WorkOrder(
+                tenant_id=tenant.id,
+                title="英文安装页补 TDK 草稿",
+                type="onsite",
+                status="open",
+                market_id=us.id if us else None,
+                acceptance_criteria="低风险可落工作区草稿；改线上 schema/收录必须确认。",
+            ),
+            WorkOrder(
+                tenant_id=tenant.id,
+                title="跟进 reddit 外链缺口",
+                type="offsite",
+                status="claimed",
+                assignee_id=user.id,
+                market_id=us.id if us else None,
+                acceptance_criteria="只做外联清单，不代买、不群发。",
+            ),
+            WorkOrder(
+                tenant_id=tenant.id,
+                title="分发台：等客户提供渠道 Key",
+                type="distribution",
+                status="blocked",
+                acceptance_criteria="未配置则不得发送。",
+            ),
+        ]
     )
 
 

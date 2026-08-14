@@ -64,6 +64,12 @@ export type DashboardSummary = {
   geo_untested: number;
   geo_recorded: number;
   geo_assets_draft: number;
+  onsite_pages: number;
+  onsite_open_low: number;
+  onsite_open_high: number;
+  offsite_gaps: number;
+  offsite_outreach_open: number;
+  distribution_jobs: number;
 };
 
 export type Market = {
@@ -179,6 +185,77 @@ export type GeoAsset = {
   body: string;
   status: string;
   updated_at?: string | null;
+};
+
+export type SitePage = {
+  id: string;
+  path: string;
+  locale: string;
+  title: string;
+  meta_title: string;
+  meta_description: string;
+  meta_keywords: string;
+  headings: string;
+  internal_links: string;
+  structured_data: string;
+  index_status: string;
+  crawl_status: string;
+  notes: string | null;
+  open_issue_count: number;
+};
+
+export type OnsiteIssue = {
+  id: string;
+  page_id: string;
+  category: string;
+  title: string;
+  detail: string;
+  proposed_change: string;
+  risk: string;
+  status: string;
+  metric_status: string;
+};
+
+export type SitePageDetail = SitePage & { issues: OnsiteIssue[] };
+
+export type OutreachItem = {
+  id: string;
+  gap_id: string;
+  contact: string;
+  channel: string;
+  status: string;
+  notes: string | null;
+};
+
+export type BacklinkGap = {
+  id: string;
+  competitor_name: string;
+  referring_domain: string;
+  competitor_url: string | null;
+  our_presence: string;
+  domain_metric: string;
+  status: string;
+  notes: string | null;
+  outreach: OutreachItem[];
+};
+
+export type DistProvider = {
+  key: string;
+  label: string;
+  configured: boolean;
+  status: string;
+  env_var: string;
+};
+
+export type DistJob = {
+  id: string;
+  title: string;
+  target_url: string;
+  provider_key: string;
+  payload_summary: string;
+  status: string;
+  last_result: string;
+  last_detail: string | null;
 };
 
 export type GeoChecklistItem = {

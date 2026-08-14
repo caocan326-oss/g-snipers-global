@@ -15,6 +15,9 @@ const typeLabel: Record<string, string> = {
   seo_meta: "SEO Meta",
   geo_monitor: "GEO 监测",
   geo_asset: "GEO 资产",
+  onsite: "站内",
+  offsite: "站外",
+  distribution: "分发",
   other: "其他",
 };
 

@@ -234,6 +234,114 @@ class GeoChecklistItem(Base):
     seo_page: Mapped[SeoPage] = relationship()
 
 
+class SitePage(Base):
+    __tablename__ = "site_pages"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
+    market_id: Mapped[str | None] = mapped_column(ForeignKey("markets.id"), index=True)
+    seo_page_id: Mapped[str | None] = mapped_column(ForeignKey("seo_pages.id"))
+    path: Mapped[str] = mapped_column(String(400), nullable=False)
+    locale: Mapped[str] = mapped_column(String(16), nullable=False)
+    title: Mapped[str] = mapped_column(String(300), nullable=False)
+    meta_title: Mapped[str] = mapped_column(String(200), default="")
+    meta_description: Mapped[str] = mapped_column(String(400), default="")
+    meta_keywords: Mapped[str] = mapped_column(String(300), default="")
+    headings: Mapped[str] = mapped_column(Text, default="")
+    internal_links: Mapped[str] = mapped_column(Text, default="")
+    structured_data: Mapped[str] = mapped_column(Text, default="")
+    index_status: Mapped[str] = mapped_column(String(20), default="untested")
+    crawl_status: Mapped[str] = mapped_column(String(20), default="untested")
+    notes: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    issues: Mapped[list["OnsiteIssue"]] = relationship(back_populates="page", cascade="all, delete-orphan")
+
+
+class OnsiteIssue(Base):
+    """Monitor finding + execute task. High-risk never touches live without confirm."""
+
+    __tablename__ = "onsite_issues"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
+    page_id: Mapped[str] = mapped_column(ForeignKey("site_pages.id"), nullable=False, index=True)
+    category: Mapped[str] = mapped_column(String(40), nullable=False)
+    title: Mapped[str] = mapped_column(String(300), nullable=False)
+    detail: Mapped[str] = mapped_column(Text, default="")
+    proposed_change: Mapped[str] = mapped_column(Text, default="")
+    risk: Mapped[str] = mapped_column(String(10), default="low")
+    status: Mapped[str] = mapped_column(String(30), default="open", index=True)
+    metric_status: Mapped[str] = mapped_column(String(20), default="untested")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    page: Mapped[SitePage] = relationship(back_populates="issues")
+
+
+class BacklinkGap(Base):
+    __tablename__ = "backlink_gaps"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
+    market_id: Mapped[str | None] = mapped_column(ForeignKey("markets.id"))
+    competitor_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    referring_domain: Mapped[str] = mapped_column(String(300), nullable=False)
+    competitor_url: Mapped[str | None] = mapped_column(String(500))
+    our_presence: Mapped[str] = mapped_column(String(20), default="none")
+    domain_metric: Mapped[str] = mapped_column(String(20), default="untested")
+    status: Mapped[str] = mapped_column(String(20), default="identified", index=True)
+    notes: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    outreach: Mapped[list["OutreachItem"]] = relationship(back_populates="gap", cascade="all, delete-orphan")
+
+
+class OutreachItem(Base):
+    __tablename__ = "outreach_items"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
+    gap_id: Mapped[str] = mapped_column(ForeignKey("backlink_gaps.id"), nullable=False, index=True)
+    contact: Mapped[str] = mapped_column(String(300), nullable=False)
+    channel: Mapped[str] = mapped_column(String(40), default="email")
+    status: Mapped[str] = mapped_column(String(20), default="todo")
+    notes: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    gap: Mapped[BacklinkGap] = relationship(back_populates="outreach")
+
+
+class DistributionJob(Base):
+    __tablename__ = "distribution_jobs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(300), nullable=False)
+    target_url: Mapped[str] = mapped_column(String(500), nullable=False)
+    provider_key: Mapped[str] = mapped_column(String(40), nullable=False)
+    payload_summary: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(String(30), default="draft", index=True)
+    last_result: Mapped[str] = mapped_column(String(40), default="未发送")
+    last_detail: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class DistributionAttempt(Base):
+    __tablename__ = "distribution_attempts"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
+    job_id: Mapped[str] = mapped_column(ForeignKey("distribution_jobs.id"), nullable=False, index=True)
+    confirmed: Mapped[bool] = mapped_column(Boolean, default=False)
+    sent: Mapped[bool] = mapped_column(Boolean, default=False)
+    result: Mapped[str] = mapped_column(String(40), default="未发送")
+    detail: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class PublishConfirmation(Base):
     """Human confirm gate: content is never auto-published."""
 

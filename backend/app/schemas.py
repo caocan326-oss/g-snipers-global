@@ -36,6 +36,12 @@ class DashboardSummary(BaseModel):
     geo_untested: int
     geo_recorded: int
     geo_assets_draft: int
+    onsite_pages: int
+    onsite_open_low: int
+    onsite_open_high: int
+    offsite_gaps: int
+    offsite_outreach_open: int
+    distribution_jobs: int
 
 
 class MarketCreate(BaseModel):
@@ -300,3 +306,142 @@ class InquiryOut(BaseModel):
     related_market_id: str | None
     notes: str | None
     created_at: datetime | None = None
+
+
+class SitePageCreate(BaseModel):
+    path: str
+    locale: str
+    title: str
+    market_id: str | None = None
+    seo_page_id: str | None = None
+    meta_title: str = ""
+    meta_description: str = ""
+    meta_keywords: str = ""
+    headings: str = ""
+    internal_links: str = ""
+    structured_data: str = ""
+    notes: str | None = None
+
+
+class SitePageUpdate(BaseModel):
+    title: str | None = None
+    meta_title: str | None = None
+    meta_description: str | None = None
+    meta_keywords: str | None = None
+    headings: str | None = None
+    internal_links: str | None = None
+    structured_data: str | None = None
+    notes: str | None = None
+
+
+class OnsiteIssueOut(BaseModel):
+    id: str
+    page_id: str
+    category: str
+    title: str
+    detail: str
+    proposed_change: str
+    risk: str
+    status: str
+    metric_status: str
+
+
+class OnsiteIssueCreate(BaseModel):
+    category: str
+    title: str
+    detail: str = ""
+    proposed_change: str = ""
+    risk: str | None = None
+
+
+class SitePageOut(BaseModel):
+    id: str
+    path: str
+    locale: str
+    title: str
+    market_id: str | None
+    seo_page_id: str | None
+    meta_title: str
+    meta_description: str
+    meta_keywords: str
+    headings: str
+    internal_links: str
+    structured_data: str
+    index_status: str
+    crawl_status: str
+    notes: str | None
+    open_issue_count: int = 0
+
+
+class SitePageDetailOut(SitePageOut):
+    issues: list[OnsiteIssueOut] = []
+
+
+class BacklinkGapCreate(BaseModel):
+    competitor_name: str
+    referring_domain: str
+    competitor_url: str | None = None
+    market_id: str | None = None
+    our_presence: str = "none"
+    notes: str | None = None
+
+
+class OutreachOut(BaseModel):
+    id: str
+    gap_id: str
+    contact: str
+    channel: str
+    status: str
+    notes: str | None
+
+
+class OutreachCreate(BaseModel):
+    contact: str
+    channel: str = "email"
+    notes: str | None = None
+
+
+class BacklinkGapOut(BaseModel):
+    id: str
+    competitor_name: str
+    referring_domain: str
+    competitor_url: str | None
+    market_id: str | None
+    our_presence: str
+    domain_metric: str
+    status: str
+    notes: str | None
+    outreach: list[OutreachOut] = []
+
+
+class DistributionJobCreate(BaseModel):
+    title: str
+    target_url: str
+    provider_key: str
+    payload_summary: str = ""
+
+
+class DistributionJobOut(BaseModel):
+    id: str
+    title: str
+    target_url: str
+    provider_key: str
+    payload_summary: str
+    status: str
+    last_result: str
+    last_detail: str | None
+
+
+class ProviderOut(BaseModel):
+    key: str
+    label: str
+    configured: bool
+    status: str
+    env_var: str
+
+
+class SendResultOut(BaseModel):
+    sent: bool
+    provider_status: str
+    detail: str
+    job: DistributionJobOut

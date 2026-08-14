@@ -51,6 +51,24 @@ export default function HomePage() {
       href: "/geo",
       hint: data.geo_recorded > 0 ? `已记录 ${data.geo_recorded}（非引用率）` : "尚无抽查，不显示 0%",
     },
+    {
+      label: "站内页面",
+      value: data.onsite_pages,
+      href: "/onsite",
+      hint: `低风险待办 ${data.onsite_open_low} · 高风险 ${data.onsite_open_high}`,
+    },
+    {
+      label: "站外缺口",
+      value: data.offsite_gaps,
+      href: "/offsite",
+      hint: `外联未完 ${data.offsite_outreach_open}`,
+    },
+    {
+      label: "分发任务",
+      value: data.distribution_jobs,
+      href: "/distribution",
+      hint: "渠道未配置则不会发送",
+    },
   ];
 
   return (
@@ -58,7 +76,7 @@ export default function HomePage() {
       <div>
         <h1 className="text-2xl font-semibold">工作台首页</h1>
         <p className="mt-1 text-sm text-slate-500">
-          {data.tenant_name} · 洞察喂给 SEO；GEO 是旁路监测与资产，不是验收 KPI。
+          {data.tenant_name} · 监测发现问题，执行按风险分级：低风险落工作区草稿，高风险须人工确认。
         </p>
       </div>
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
