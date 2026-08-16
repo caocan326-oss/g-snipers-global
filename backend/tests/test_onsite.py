@@ -3,6 +3,52 @@ from fastapi.testclient import TestClient
 from tests.conftest import auth_header
 
 
+def test_project_targets_seed_customer_context_and_geo_prompts(client: TestClient, demo_user) -> None:
+    headers = auth_header(client)
+    payload = {
+        "site_origin": "https://example.com",
+        "markets": [
+            {
+                "name": "United States",
+                "region": "North America",
+                "country_code": "US",
+                "primary_locale": "en-US",
+                "status": "priority",
+                "opportunity_score": 82,
+            }
+        ],
+        "keywords": [
+            {"theme": "industrial pump supplier", "locale": "en-US", "country_code": "US", "intent": "commercial", "intensity": 5},
+            {"theme": "industrial pump supplier", "locale": "en-US", "country_code": "US", "intent": "commercial", "intensity": 5},
+        ],
+        "competitors": [
+            {"name": "Pump Rival", "website": "https://rival.example", "country_code": "US"},
+            {"name": "Pump Rival Copy", "website": "https://rival.example", "country_code": "US"},
+        ],
+    }
+
+    saved = client.put("/api/project-targets", headers=headers, json=payload)
+    assert saved.status_code == 200, saved.text
+    body = saved.json()
+    assert body["site_origin"] == "https://example.com"
+    assert body["readiness"] == "ready"
+    assert body["target_market_count"] == 1
+    assert body["keyword_count"] == 1
+    assert body["competitor_count"] == 1
+    assert body["markets"][0]["demand_signals"][0]["theme"] == "industrial pump supplier"
+
+    again = client.put("/api/project-targets", headers=headers, json=payload)
+    assert again.status_code == 200, again.text
+    assert again.json()["keyword_count"] == 1
+    assert again.json()["competitor_count"] == 1
+
+    seeded = client.post("/api/geo/prompt-panel/seed", headers=headers)
+    assert seeded.status_code == 200, seeded.text
+    assert seeded.json()["created"] >= 1
+    prompts = client.get("/api/geo/prompts", headers=headers).json()
+    assert any("industrial pump supplier" in row["prompt_text"] for row in prompts)
+
+
 def test_onsite_page_and_risk_gates(client: TestClient, demo_user) -> None:
     headers = auth_header(client)
     page = client.post(
@@ -26,6 +72,9 @@ def test_onsite_page_and_risk_gates(client: TestClient, demo_user) -> None:
     assert low.status_code == 201
     assert low.json()["risk"] == "low"
     assert low.json()["metric_status"] == "untested"
+    assert low.json()["review_required"] is False
+    assert low.json()["owner_hint"] == "内容运营 / 客户经理"
+    assert "Title" in low.json()["recommended_action"]
 
     high = client.post(
         f"/api/onsite/pages/{page_id}/issues",
@@ -33,6 +82,9 @@ def test_onsite_page_and_risk_gates(client: TestClient, demo_user) -> None:
         json={"category": "schema", "title": "补 FAQ", "proposed_change": "JSON-LD"},
     )
     assert high.json()["risk"] == "high"
+    assert high.json()["review_required"] is True
+    assert "JSON-LD" in high.json()["recommended_action"]
+    assert high.json()["retest_method"]
 
     denied_auto = client.post(f"/api/onsite/issues/{high.json()['id']}/apply-draft", headers=headers)
     assert denied_auto.status_code == 400
@@ -59,6 +111,28 @@ def test_onsite_page_and_risk_gates(client: TestClient, demo_user) -> None:
     after_high = client.get(f"/api/onsite/pages/{page_id}", headers=headers).json()
     assert after_high["structured_data"] == ""
     assert confirmed.json()["proposed_change"] == "JSON-LD"
+
+    reopened = client.post(f"/api/onsite/issues/{high.json()['id']}/reopen", headers=headers)
+    assert reopened.status_code == 200
+    assert reopened.json()["status"] == "drafted"
+
+    marked = client.post(
+        f"/api/onsite/issues/{high.json()['id']}/mark-executed",
+        headers=headers,
+        json={"confirmed": True, "note": "已在测试站处理"},
+    )
+    assert marked.status_code == 200
+    assert marked.json()["status"] == "confirmed"
+    assert "人工执行记录" in marked.json()["evidence"]
+
+    ignored = client.post(
+        f"/api/onsite/issues/{low.json()['id']}/wont-fix",
+        headers=headers,
+        json={"note": "本轮不处理"},
+    )
+    assert ignored.status_code == 200
+    assert ignored.json()["status"] == "wont_fix"
+    assert "忽略原因" in ignored.json()["evidence"]
 
 
 def test_analyze_does_not_apply_and_board_groups_severity(client: TestClient, demo_user) -> None:
@@ -107,8 +181,14 @@ def test_analyze_does_not_apply_and_board_groups_severity(client: TestClient, de
 
     board = client.get("/api/onsite/board", headers=headers).json()
     assert "critical" in board["groups"]
+    assert "status_counts" in board
+    assert "workflow_counts" in board
     assert board["counts"]["critical"] + board["counts"]["high"] + board["counts"]["low"] >= 1
     assert all(i["metric_status"] == "untested" for i in board["groups"]["critical"])
+    first_issue = (board["groups"]["critical"] + board["groups"]["high"] + board["groups"]["low"])[0]
+    assert first_issue["impact"]
+    assert first_issue["recommended_action"]
+    assert first_issue["retest_method"]
 
     briefs = client.get("/api/onsite/briefs", headers=headers).json()
     assert isinstance(briefs, list)
@@ -135,3 +215,321 @@ def test_crawl_or_seed_from_internal_links(client: TestClient, demo_user) -> Non
     assert any(p["path"] == "/en-us/new-from-seed" for p in pages)
     seeded = next(p for p in pages if p["path"] == "/en-us/new-from-seed")
     assert seeded["index_status"] == "untested"
+
+
+def test_seo_report_exports_customer_report_and_execution_table(client: TestClient, demo_user) -> None:
+    headers = auth_header(client)
+    page = client.post(
+        "/api/onsite/pages",
+        headers=headers,
+        json={
+            "path": "/products/pump",
+            "locale": "en-US",
+            "title": "Industrial Pump",
+            "crawl_status": "ok",
+            "http_status": 200,
+            "word_count": 80,
+        },
+    ).json()
+    client.post(
+        f"/api/onsite/pages/{page['id']}/issues",
+        headers=headers,
+        json={
+            "category": "b2b",
+            "title": "产品页缺少询盘入口",
+            "detail": "未发现明显询盘入口。",
+            "severity": "high",
+            "risk": "high",
+        },
+    )
+
+    report = client.get("/api/onsite/report", headers=headers)
+    assert report.status_code == 200
+    markdown = report.json()["markdown"]
+    assert "一句话结论" in markdown
+    assert "诊断目标" in markdown
+    assert "主要风险" in markdown
+    assert "需要客户配合" in markdown
+    assert "测速状态" in markdown
+    assert "产品页缺少询盘入口" in markdown
+    assert "page_type" not in markdown
+
+    table = client.get("/api/onsite/report-table", headers=headers)
+    assert table.status_code == 200
+    data = table.json()
+    assert data["filename"].startswith("seo整改执行表-")
+    csv_text = data["csv"]
+    assert "优先级,严重程度,问题类型,目标国家/地区,关联关键词,页面" in csv_text
+    assert "为什么影响获客" in csv_text
+    assert "建议整改动作" in csv_text
+    assert "复测方式" in csv_text
+    assert "测速状态" in csv_text
+    assert "产品页缺少询盘入口" in csv_text
+    assert "page_type" not in csv_text
+    assert "crawl_status" not in csv_text
+
+
+def test_seo_performance_csv_feeds_summary_report_and_table(client: TestClient, demo_user) -> None:
+    headers = auth_header(client)
+    page = client.post(
+        "/api/onsite/pages",
+        headers=headers,
+        json={"path": "/products/pump", "locale": "en-US", "title": "Industrial Pump"},
+    ).json()
+    client.post(
+        f"/api/onsite/pages/{page['id']}/issues",
+        headers=headers,
+        json={"category": "tdk", "title": "标题缺少核心产品词", "severity": "high"},
+    )
+
+    csv_text = "\n".join(
+        [
+            "Query,Page,Country,Device,Clicks,Impressions,CTR,Position",
+            "industrial pump,https://example.com/products/pump,United States,desktop,12,300,4%,8.5",
+            "pump supplier,https://example.com/products/pump,Germany,mobile,3,120,2.5%,14",
+        ]
+    )
+    imported = client.post(
+        "/api/onsite/performance/import-csv",
+        headers=headers,
+        json={"source": "gsc_csv", "filename": "gsc.csv", "csv_text": csv_text},
+    )
+    assert imported.status_code == 201
+    assert imported.json()["rows_imported"] == 2
+
+    summary = client.get("/api/onsite/performance", headers=headers)
+    assert summary.status_code == 200
+    body = summary.json()
+    assert body["gsc_status"] == "已导入"
+    assert body["total_impressions"] == 420
+    assert body["total_clicks"] == 15
+    assert body["by_country"][0]["key"] == "United States"
+    assert any(item["key"] == "industrial pump" for item in body["by_query"])
+
+    report = client.get("/api/onsite/report", headers=headers).json()["markdown"]
+    assert "SEO 表现" in report
+    assert "总曝光：420" in report
+    assert "industrial pump" in report
+
+    table = client.get("/api/onsite/report-table", headers=headers).json()["csv"]
+    assert "曝光,点击,CTR,平均排名" in table
+    assert "420" in table or "300" in table
+
+
+def test_gsc_oauth_connect_and_sync_feeds_performance(client: TestClient, demo_user, monkeypatch) -> None:
+    import httpx
+
+    import app.routers.onsite as onsite_router
+    from app.config import settings
+
+    headers = auth_header(client)
+    status = client.get("/api/onsite/gsc/status", headers=headers)
+    assert status.status_code == 200
+    assert status.json()["configured"] is False
+
+    monkeypatch.setattr(settings, "gsc_oauth_client_id", "client-id")
+    monkeypatch.setattr(settings, "gsc_oauth_client_secret", "client-secret")
+    monkeypatch.setattr(settings, "gsc_oauth_redirect_uri", "http://localhost:3000/onsite")
+    monkeypatch.setattr(
+        onsite_router,
+        "_exchange_gsc_code",
+        lambda code: {
+            "access_token": "access-1",
+            "refresh_token": "refresh-1",
+            "expires_in": 3600,
+            "scope": "https://www.googleapis.com/auth/webmasters.readonly",
+        },
+    )
+
+    connected = client.post(
+        "/api/onsite/gsc/connect",
+        headers=headers,
+        json={"code": "oauth-code", "site_url": "https://example.com/"},
+    )
+    assert connected.status_code == 200, connected.text
+    assert connected.json()["connected"] is True
+    assert connected.json()["site_url"] == "https://example.com/"
+
+    monkeypatch.setattr(onsite_router, "_refresh_gsc_token", lambda conn: "access-2")
+
+    class FakeGscClient:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> None:
+            return None
+
+        def post(self, url, headers=None, json=None, data=None):
+            assert "searchAnalytics/query" in url
+            assert headers["Authorization"] == "Bearer access-2"
+            assert json["dimensions"] == ["date", "query", "page", "country", "device"]
+            return httpx.Response(
+                200,
+                json={
+                    "rows": [
+                        {
+                            "keys": ["2026-08-01", "industrial pump", "https://example.com/products/pump", "usa", "DESKTOP"],
+                            "clicks": 4,
+                            "impressions": 100,
+                            "ctr": 0.04,
+                            "position": 8.2,
+                        }
+                    ]
+                },
+            )
+
+    monkeypatch.setattr(onsite_router.httpx, "Client", FakeGscClient)
+    synced = client.post("/api/onsite/gsc/sync", headers=headers, json={"days": 28, "row_limit": 100})
+    assert synced.status_code == 200, synced.text
+    assert synced.json()["rows_imported"] == 1
+
+    performance = client.get("/api/onsite/performance", headers=headers)
+    assert performance.status_code == 200
+    body = performance.json()
+    assert body["gsc_status"] == "已导入"
+    assert body["total_impressions"] == 100
+    assert body["total_clicks"] == 4
+    assert body["by_query"][0]["key"] == "industrial pump"
+
+    runs = client.get("/api/onsite/data-sync/status", headers=headers)
+    assert runs.status_code == 200
+    assert runs.json()["runs"][0]["source"] == "gsc"
+    assert runs.json()["runs"][0]["rows_imported"] == 1
+
+
+def test_data_sync_run_due_executes_gsc_once(client: TestClient, demo_user, monkeypatch) -> None:
+    import httpx
+
+    import app.routers.onsite as onsite_router
+    from app.config import settings
+
+    headers = auth_header(client)
+    monkeypatch.setattr(settings, "gsc_oauth_client_id", "client-id")
+    monkeypatch.setattr(settings, "gsc_oauth_client_secret", "client-secret")
+    monkeypatch.setattr(settings, "gsc_oauth_redirect_uri", "http://localhost:3000/onsite")
+    monkeypatch.setattr(settings, "gsc_auto_sync_days", 28)
+    monkeypatch.setattr(settings, "gsc_auto_sync_min_interval_hours", 24)
+    monkeypatch.setattr(
+        onsite_router,
+        "_exchange_gsc_code",
+        lambda code: {
+            "access_token": "access-1",
+            "refresh_token": "refresh-1",
+            "expires_in": 3600,
+            "scope": "https://www.googleapis.com/auth/webmasters.readonly",
+        },
+    )
+    connected = client.post(
+        "/api/onsite/gsc/connect",
+        headers=headers,
+        json={"code": "oauth-code", "site_url": "https://example.com/"},
+    )
+    assert connected.status_code == 200, connected.text
+    monkeypatch.setattr(onsite_router, "_refresh_gsc_token", lambda conn: "access-2")
+
+    calls = {"count": 0}
+
+    class FakeGscClient:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> None:
+            return None
+
+        def post(self, url, headers=None, json=None, data=None):
+            calls["count"] += 1
+            assert "searchAnalytics/query" in url
+            assert json["rowLimit"] == 25000
+            return httpx.Response(
+                200,
+                json={
+                    "rows": [
+                        {
+                            "keys": ["2026-08-01", "industrial pump exporter", "https://example.com/products/pump", "usa", "MOBILE"],
+                            "clicks": 6,
+                            "impressions": 180,
+                            "ctr": 0.0333,
+                            "position": 11.4,
+                        }
+                    ]
+                },
+            )
+
+    monkeypatch.setattr(onsite_router.httpx, "Client", FakeGscClient)
+    due = client.post("/api/onsite/data-sync/run-due", headers=headers, json={"force": False, "sources": ["gsc"]})
+    assert due.status_code == 200, due.text
+    assert due.json()["status"] == "ok"
+    assert due.json()["ran"] == 1
+    assert due.json()["runs"][0]["mode"] == "scheduled"
+    assert due.json()["runs"][0]["rows_imported"] == 1
+    assert calls["count"] == 1
+
+    performance = client.get("/api/onsite/performance", headers=headers).json()
+    assert performance["total_impressions"] == 180
+    assert performance["by_query"][0]["key"] == "industrial pump exporter"
+
+    skipped = client.post("/api/onsite/data-sync/run-due", headers=headers, json={"force": False, "sources": ["gsc"]})
+    assert skipped.status_code == 200, skipped.text
+    assert skipped.json()["status"] == "skipped"
+    assert skipped.json()["skipped"] == 1
+    assert calls["count"] == 1
+
+
+def test_bing_status_and_indexnow_submission(client: TestClient, demo_user, monkeypatch) -> None:
+    import httpx
+
+    import app.routers.onsite as onsite_router
+    from app.config import settings
+
+    headers = auth_header(client)
+    client.patch("/api/onsite/settings", headers=headers, json={"site_origin": "https://example.com"})
+    bing = client.get("/api/onsite/bing/status", headers=headers)
+    assert bing.status_code == 200
+    assert bing.json()["configured"] is False
+
+    monkeypatch.setattr(settings, "bing_webmaster_api_key", "bing-key")
+    monkeypatch.setattr(settings, "indexnow_key", "index-key")
+    monkeypatch.setattr(settings, "indexnow_key_location", "https://example.com/index-key.txt")
+
+    bing_ready = client.get("/api/onsite/bing/status", headers=headers)
+    assert bing_ready.json()["configured"] is True
+    index_status = client.get("/api/onsite/indexnow/status", headers=headers)
+    assert index_status.json()["configured"] is True
+    assert index_status.json()["key_location"] == "https://example.com/index-key.txt"
+
+    class FakeIndexNowClient:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> None:
+            return None
+
+        def post(self, url, json=None):
+            assert url == onsite_router.INDEXNOW_ENDPOINT
+            assert json["host"] == "example.com"
+            assert json["key"] == "index-key"
+            assert json["urlList"] == ["https://example.com/products/pump"]
+            return httpx.Response(200, text="ok")
+
+    monkeypatch.setattr(onsite_router.httpx, "Client", FakeIndexNowClient)
+    submitted = client.post(
+        "/api/onsite/indexnow/submit",
+        headers=headers,
+        json={"paths": ["/products/pump"]},
+    )
+    assert submitted.status_code == 200, submitted.text
+    assert submitted.json()["status"] == "submitted"
+    assert submitted.json()["submitted"] == 1
+
+    runs = client.get("/api/onsite/data-sync/status", headers=headers).json()["runs"]
+    assert runs[0]["source"] == "indexnow"
+    assert runs[0]["submitted"] == 1

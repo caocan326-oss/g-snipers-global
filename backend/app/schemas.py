@@ -49,6 +49,68 @@ class DashboardSummary(BaseModel):
     distribution_jobs: int
 
 
+class WorkbenchItem(BaseModel):
+    id: str
+    title: str
+    subtitle: str = ""
+    href: str
+    status: str = ""
+    tone: str = "default"
+    meta: str = ""
+    action_label: str = "查看"
+
+
+class WorkbenchChain(BaseModel):
+    key: str
+    title: str
+    href: str
+    primary: int
+    secondary: str
+    health: str
+    tone: str = "default"
+    action_label: str
+
+
+class WorkbenchSeoBucket(BaseModel):
+    key: str
+    clicks: int = 0
+    impressions: int = 0
+    ctr: float | None = None
+    position: float | None = None
+
+
+class WorkbenchSeoPerformance(BaseModel):
+    days: int = 28
+    data_status: str = "未导入"
+    total_clicks: int = 0
+    total_impressions: int = 0
+    avg_ctr: float | None = None
+    avg_position: float | None = None
+    indexed_pages: int = 0
+    index_pending_pages: int = 0
+    backlink_domains: int = 0
+    unverified_backlinks: int = 0
+    authority_status: str = "未接入"
+    pagespeed_status: str = "未测速"
+    latest_speed_score: int | None = None
+    top_countries: list[WorkbenchSeoBucket] = []
+    top_keywords: list[WorkbenchSeoBucket] = []
+    top_pages: list[WorkbenchSeoBucket] = []
+
+
+class WorkbenchOut(BaseModel):
+    summary: DashboardSummary
+    site_origin: str = ""
+    diagnostic_status: str
+    seo_performance: WorkbenchSeoPerformance = WorkbenchSeoPerformance()
+    next_actions: list[WorkbenchItem] = []
+    seo_items: list[WorkbenchItem] = []
+    geo_items: list[WorkbenchItem] = []
+    recent_signals: list[WorkbenchItem] = []
+    chains: list[WorkbenchChain] = []
+    deferred_modules: list[WorkbenchItem] = []
+
+
 class MarketCreate(BaseModel):
     name: str
     region: str
@@ -139,6 +201,52 @@ class MarketDetailOut(MarketOut):
     competitors: list[CompetitorOut] = []
     demand_signals: list[DemandSignalOut] = []
     brief: InsightBriefOut | None = None
+
+
+class ProjectTargetMarketIn(BaseModel):
+    name: str
+    region: str = ""
+    country_code: str = Field(min_length=2, max_length=8)
+    primary_locale: str = "en-US"
+    status: str = "priority"
+    opportunity_score: int = Field(default=70, ge=0, le=100)
+
+
+class ProjectTargetKeywordIn(BaseModel):
+    theme: str
+    locale: str = "en-US"
+    market_id: str | None = None
+    market_name: str | None = None
+    country_code: str | None = None
+    intent: str = "commercial"
+    intensity: int = Field(default=4, ge=1, le=5)
+
+
+class ProjectTargetCompetitorIn(BaseModel):
+    name: str
+    website: str | None = None
+    market_id: str | None = None
+    market_name: str | None = None
+    country_code: str | None = None
+    positioning: str | None = None
+
+
+class ProjectTargetsIn(BaseModel):
+    site_origin: str | None = None
+    markets: list[ProjectTargetMarketIn] = Field(default_factory=list)
+    keywords: list[ProjectTargetKeywordIn] = Field(default_factory=list)
+    competitors: list[ProjectTargetCompetitorIn] = Field(default_factory=list)
+
+
+class ProjectTargetsOut(BaseModel):
+    site_origin: str = ""
+    markets: list[MarketDetailOut] = Field(default_factory=list)
+    target_market_count: int = 0
+    keyword_count: int = 0
+    competitor_count: int = 0
+    primary_market_id: str | None = None
+    readiness: str = "incomplete"
+    note: str = ""
 
 
 class SeoPageCreate(BaseModel):
@@ -239,13 +347,29 @@ class GeoObservationOut(BaseModel):
     engine: str
     engine_label: str = ""
     region: str = ""
+    surface: str = "manual_ai_answer"
+    sample_type: str = "manual"
     status: str
+    evidence_tier: str = "none"
+    evidence_label: str = "未测"
+    response_excerpt: str = ""
+    citation_urls: str = ""
+    brand_mentions: str = ""
+    competitor_mentions: str = ""
+    interpretation_note: str = ""
     notes: str | None
     observed_at: datetime | None = None
 
 
 class GeoObservationUpdate(BaseModel):
     status: str
+    surface: str | None = None
+    sample_type: str | None = None
+    response_excerpt: str | None = None
+    citation_urls: str | None = None
+    brand_mentions: str | None = None
+    competitor_mentions: str | None = None
+    interpretation_note: str | None = None
     notes: str | None = None
 
 
@@ -255,6 +379,9 @@ class GeoPromptCreate(BaseModel):
     market_id: str | None = None
     seo_page_id: str | None = None
     demand_signal_id: str | None = None
+    prompt_pack_id: str = "custom"
+    prompt_key: str = ""
+    prompt_type: str = "custom"
 
 
 class GeoPromptOut(BaseModel):
@@ -264,11 +391,17 @@ class GeoPromptOut(BaseModel):
     market_id: str | None
     seo_page_id: str | None
     demand_signal_id: str | None
+    prompt_pack_id: str = "custom"
+    prompt_key: str = ""
+    prompt_type: str = "custom"
     diagnosis: str = "untested"
     diagnosis_label: str = "未测"
     observations: list[GeoObservationOut] = []
     created_at: datetime | None = None
+    mention_rate: str = "未测"
     cite_rate: str = "未测"
+    verified_citation_rate: str = "未测"
+    competitor_rate: str = "未测"
     absorption_rate: str = "未测"
     ai_status: str = "untested"
     evidence: str = ""
@@ -343,7 +476,108 @@ class GeoSummary(BaseModel):
     checklist_untested: int
     assets_draft: int
     tickets_open: int = 0
+    mention_rate: str = "未测"
     cite_rate: str = "未测"
+    verified_citation_rate: str = "未测"
+    competitor_rate: str = "未测"
+    absorption_rate: str = "未测"
+    competitor_mentions: int = 0
+    sample_runs: int = 0
+    evidence_results: int = 0
+    latest_run_id: str | None = None
+
+
+class GeoSeedOut(BaseModel):
+    created: int
+    skipped: int
+    prompts: int
+    note: str
+
+
+class GeoReportOut(BaseModel):
+    title: str
+    markdown: str
+    generated_at: datetime
+
+
+class GeoReportTableOut(BaseModel):
+    filename: str
+    csv: str
+    generated_at: datetime
+
+
+class GeoSampleRunCreate(BaseModel):
+    note: str = ""
+    prompt_set_id: str = "manual-panel"
+    region_hint: str = ""
+    language: str = ""
+
+
+class GeoAutoSampleIn(BaseModel):
+    prompt_ids: list[str] = []
+    engine: str = "llm"
+    model: str = ""
+    trials: int = Field(default=1, ge=1, le=3)
+    limit: int = Field(default=8, ge=1, le=30)
+    region_hint: str = ""
+    web_grounded: str = "false"
+
+
+class GeoSampleResultOut(BaseModel):
+    id: str
+    run_id: str
+    prompt_id: str
+    observation_id: str | None = None
+    evidence_id: str
+    trial_index: int
+    prompt_type: str = "custom"
+    engine: str
+    engine_label: str = ""
+    model: str
+    web_grounded: str
+    surface: str
+    prompt_text_hash: str
+    answer_text_hash: str
+    answer_excerpt: str = ""
+    mentioned: bool
+    citations: list[str] = []
+    owned_citations: list[str] = []
+    third_party_citations: list[str] = []
+    brand_hits: str = ""
+    competitor_hits: str = ""
+    verification_status: str
+    verification_note: str = ""
+    sampled_at: datetime | None = None
+
+
+class GeoSampleRunOut(BaseModel):
+    id: str
+    protocol_version: str
+    prompt_set_id: str
+    config_hash: str
+    domain: str
+    brand_names: list[str] = []
+    engines: list[str] = []
+    trials_per_prompt: int
+    region_hint: str = ""
+    language: str = ""
+    status: str
+    note: str = ""
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+    results_count: int = 0
+    mention_rate: str = "未测"
+    cite_rate: str = "未测"
+    verified_citation_rate: str = "未测"
+    results: list[GeoSampleResultOut] = []
+    aggregate: dict = {}
+
+
+class GeoTicketDraftOut(BaseModel):
+    created: int
+    skipped: int
+    note: str
+    tickets: list[GeoTicketOut] = []
 
 
 class InquiryOut(BaseModel):
@@ -404,6 +638,11 @@ class OnsiteIssueOut(BaseModel):
     ai_review: str = ""
     ai_review_verdict: str = "untested"
     evidence: str = ""
+    impact: str = ""
+    recommended_action: str = ""
+    review_required: bool = False
+    retest_method: str = ""
+    owner_hint: str = ""
 
 
 class OnsiteIssueCreate(BaseModel):
@@ -419,10 +658,17 @@ class OnsiteDraftIn(BaseModel):
     proposed_change: str
 
 
+class OnsiteStatusIn(BaseModel):
+    confirmed: bool = False
+    note: str | None = None
+
+
 class OnsiteBoardOut(BaseModel):
     pages: int
     analyzed_pages: int
     counts: dict[str, int]
+    status_counts: dict[str, int] = {}
+    workflow_counts: dict[str, int] = {}
     groups: dict[str, list[OnsiteIssueOut]]
 
 
@@ -476,6 +722,195 @@ class FetchRegisteredOut(BaseModel):
     ai_status: str = "未配置"
 
 
+class CrawlSiteIn(BaseModel):
+    max_urls: int = Field(default=50, ge=1, le=300)
+    max_depth: int = Field(default=2, ge=0, le=5)
+
+
+class CrawlSessionOut(BaseModel):
+    id: str
+    origin: str
+    mode: str
+    max_urls: int
+    max_depth: int
+    status: str
+    discovered: int
+    fetched: int
+    failed: int
+    created: int
+    verified: int
+    robots_blocked: int
+    needs_js: int
+    note: str
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+
+
+class SeoReportOut(BaseModel):
+    title: str
+    markdown: str
+    generated_at: datetime
+
+
+class SeoReportTableOut(BaseModel):
+    filename: str
+    csv: str
+    generated_at: datetime
+
+
+class SeoPerformanceImportIn(BaseModel):
+    source: str = Field(default="gsc_csv", pattern="^(gsc_csv|bing_csv)$")
+    filename: str = ""
+    csv_text: str = Field(min_length=1)
+
+
+class SeoPerformanceImportOut(BaseModel):
+    id: str
+    source: str
+    filename: str
+    rows_imported: int
+    note: str
+    imported_at: datetime | None = None
+
+
+class SeoPerformanceBucketOut(BaseModel):
+    key: str
+    clicks: int
+    impressions: int
+    ctr: float | None = None
+    position: float | None = None
+
+
+class PageSpeedRunIn(BaseModel):
+    urls: list[str] = []
+    strategies: list[str] = ["mobile", "desktop"]
+    limit: int = Field(default=3, ge=1, le=10)
+
+
+class PageSpeedAuditOut(BaseModel):
+    id: str
+    url: str
+    strategy: str
+    status: str
+    performance_score: int | None = None
+    seo_score: int | None = None
+    accessibility_score: int | None = None
+    best_practices_score: int | None = None
+    lcp_ms: int | None = None
+    inp_ms: int | None = None
+    cls: float | None = None
+    detail: str = ""
+    audited_at: datetime | None = None
+
+
+class SeoPerformanceSummaryOut(BaseModel):
+    gsc_status: str
+    bing_status: str
+    pagespeed_status: str
+    total_clicks: int
+    total_impressions: int
+    avg_ctr: float | None = None
+    avg_position: float | None = None
+    by_country: list[SeoPerformanceBucketOut] = []
+    by_query: list[SeoPerformanceBucketOut] = []
+    by_page: list[SeoPerformanceBucketOut] = []
+    speed_latest: list[PageSpeedAuditOut] = []
+    imports: list[SeoPerformanceImportOut] = []
+
+
+class GscStatusOut(BaseModel):
+    configured: bool
+    connected: bool
+    status: str
+    site_url: str = ""
+    last_sync_at: datetime | None = None
+    last_error: str = ""
+    redirect_uri: str = ""
+    note: str = ""
+
+
+class GscAuthUrlOut(BaseModel):
+    configured: bool
+    auth_url: str = ""
+    redirect_uri: str = ""
+    note: str = ""
+
+
+class GscConnectIn(BaseModel):
+    code: str = Field(min_length=1)
+    site_url: str = ""
+
+
+class GscSyncIn(BaseModel):
+    days: int = Field(default=28, ge=1, le=180)
+    row_limit: int = Field(default=25000, ge=100, le=25000)
+
+
+class GscSyncOut(BaseModel):
+    status: str
+    rows_imported: int = 0
+    date_start: str = ""
+    date_end: str = ""
+    note: str = ""
+    last_error: str = ""
+
+
+class DataSyncRunOut(BaseModel):
+    id: str
+    source: str
+    mode: str
+    status: str
+    rows_imported: int = 0
+    submitted: int = 0
+    note: str = ""
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+
+
+class DataSyncStatusOut(BaseModel):
+    runs: list[DataSyncRunOut] = []
+
+
+class DataSyncRunDueIn(BaseModel):
+    force: bool = False
+    sources: list[str] = Field(default_factory=lambda: ["gsc"])
+
+
+class DataSyncRunDueOut(BaseModel):
+    status: str
+    ran: int = 0
+    skipped: int = 0
+    runs: list[DataSyncRunOut] = []
+    note: str = ""
+
+
+class BingStatusOut(BaseModel):
+    configured: bool
+    status: str
+    note: str
+
+
+class IndexNowStatusOut(BaseModel):
+    configured: bool
+    host: str = ""
+    key_location: str = ""
+    last_submitted_at: datetime | None = None
+    last_status: str = ""
+    note: str = ""
+
+
+class IndexNowSubmitIn(BaseModel):
+    urls: list[str] = []
+    paths: list[str] = []
+
+
+class IndexNowSubmitOut(BaseModel):
+    status: str
+    submitted: int = 0
+    http_status: int | None = None
+    note: str = ""
+
+
 class AnalyzeOut(BaseModel):
     created: int
     skipped: int
@@ -504,10 +939,14 @@ class AiAssistOut(BaseModel):
     review_verdict: str = "未测"
     evidence: str = ""
     detail: str = ""
+    processed: int = 0
+    remaining: int = 0
+    limit: int = 0
 
 
 class AiStepIn(BaseModel):
     step: str = "all"
+    limit: int | None = None
 
 
 class SitePageOut(BaseModel):
@@ -529,12 +968,28 @@ class SitePageOut(BaseModel):
     fetched_at: datetime | None = None
     final_url: str = ""
     http_status: int | None = None
+    content_type: str = ""
+    ttfb_ms: int | None = None
+    redirect_count: int = 0
+    html_bytes: int = 0
+    body_hash: str = ""
     needs_js: bool = False
     html_lang: str = ""
     hreflang: str = ""
     viewport: str = ""
     json_ld_types: str = ""
     crawl_error: str = ""
+    discovery_source: str = "manual"
+    is_in_sitemap: str = "untested"
+    meta_robots: str = ""
+    x_robots_tag: str = ""
+    word_count: int = 0
+    image_count: int = 0
+    images_missing_alt: int = 0
+    external_link_count: int = 0
+    page_type: str = "other"
+    url_depth: int = 0
+    priority_hint: str = "P2"
     notes: str | None
     open_issue_count: int = 0
     analyzed_at: datetime | None = None

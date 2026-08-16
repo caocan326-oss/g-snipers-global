@@ -20,6 +20,9 @@ const catLabel: Record<string, string> = {
   index: "收录",
   crawl: "抓取",
   canonical: "Canonical",
+  image: "图片",
+  content: "内容",
+  b2b: "B2B",
 };
 
 const sevLabel: Record<string, string> = { critical: "Critical", high: "High", low: "Low" };
@@ -107,13 +110,14 @@ export default function OnsiteEditorPage() {
     load();
   }
 
-  async function saveDraft(id: string) {
-    const text = drafts[id];
+  async function saveDraft(issue: OnsiteIssue) {
+    const text = drafts[issue.id] ?? issue.proposed_change;
     if (!text?.trim()) {
-      setError("请先写改稿");
+      setError("请先填写处理方案，AI 建议和人工执行是两步");
       return;
     }
-    await api(`/api/onsite/issues/${id}/draft`, { method: "PATCH", body: JSON.stringify({ proposed_change: text }) });
+    await api(`/api/onsite/issues/${issue.id}/draft`, { method: "PATCH", body: JSON.stringify({ proposed_change: text }) });
+    setNote("处理方案已保存，下一步交给执行人上线或进入人审。");
     load();
   }
 
@@ -122,11 +126,13 @@ export default function OnsiteEditorPage() {
     try {
       if (issue.severity === "low" && issue.risk === "low") {
         await api(`/api/onsite/issues/${issue.id}/apply-draft`, { method: "POST" });
+        setNote("已标记为交付执行人。执行完成后可回抓复测。");
       } else {
-        await api(`/api/onsite/issues/${issue.id}/confirm-apply`, {
+        await api(`/api/onsite/issues/${issue.id}/mark-executed`, {
           method: "POST",
-          body: JSON.stringify({ confirmed: true }),
+          body: JSON.stringify({ confirmed: true, note: "人工确认已处理，等待复测。" }),
         });
+        setNote("已记录人工执行，下一步回抓复测。");
       }
       load();
     } catch (e) {
@@ -156,6 +162,14 @@ export default function OnsiteEditorPage() {
           {page.final_url ? ` · ${page.final_url}` : ""} · 收录{" "}
           {page.index_status === "untested" ? "未测" : page.index_status}
         </p>
+        <p className="mt-1 text-xs text-slate-500">
+          {page.priority_hint || "P2"} · {page.page_type || "other"} · 深度 {page.url_depth ?? 0} · 来源 {page.discovery_source || "manual"} · sitemap {page.is_in_sitemap || "未测"} · 字数 {page.word_count ?? 0} · 图片缺 alt {page.images_missing_alt ?? 0}/{page.image_count ?? 0} · 外链 {page.external_link_count ?? 0}
+        </p>
+        {(page.meta_robots || page.x_robots_tag) ? (
+          <p className="mt-1 text-xs text-slate-500">
+            robots {page.meta_robots || "—"} · X-Robots {page.x_robots_tag || "—"}
+          </p>
+        ) : null}
         {page.crawl_error ? <p className="mt-1 text-xs text-amber-700">{page.crawl_error}</p> : null}
         <div className="mt-3 flex flex-wrap gap-2">
           <Button variant="outline" onClick={fetchThis}>
@@ -187,6 +201,24 @@ export default function OnsiteEditorPage() {
                 </div>
                 <p className="mt-1 text-sm text-slate-600">{i.detail}</p>
                 {i.evidence ? <pre className="mt-2 whitespace-pre-wrap text-xs text-slate-500">{i.evidence}</pre> : null}
+                <div className="mt-3 grid gap-2 md:grid-cols-2">
+                  <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                    <div className="text-xs font-medium text-slate-500">影响</div>
+                    <p className="mt-1 text-sm text-slate-700">{i.impact || "影响页面可被理解和复测。"}</p>
+                  </div>
+                  <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                    <div className="text-xs font-medium text-slate-500">执行角色</div>
+                    <p className="mt-1 text-sm text-slate-700">{i.owner_hint || "客户经理 / 执行人"}</p>
+                  </div>
+                  <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                    <div className="text-xs font-medium text-slate-500">建议动作</div>
+                    <p className="mt-1 text-sm text-slate-700">{i.recommended_action || "结合诊断证据补充处理方案，人工确认后执行。"}</p>
+                  </div>
+                  <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                    <div className="text-xs font-medium text-slate-500">复测方法</div>
+                    <p className="mt-1 text-sm text-slate-700">{i.retest_method || "执行后重新抓取页面并比对观察层。"}</p>
+                  </div>
+                </div>
                 <Textarea
                   className="mt-2"
                   placeholder="改稿草稿"
@@ -195,14 +227,20 @@ export default function OnsiteEditorPage() {
                 />
                 <div className="mt-2 flex gap-2">
                   <Button size="sm" onClick={() => aiIssue(i.id)}>
-                    AI 本条
+                    生成处理建议
                   </Button>
-                  <Button size="sm" variant="outline" onClick={() => saveDraft(i.id)}>
-                    保存改稿
+                  <Button size="sm" variant="outline" onClick={() => saveDraft(i)}>
+                    保存方案
                   </Button>
-                  <Button size="sm" onClick={() => apply(i)}>
-                    {i.severity === "low" ? "标记改稿已交付" : "确认已上线（回抓验收）"}
-                  </Button>
+                  {i.status === "confirmed" || i.status === "draft_applied" ? (
+                    <Button size="sm" variant="outline" onClick={fetchThis}>
+                      回抓复测
+                    </Button>
+                  ) : (
+                    <Button size="sm" onClick={() => apply(i)}>
+                      {i.severity === "low" ? "交付执行人" : "已人工上线，回抓验收"}
+                    </Button>
+                  )}
                 </div>
               </div>
             ))}

@@ -17,6 +17,15 @@ class Settings(BaseSettings):
     llm_api_key: str = ""
     llm_base_url: str = "https://api.openai.com/v1"
     llm_model: str = "gpt-4o-mini"
+    pagespeed_api_key: str = ""
+    gsc_oauth_client_id: str = ""
+    gsc_oauth_client_secret: str = ""
+    gsc_oauth_redirect_uri: str = ""
+    gsc_auto_sync_days: int = 28
+    gsc_auto_sync_min_interval_hours: int = 24
+    bing_webmaster_api_key: str = ""
+    indexnow_key: str = ""
+    indexnow_key_location: str = ""
 
 
 settings = Settings()

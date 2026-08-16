@@ -11,7 +11,6 @@ import { cn } from "@/lib/utils";
 
 const nav = [
   { href: "/home", label: "首页" },
-  { href: "/insights", label: "洞察投喂" },
   { href: "/onsite", label: "站内改页" },
   { href: "/geo", label: "GEO 闭环" },
   { href: "/offsite", label: "外链核验与分发" },

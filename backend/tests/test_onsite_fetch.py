@@ -62,7 +62,7 @@ def test_fetch_follows_redirect_to_final_url() -> None:
         if path == "/old":
             return httpx.Response(301, headers={"location": "/en"})
         if path == "/en":
-            return httpx.Response(200, text=SAMPLE_HTML)
+            return httpx.Response(200, text=SAMPLE_HTML, headers={"content-type": "text/html; charset=utf-8"})
         return httpx.Response(404, text="missing")
 
     transport = httpx.MockTransport(handler)
@@ -74,6 +74,11 @@ def test_fetch_follows_redirect_to_final_url() -> None:
     assert snap.title == "Smart Lock Guide"
     assert snap.h1 == "Smart lock for renters"
     assert "WebPage" in snap.json_ld_types
+    assert snap.content_type == "text/html"
+    assert snap.redirect_count == 1
+    assert snap.html_bytes > 0
+    assert len(snap.body_hash) == 64
+    assert snap.ttfb_ms is not None
 
 
 def test_fetch_rejects_off_host_redirect() -> None:
@@ -233,7 +238,7 @@ def test_fetch_registered_updates_observation_and_verifies(client: TestClient, d
         if request.url.path == "/robots.txt":
             return httpx.Response(200, text="User-agent: *\nAllow: /\n")
         if request.url.path in {"/", "/en"}:
-            return httpx.Response(200, text=SAMPLE_HTML)
+            return httpx.Response(200, text=SAMPLE_HTML, headers={"content-type": "text/html; charset=utf-8"})
         return httpx.Response(404, text="no")
 
     import app.onsite_fetch as onsite_fetch
@@ -251,6 +256,10 @@ def test_fetch_registered_updates_observation_and_verifies(client: TestClient, d
     assert after["meta_title"] == "Smart Lock Guide"
     assert after["canonical"] == f"{ORIGIN}/en"
     assert after["json_ld_types"] == "WebPage"
+    assert after["content_type"] == "text/html"
+    assert after["html_bytes"] > 0
+    assert len(after["body_hash"]) == 64
+    assert after["ttfb_ms"] is not None
     assert after["crawl_status"] in {"ok", "needs_js"}
     assert after["fetched_at"]
     assert after["index_status"] == "untested"
@@ -375,3 +384,59 @@ def test_fetch_registered_does_not_call_llm(client: TestClient, demo_user, monke
     assert body["ai_status"] == "skipped"
     assert "不跑 LLM" in body["note"]
     assert body["fetched"] >= 1
+
+
+def test_crawl_site_discovers_sitemap_links_and_report(client: TestClient, demo_user, monkeypatch) -> None:
+    headers = auth_header(client)
+    client.patch("/api/onsite/settings", headers=headers, json={"site_origin": ORIGIN})
+
+    product_html = """<!doctype html>
+<html lang="en"><head>
+<title>Product Page</title>
+<meta name="description" content="A useful product page for overseas buyers with enough detail.">
+<meta name="robots" content="index,follow">
+<link rel="canonical" href="https://www.snipers.com.cn/product">
+</head><body>
+<h1>Product Page</h1>
+<p>Smart lock product specification, application, installation, support, buyer FAQ, warranty and export service content.</p>
+<img src="/a.jpg"><a href="/contact">Contact</a><a href="https://example.com/out">Out</a>
+</body></html>"""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/robots.txt":
+            return httpx.Response(200, text=f"User-agent: *\nAllow: /\nSitemap: {ORIGIN}/sitemap.xml\n")
+        if request.url.path == "/sitemap.xml":
+            return httpx.Response(
+                200,
+                text=f"""<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>{ORIGIN}/product</loc></url>
+</urlset>""",
+            )
+        if request.url.path in {"/", "/product", "/contact"}:
+            return httpx.Response(200, headers={"X-Robots-Tag": "index"}, text=product_html)
+        return httpx.Response(404, text="no")
+
+    import app.onsite_fetch as onsite_fetch
+
+    monkeypatch.setattr(onsite_fetch, "TEST_TRANSPORT", httpx.MockTransport(handler))
+    crawled = client.post("/api/onsite/crawl-site", headers=headers, json={"max_urls": 5, "max_depth": 1})
+    assert crawled.status_code == 200, crawled.text
+    body = crawled.json()
+    assert body["discovered"] >= 2
+    assert body["fetched"] >= 2
+
+    pages = client.get("/api/onsite/pages", headers=headers).json()
+    product = next(p for p in pages if p["path"] == "/product")
+    assert product["discovery_source"] == "sitemap"
+    assert product["is_in_sitemap"] == "yes"
+    assert product["image_count"] == 1
+    assert product["images_missing_alt"] == 1
+    assert product["external_link_count"] == 1
+    assert product["meta_robots"] == "index,follow"
+    assert product["x_robots_tag"] == "index"
+
+    report = client.get("/api/onsite/report", headers=headers)
+    assert report.status_code == 200
+    assert "SEO" in report.json()["markdown"]
+    assert "/product" in report.json()["markdown"]

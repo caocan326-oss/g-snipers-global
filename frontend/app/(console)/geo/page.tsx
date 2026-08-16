@@ -1,5 +1,6 @@
 "use client";
 
+import { Download, Wand2 } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
@@ -13,7 +14,13 @@ import {
   type GeoAsset,
   type GeoChecklistItem,
   type GeoPrompt,
+  type GeoReport,
+  type GeoReportTable,
+  type GeoSampleRun,
+  type GeoSummary,
   type GeoTicket,
+  type GeoTicketDraft,
+  type ProjectTargets,
   type SeoPage,
 } from "@/lib/api";
 
@@ -22,6 +29,7 @@ const obsLabel: Record<string, string> = {
   mentioned: "出现",
   not_mentioned: "未出现",
   cited: "被引用",
+  verified: "引用已核验",
 };
 
 const obsTone: Record<string, "default" | "amber" | "green" | "red" | "blue"> = {
@@ -29,6 +37,14 @@ const obsTone: Record<string, "default" | "amber" | "green" | "red" | "blue"> = 
   mentioned: "blue",
   not_mentioned: "default",
   cited: "green",
+  verified: "green",
+};
+
+const evidenceLabel: Record<string, string> = {
+  none: "无证据",
+  mentioned: "正文提及",
+  cited: "引用待核验",
+  verified: "引用已核验",
 };
 
 const diagnosisOptions = [
@@ -50,7 +66,10 @@ const ticketStatus: Record<string, string> = {
 export default function GeoPage() {
   const [tab, setTab] = useState<"sample" | "tickets" | "assets">("sample");
   const [prompts, setPrompts] = useState<GeoPrompt[]>([]);
+  const [summary, setSummary] = useState<GeoSummary | null>(null);
+  const [targets, setTargets] = useState<ProjectTargets | null>(null);
   const [tickets, setTickets] = useState<GeoTicket[]>([]);
+  const [runs, setRuns] = useState<GeoSampleRun[]>([]);
   const [assets, setAssets] = useState<GeoAsset[]>([]);
   const [pages, setPages] = useState<SeoPage[]>([]);
   const [pageId, setPageId] = useState("");
@@ -65,12 +84,22 @@ export default function GeoPage() {
     acceptance_criteria: "",
   });
   const [confirmNote, setConfirmNote] = useState("");
+  const [note, setNote] = useState("");
+  const [busyAction, setBusyAction] = useState("");
 
   function loadPrompts() {
-    api<GeoPrompt[]>("/api/geo/prompts").then(setPrompts).catch((e) => setError(e.message));
+    Promise.all([api<GeoPrompt[]>("/api/geo/prompts"), api<GeoSummary>("/api/geo/summary")])
+      .then(([rows, s]) => {
+        setPrompts(rows);
+        setSummary(s);
+      })
+      .catch((e) => setError(e.message));
   }
   function loadTickets() {
     api<GeoTicket[]>("/api/geo/tickets").then(setTickets).catch((e) => setError(e.message));
+  }
+  function loadRuns() {
+    api<GeoSampleRun[]>("/api/geo/sample-runs").then(setRuns).catch((e) => setError(e.message));
   }
   function loadAssets() {
     api<GeoAsset[]>("/api/geo/assets").then(setAssets).catch((e) => setError(e.message));
@@ -79,8 +108,10 @@ export default function GeoPage() {
   useEffect(() => {
     loadPrompts();
     loadTickets();
+    loadRuns();
     loadAssets();
     api<SeoPage[]>("/api/seo-pages").then(setPages).catch(() => undefined);
+    api<ProjectTargets>("/api/project-targets").then(setTargets).catch(() => undefined);
   }, []);
 
   async function aiPrompt(id: string) {
@@ -111,9 +142,111 @@ export default function GeoPage() {
     loadPrompts();
   }
 
-  async function setObs(id: string, status: string) {
-    await api(`/api/geo/observations/${id}`, { method: "PATCH", body: JSON.stringify({ status }) });
+  async function setObs(id: string, status: string, extra: Record<string, string | null> = {}) {
+    await api(`/api/geo/observations/${id}`, { method: "PATCH", body: JSON.stringify({ status, ...extra }) });
     loadPrompts();
+  }
+
+  async function seedPromptPanel() {
+    setError("");
+    setNote("");
+    setBusyAction("seed-prompts");
+    try {
+      const res = await api<{ created: number; skipped: number; prompts: number; note: string }>("/api/geo/prompt-panel/seed", { method: "POST" });
+      setNote(`${res.note} 新增 ${res.created} 条，跳过 ${res.skipped} 条。当前问句 ${res.prompts} 条。`);
+      loadPrompts();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "生成问句失败");
+    } finally {
+      setBusyAction("");
+    }
+  }
+
+  async function downloadGeoReport() {
+    const report = await api<GeoReport>("/api/geo/report");
+    const blob = new Blob([report.markdown], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `geo-report-${new Date(report.generated_at).toISOString().slice(0, 10)}.md`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    setNote("GEO 报告已导出。");
+  }
+
+  async function downloadGeoTable() {
+    const report = await api<GeoReportTable>("/api/geo/report-table");
+    const blob = new Blob([report.csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = report.filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    setNote("GEO 采样证据表已导出。");
+  }
+
+  async function createEvidenceRun() {
+    setError("");
+    setNote("");
+    setBusyAction("evidence-run");
+    try {
+      const run = await api<GeoSampleRun>("/api/geo/sample-runs/from-observations", {
+        method: "POST",
+        body: JSON.stringify({ note: "从当前人工 GEO 观测生成证据运行。" }),
+      });
+      setNote(`已生成证据运行 ${run.id}，包含 ${run.results_count} 条证据，config hash ${run.config_hash}。`);
+      loadPrompts();
+      loadRuns();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "生成证据运行失败");
+    } finally {
+      setBusyAction("");
+    }
+  }
+
+  async function draftTicketsFromEvidence() {
+    setError("");
+    setNote("");
+    setBusyAction("draft-tickets");
+    try {
+      const res = await api<GeoTicketDraft>("/api/geo/tickets/draft-from-evidence", { method: "POST" });
+      setNote(`${res.note} 新增 ${res.created} 条，跳过 ${res.skipped} 条。`);
+      loadTickets();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "生成工单失败");
+    } finally {
+      setBusyAction("");
+    }
+  }
+
+  async function runAutoSample() {
+    setError("");
+    setNote("");
+    setBusyAction("auto-sample");
+    try {
+      const run = await api<GeoSampleRun>("/api/geo/sample-runs/auto", {
+        method: "POST",
+        body: JSON.stringify({
+          engine: "llm",
+          trials: 1,
+          limit: 8,
+          web_grounded: "false",
+          region_hint: "API",
+        }),
+      });
+      setNote(`自动采样完成：run ${run.id}，证据 ${run.results_count} 条。若模型未联网，citation 仅作低权重观测。`);
+      loadRuns();
+      loadPrompts();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "自动采样失败");
+    } finally {
+      setBusyAction("");
+    }
   }
 
   async function setDiagnosis(promptId: string, diagnosis: string) {
@@ -190,15 +323,53 @@ export default function GeoPage() {
         <div className="mb-2 text-xs font-medium text-slate-500">{title}</div>
         <div className="flex flex-wrap gap-3">
           {rows.map((o) => (
-            <div key={o.id} className="rounded-md border p-3">
-              <div className="mb-2 text-xs text-slate-500">{o.engine_label || o.engine}</div>
-              <Badge tone={obsTone[o.status]}>{obsLabel[o.status] ?? o.status}</Badge>
+            <div key={o.id} className="w-full rounded-md border p-3 lg:w-[calc(50%-0.375rem)]">
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <div className="text-xs font-medium text-slate-500">{o.engine_label || o.engine}</div>
+                <Badge tone={obsTone[o.status]}>{obsLabel[o.status] ?? o.status}</Badge>
+              </div>
+              <div className="mb-2 flex flex-wrap gap-2 text-[11px] text-slate-500">
+                <span>{o.surface || "manual_ai_answer"}</span>
+                <span>{o.sample_type || "manual"}</span>
+                <span>{o.evidence_label || evidenceLabel[o.evidence_tier || "none"]}</span>
+                {o.observed_at ? <span>{new Date(o.observed_at).toLocaleString("zh-CN")}</span> : null}
+              </div>
               <div className="mt-2 flex flex-wrap gap-1">
-                {["untested", "mentioned", "not_mentioned", "cited"].map((s) => (
+                {["untested", "not_mentioned", "mentioned", "cited", "verified"].map((s) => (
                   <Button key={s} size="sm" variant="ghost" onClick={() => setObs(o.id, s)}>
                     {obsLabel[s]}
                   </Button>
                 ))}
+              </div>
+              <div className="mt-3 grid gap-2">
+                <Textarea
+                  className="min-h-[72px]"
+                  placeholder="回答摘录：粘贴 AI 答案里和客户/竞品/来源相关的片段"
+                  defaultValue={o.response_excerpt || ""}
+                  onBlur={(e) => setObs(o.id, o.status, { response_excerpt: e.target.value })}
+                />
+                <Input
+                  placeholder="引用 URL，一行或逗号分隔"
+                  defaultValue={o.citation_urls || ""}
+                  onBlur={(e) => setObs(o.id, o.status, { citation_urls: e.target.value })}
+                />
+                <div className="grid gap-2 md:grid-cols-2">
+                  <Input
+                    placeholder="品牌/产品提及"
+                    defaultValue={o.brand_mentions || ""}
+                    onBlur={(e) => setObs(o.id, o.status, { brand_mentions: e.target.value })}
+                  />
+                  <Input
+                    placeholder="竞品提及"
+                    defaultValue={o.competitor_mentions || ""}
+                    onBlur={(e) => setObs(o.id, o.status, { competitor_mentions: e.target.value })}
+                  />
+                </div>
+                <Input
+                  placeholder="解释备注：例如 consumer_scrape / web_rank / api_proxy，不混同口径"
+                  defaultValue={o.interpretation_note || o.notes || ""}
+                  onBlur={(e) => setObs(o.id, o.status, { interpretation_note: e.target.value, notes: e.target.value })}
+                />
               </div>
             </div>
           ))}
@@ -210,12 +381,178 @@ export default function GeoPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">GEO 闭环</h1>
+        <h1 className="text-2xl font-semibold">GEO Prompt Lab</h1>
         <p className="mt-1 text-sm text-slate-500">
-          问句集 → 中西引擎采样（可手填 / 未配置）→ 诊断层 → 带验收标准的工单 → 确认验收或重开。引用 ≠
-          吸收。brand.com 引用率未测。不得交付「已让 ChatGPT 引用」。
+          围绕客户目标国家、关键词和竞品生成买家问句，人工记录真实 AI 采样。正文提及、引用、已核验引用分开计算。
         </p>
       </div>
+
+      <div className="space-y-2">
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" onClick={seedPromptPanel} disabled={busyAction === "seed-prompts"}>
+            <Wand2 className="mr-2 h-4 w-4" />
+            {busyAction === "seed-prompts" ? "生成中…" : "从 SEO 目标生成问句"}
+          </Button>
+          <Button size="sm" variant="outline" onClick={createEvidenceRun} disabled={busyAction === "evidence-run"}>
+            {busyAction === "evidence-run" ? "生成中…" : "生成证据运行"}
+          </Button>
+          <Button size="sm" variant="outline" onClick={draftTicketsFromEvidence} disabled={busyAction === "draft-tickets"}>
+            {busyAction === "draft-tickets" ? "生成中…" : "从证据生成工单"}
+          </Button>
+          <Button size="sm" onClick={runAutoSample} disabled={busyAction === "auto-sample"}>
+            {busyAction === "auto-sample" ? "采样中…" : "自动采样一轮"}
+          </Button>
+          <Button size="sm" variant="outline" onClick={downloadGeoReport}>
+            <Download className="mr-2 h-4 w-4" />
+            导出报告
+          </Button>
+          <Button size="sm" variant="outline" onClick={downloadGeoTable}>
+            <Download className="mr-2 h-4 w-4" />
+            导出证据表
+          </Button>
+        </div>
+        {note ? <p className="text-sm text-emerald-700">{note}</p> : null}
+        {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      </div>
+
+      <Card className="rounded-md">
+        <CardHeader>
+          <CardTitle>GEO 测试目标</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-3 lg:grid-cols-3">
+          <div className="rounded-md border border-slate-200 p-3">
+            <div className="text-xs font-medium text-slate-500">目标国家</div>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {(targets?.markets ?? []).slice(0, 6).map((market) => (
+                <Badge key={market.id} tone={market.status === "priority" ? "brand" : "default"}>
+                  {market.name} · {market.primary_locale}
+                </Badge>
+              ))}
+              {targets?.markets.length ? null : <span className="text-sm text-slate-500">未设置</span>}
+            </div>
+          </div>
+          <div className="rounded-md border border-slate-200 p-3">
+            <div className="text-xs font-medium text-slate-500">问句来源关键词</div>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {(targets?.markets.flatMap((market) => market.demand_signals) ?? []).slice(0, 8).map((signal) => (
+                <Badge key={signal.id} tone="blue">{signal.theme}</Badge>
+              ))}
+              {targets?.keyword_count ? null : <span className="text-sm text-slate-500">未设置</span>}
+            </div>
+          </div>
+          <div className="rounded-md border border-slate-200 p-3">
+            <div className="text-xs font-medium text-slate-500">竞品对照</div>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {(targets?.markets.flatMap((market) => market.competitors) ?? []).slice(0, 8).map((competitor) => (
+                <Badge key={competitor.id}>{competitor.name}</Badge>
+              ))}
+              {targets?.competitor_count ? null : <span className="text-sm text-slate-500">未设置</span>}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-3 md:grid-cols-5">
+        <Card className="rounded-md">
+          <CardContent className="py-4">
+            <div className="text-2xl font-semibold">{summary?.prompts ?? 0}</div>
+            <div className="text-xs text-slate-500">采样问句</div>
+          </CardContent>
+        </Card>
+        <Card className="rounded-md">
+          <CardContent className="py-4">
+            <div className="text-2xl font-semibold">{summary?.recorded ?? 0}</div>
+            <div className="text-xs text-slate-500">已记录槽位</div>
+          </CardContent>
+        </Card>
+        <Card className="rounded-md">
+          <CardContent className="py-4">
+            <div className="text-2xl font-semibold">{summary?.mention_rate ?? "未测"}</div>
+            <div className="text-xs text-slate-500">品牌提及率</div>
+          </CardContent>
+        </Card>
+        <Card className="rounded-md">
+          <CardContent className="py-4">
+            <div className="text-2xl font-semibold">{summary?.cite_rate ?? "未测"}</div>
+            <div className="text-xs text-slate-500">官网引用率</div>
+          </CardContent>
+        </Card>
+        <Card className="rounded-md">
+          <CardContent className="py-4">
+            <div className="text-2xl font-semibold">{summary?.verified_citation_rate ?? "未测"}</div>
+            <div className="text-xs text-slate-500">核验引用率</div>
+          </CardContent>
+        </Card>
+      </div>
+      <div className="grid gap-3 md:grid-cols-2">
+        <Card className="rounded-md">
+          <CardContent className="flex items-center justify-between py-4 text-sm">
+            <span className="text-slate-500">竞品提及率</span>
+            <span className="font-semibold text-slate-900">{summary?.competitor_rate ?? "未测"}</span>
+          </CardContent>
+        </Card>
+        <Card className="rounded-md">
+          <CardContent className="flex items-center justify-between py-4 text-sm">
+            <span className="text-slate-500">竞品提及槽位</span>
+            <span className="font-semibold text-slate-900">{summary?.competitor_mentions ?? 0}</span>
+          </CardContent>
+        </Card>
+      </div>
+      <div className="grid gap-3 md:grid-cols-3">
+        <Card className="rounded-md">
+          <CardContent className="flex items-center justify-between py-4 text-sm">
+            <span className="text-slate-500">证据运行</span>
+            <span className="font-semibold text-slate-900">{summary?.sample_runs ?? 0}</span>
+          </CardContent>
+        </Card>
+        <Card className="rounded-md">
+          <CardContent className="flex items-center justify-between py-4 text-sm">
+            <span className="text-slate-500">证据条目</span>
+            <span className="font-semibold text-slate-900">{summary?.evidence_results ?? 0}</span>
+          </CardContent>
+        </Card>
+        <Card className="rounded-md">
+          <CardContent className="py-4 text-sm">
+            <div className="text-slate-500">最近 run</div>
+            <div className="mt-1 truncate font-mono text-xs text-slate-900">{summary?.latest_run_id ?? "暂无"}</div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card className="rounded-md">
+        <CardHeader>
+          <CardTitle>证据运行记录</CardTitle>
+          <p className="text-sm text-slate-500">正式报告里的引用类结论，需要绑定 run_id、evidence_id、hash 和核验状态。</p>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {runs.length ? runs.map((run) => (
+            <div key={run.id} className="rounded-md border border-slate-200 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <div className="font-mono text-xs text-slate-500">{run.id}</div>
+                  <div className="mt-1 text-sm font-medium">
+                    {run.protocol_version} · {run.prompt_set_id} · {run.results_count} 条证据
+                  </div>
+                </div>
+                <Badge tone={run.status === "done" ? "green" : "amber"}>{run.status}</Badge>
+              </div>
+              <div className="mt-3 grid gap-2 text-xs text-slate-600 md:grid-cols-4">
+                <div>config hash：<span className="font-mono">{run.config_hash}</span></div>
+                <div>提及：{run.mention_rate}</div>
+                <div>自有引用：{run.cite_rate}</div>
+                <div>核验引用：{run.verified_citation_rate}</div>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {run.results.slice(0, 6).map((result) => (
+                  <Badge key={result.id} tone={result.verification_status === "passed" ? "green" : "default"}>
+                    {result.evidence_id} · {result.engine_label ?? result.engine}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          )) : <p className="text-sm text-slate-500">暂无证据运行。记录一条观测后，可以点击“生成证据运行”。</p>}
+        </CardContent>
+      </Card>
 
       <div className="flex gap-2">
         <Button size="sm" variant={tab === "sample" ? "default" : "outline"} onClick={() => setTab("sample")}>
@@ -236,7 +573,7 @@ export default function GeoPage() {
               <CardHeader>
                 <CardTitle className="text-base">{p.prompt_text}</CardTitle>
                 <p className="text-xs text-slate-500">
-                  {p.locale} · 引用率 {p.cite_rate ?? "未测"} · 吸收率 {p.absorption_rate ?? "未测"}
+                  {p.prompt_key || "custom"} · {p.prompt_type || "custom"} · {p.prompt_pack_id || "custom"} · {p.locale} · 提及 {p.mention_rate ?? "未测"} · 引用 {p.cite_rate ?? "未测"} · 核验 {p.verified_citation_rate ?? "未测"} · 竞品 {p.competitor_rate ?? "未测"}
                 </p>
                 {p.evidence ? <pre className="mt-2 whitespace-pre-wrap text-xs text-slate-500">{p.evidence}</pre> : null}
                 <div className="mt-2 flex items-center gap-2">
@@ -468,7 +805,6 @@ export default function GeoPage() {
       ) : null}
 
       <Input placeholder="确认 / 验收备注" value={confirmNote} onChange={(e) => setConfirmNote(e.target.value)} />
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
     </div>
   );
 }

@@ -31,13 +31,17 @@ from app.models import (
     WorkOrder,
 )
 
+SNIPERS_TEST_ORIGIN = "https://www.snipers.com.cn"
+
 
 def seed(db: Session) -> None:
     tenant = db.scalar(select(Tenant).where(Tenant.name == "演示客户 · 智能门锁出海"))
     if tenant is None:
-        tenant = Tenant(name="演示客户 · 智能门锁出海", industry="智能家居")
+        tenant = Tenant(name="演示客户 · 智能门锁出海", industry="智能家居", site_origin=SNIPERS_TEST_ORIGIN)
         db.add(tenant)
         db.flush()
+    elif not tenant.site_origin:
+        tenant.site_origin = SNIPERS_TEST_ORIGIN
 
     email = settings.demo_am_email.lower()
     user = db.scalar(select(User).where(User.email == email))

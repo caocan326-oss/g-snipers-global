@@ -31,6 +31,62 @@ def test_dashboard_has_geo_counts_not_rates(client: TestClient, demo_user) -> No
     assert "share_of_voice" not in body
 
 
+def test_dashboard_workbench_prioritizes_seo_geo_diagnosis(client: TestClient, demo_user) -> None:
+    token = client.post("/api/auth/login", json={"email": "am@demo.gsnipers.com", "password": "demo1234"}).json()[
+        "access_token"
+    ]
+    headers = {"Authorization": f"Bearer {token}"}
+    market = client.post(
+        "/api/markets",
+        headers=headers,
+        json={"name": "美国", "region": "北美", "country_code": "US", "primary_locale": "en-US"},
+    ).json()
+    signal = client.post(
+        f"/api/markets/{market['id']}/demand-signals",
+        headers=headers,
+        json={"theme": "smart lock for renters", "locale": "en-US", "intensity": 5},
+    ).json()
+    page = client.post(
+        "/api/onsite/pages",
+        headers=headers,
+        json={"path": "/en-us/renters", "locale": "en-US", "title": "Renters"},
+    ).json()
+    client.post(
+        f"/api/onsite/pages/{page['id']}/issues",
+        headers=headers,
+        json={"category": "schema", "title": "缺少 FAQ schema", "severity": "critical", "risk": "high"},
+    )
+    client.post(f"/api/demand-signals/{signal['id']}/open-geo-ticket", headers=headers)
+    client.post(
+        "/api/onsite/performance/import-csv",
+        headers=headers,
+        json={
+            "source": "gsc_csv",
+            "filename": "gsc.csv",
+            "csv_text": "\n".join(
+                [
+                    "Date,Query,Page,Country,Clicks,Impressions,CTR,Position",
+                    "2026-08-15,smart lock,https://example.com/en-us/renters,United States,8,200,4%,9",
+                ]
+            ),
+        },
+    )
+
+    res = client.get("/api/dashboard/workbench?days=7", headers=headers)
+    assert res.status_code == 200, res.text
+    data = res.json()
+    assert data["summary"]["onsite_open_critical"] == 1
+    assert data["summary"]["geo_tickets_open"] == 1
+    assert data["chains"][0]["title"] == "SEO 诊断"
+    assert all(chain["key"] != "insights" for chain in data["chains"])
+    assert data["seo_performance"]["days"] == 7
+    assert data["seo_performance"]["total_impressions"] == 200
+    assert data["seo_performance"]["top_keywords"][0]["key"] == "smart lock"
+    assert any(item["id"] == "seo-critical" for item in data["next_actions"])
+    assert data["seo_items"][0]["href"] == f"/onsite/{page['id']}"
+    assert data["recent_signals"][0]["href"] == f"/insights/{market['id']}"
+
+
 def test_boot_does_not_require_google_ads_env(client: TestClient, monkeypatch) -> None:
     for key in (
         "GOOGLE_ADS_CLIENT_ID",

@@ -1,7 +1,22 @@
 "use client";
 
+import {
+  AlertTriangle,
+  BarChart3,
+  Bot,
+  CheckCircle2,
+  ClipboardList,
+  Copy,
+  Download,
+  Gauge,
+  RefreshCcw,
+  Search,
+  Upload,
+  Wrench,
+  XCircle,
+} from "lucide-react";
 import Link from "next/link";
-import { FormEvent, useEffect, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,12 +27,28 @@ import {
   api,
   crawlStatusLabel,
   type AiAssist,
+  type BingStatus,
   type ContentBrief,
+  type CrawlSession,
+  type DataSyncRunDueResult,
+  type DataSyncStatus,
   type FetchRegistered,
+  type GscAuthUrl,
+  type GscStatus,
+  type GscSyncResult,
+  type IndexNowStatus,
+  type IndexNowSubmitResult,
+  type Market,
   type OnsiteBoard,
   type OnsiteIssue,
+  type ProjectTargets,
+  type SeoReport,
+  type SeoReportTable,
+  type SeoPerformanceSummary,
+  type SeoPage,
   type SitePage,
 } from "@/lib/api";
+import { cn } from "@/lib/utils";
 
 const catLabel: Record<string, string> = {
   tdk: "TDK",
@@ -27,26 +58,108 @@ const catLabel: Record<string, string> = {
   index: "收录",
   crawl: "抓取",
   canonical: "Canonical",
+  image: "图片",
+  content: "内容",
+  b2b: "B2B",
 };
 
 const sevLabel: Record<string, string> = { critical: "Critical", high: "High", low: "Low" };
 const sevTone: Record<string, "red" | "amber" | "green"> = { critical: "red", high: "amber", low: "green" };
 const statusLabel: Record<string, string> = {
-  open: "已分析，待改稿",
-  drafted: "已有改稿，未上线",
-  draft_applied: "改稿已交付站点",
-  confirmed: "已确认上线，待回抓",
+  open: "待写处理方案",
+  drafted: "已有方案，待人工上线",
+  draft_applied: "已交付执行人",
+  confirmed: "已人工上线，待回抓",
   verified: "观察已验收",
+  wont_fix: "不做",
 };
+
+const statusTone: Record<string, "default" | "amber" | "green" | "blue" | "red"> = {
+  open: "amber",
+  drafted: "blue",
+  draft_applied: "amber",
+  confirmed: "red",
+  verified: "green",
+  wont_fix: "default",
+};
+
+const filters = [
+  { key: "all", label: "全部" },
+  { key: "needs_review", label: "需人审" },
+  { key: "critical", label: "Critical" },
+  { key: "high", label: "High" },
+  { key: "low", label: "Low" },
+  { key: "needs_draft", label: "待方案" },
+  { key: "ready_to_execute", label: "待人工上线" },
+  { key: "waiting_retest", label: "待回抓验收" },
+  { key: "untested", label: "未测" },
+] as const;
+
+const SNIPERS_TEST_ORIGIN = "https://www.snipers.com.cn";
+const SNIPERS_TEST_PAGES = [
+  { path: "/", locale: "zh-CN", title: "Snipers 官网首页" },
+  { path: "/g-snipers/", locale: "zh-CN", title: "G-Snipers" },
+  { path: "/category/seo/", locale: "zh-CN", title: "SEO 文章栏目" },
+  { path: "/category/geo/", locale: "zh-CN", title: "GEO 文章栏目" },
+];
+
+type FilterKey = (typeof filters)[number]["key"];
+
+function priorityLabel(issue: OnsiteIssue) {
+  if (issue.severity === "critical") return "P0";
+  if (issue.severity === "high" || issue.risk === "high") return "P1";
+  if (issue.status === "confirmed") return "P1";
+  return "P2";
+}
+
+function priorityRank(issue: OnsiteIssue) {
+  const severityRank: Record<string, number> = { critical: 0, high: 10, low: 20 };
+  const statusRank: Record<string, number> = { confirmed: 0, drafted: 1, open: 2, draft_applied: 3 };
+  return (severityRank[issue.severity] ?? 20) + (statusRank[issue.status] ?? 5);
+}
+
+function nextStep(issue: OnsiteIssue) {
+  if (issue.status === "confirmed") return "回抓验收";
+  if (issue.status === "draft_applied") return "等待执行后复测";
+  if (issue.status === "drafted") return issue.risk === "high" ? "交给技术/客户上线" : "交付执行";
+  if (!issue.proposed_change.trim()) return "生成或填写处理方案";
+  return "保存方案并推进";
+}
+
+function matchesFilter(issue: OnsiteIssue, filter: FilterKey) {
+  if (filter === "all") return true;
+  if (filter === "needs_review") return Boolean(issue.review_required);
+  if (filter === "critical" || filter === "high" || filter === "low") return issue.severity === filter;
+  if (filter === "needs_draft") return issue.status === "open" && !issue.proposed_change.trim();
+  if (filter === "ready_to_execute") return issue.status === "drafted";
+  if (filter === "waiting_retest") return issue.status === "confirmed" || issue.status === "draft_applied";
+  if (filter === "untested") return issue.metric_status === "untested";
+  return true;
+}
 
 export default function OnsiteBoardPage() {
   const [board, setBoard] = useState<OnsiteBoard | null>(null);
   const [pages, setPages] = useState<SitePage[]>([]);
   const [briefs, setBriefs] = useState<ContentBrief[]>([]);
-  const [filter, setFilter] = useState<"critical" | "high" | "low" | "all">("all");
+  const [markets, setMarkets] = useState<Market[]>([]);
+  const [seoTargets, setSeoTargets] = useState<SeoPage[]>([]);
+  const [performance, setPerformance] = useState<SeoPerformanceSummary | null>(null);
+  const [gsc, setGsc] = useState<GscStatus | null>(null);
+  const [bing, setBing] = useState<BingStatus | null>(null);
+  const [indexNow, setIndexNow] = useState<IndexNowStatus | null>(null);
+  const [syncStatus, setSyncStatus] = useState<DataSyncStatus | null>(null);
+  const [targets, setTargets] = useState<ProjectTargets | null>(null);
+  const [sessions, setSessions] = useState<CrawlSession[]>([]);
+  const [filter, setFilter] = useState<FilterKey>("all");
+  const [expandedId, setExpandedId] = useState("");
   const [error, setError] = useState("");
   const [note, setNote] = useState("");
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [query, setQuery] = useState("");
+  const [busyId, setBusyId] = useState("");
+  const [maxUrls, setMaxUrls] = useState(50);
+  const [maxDepth, setMaxDepth] = useState(2);
+  const [performanceSource, setPerformanceSource] = useState<"gsc_csv" | "bing_csv">("gsc_csv");
   const [form, setForm] = useState({ path: "/", locale: "en-US", title: "" });
   const [origin, setOrigin] = useState("");
 
@@ -56,12 +169,30 @@ export default function OnsiteBoardPage() {
       api<SitePage[]>("/api/onsite/pages"),
       api<ContentBrief[]>("/api/onsite/briefs"),
       api<{ site_origin: string }>("/api/onsite/settings"),
+      api<CrawlSession[]>("/api/onsite/crawl-sessions"),
+      api<Market[]>("/api/markets"),
+      api<SeoPage[]>("/api/seo-pages"),
+      api<SeoPerformanceSummary>("/api/onsite/performance"),
+      api<GscStatus>("/api/onsite/gsc/status"),
+      api<BingStatus>("/api/onsite/bing/status"),
+      api<IndexNowStatus>("/api/onsite/indexnow/status"),
+      api<DataSyncStatus>("/api/onsite/data-sync/status"),
+      api<ProjectTargets>("/api/project-targets"),
     ])
-      .then(([b, p, br, s]) => {
+      .then(([b, p, br, s, cs, m, seo, perf, gscStatus, bingStatus, indexNowStatus, ds, targetConfig]) => {
         setBoard(b);
         setPages(p);
         setBriefs(br);
         setOrigin(s.site_origin || "");
+        setSessions(cs);
+        setMarkets(m);
+        setSeoTargets(seo);
+        setPerformance(perf);
+        setGsc(gscStatus);
+        setBing(bingStatus);
+        setIndexNow(indexNowStatus);
+        setSyncStatus(ds);
+        setTargets(targetConfig);
       })
       .catch((e) => setError(e.message));
   }
@@ -69,6 +200,78 @@ export default function OnsiteBoardPage() {
   useEffect(() => {
     load();
   }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get("code");
+    if (!code) return;
+    api<GscStatus>("/api/onsite/gsc/connect", {
+      method: "POST",
+      body: JSON.stringify({ code, site_url: origin }),
+    })
+      .then((status) => {
+        setGsc(status);
+        setNote("Google Search Console 已连接。");
+        window.history.replaceState({}, "", window.location.pathname);
+        load();
+      })
+      .catch((e) => setError(e instanceof Error ? e.message : "GSC 授权接入失败"));
+  }, [origin]);
+
+  const issues = useMemo(() => {
+    if (!board) return [];
+    return Object.values(board.groups)
+      .flat()
+      .sort((a, b) => priorityRank(a) - priorityRank(b) || (a.page_path ?? "").localeCompare(b.page_path ?? ""));
+  }, [board]);
+
+  const visibleIssues = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return issues.filter((issue) => {
+      if (!matchesFilter(issue, filter)) return false;
+      if (!q) return true;
+      return [
+        issue.title,
+        issue.page_title,
+        issue.page_path,
+        issue.category,
+        issue.detail,
+        issue.proposed_change,
+        issue.ai_review,
+        issue.recommended_action,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes(q);
+    });
+  }, [filter, issues, query]);
+
+  const stats = useMemo(() => {
+    const fetched = pages.filter((p) => p.crawl_status === "ok").length;
+    const waitingDraft = issues.filter((i) => i.status === "open" && !i.proposed_change.trim()).length;
+    const readyToExecute = issues.filter((i) => i.status === "drafted").length;
+    const waitingRetest = issues.filter((i) => i.status === "confirmed" || i.status === "draft_applied").length;
+    const untested = issues.filter((i) => i.metric_status === "untested").length;
+    const needsReview = issues.filter((i) => i.review_required && i.status === "drafted").length;
+    const solved = board?.workflow_counts?.verified ?? issues.filter((i) => i.status === "verified").length;
+    return { fetched, waitingDraft, readyToExecute, waitingRetest, untested, needsReview, solved };
+  }, [board?.workflow_counts, issues, pages]);
+
+  const targetMarkets = useMemo(() => {
+    if (targets?.markets.length) {
+      const priority = targets.markets.filter((m) => m.status === "priority");
+      return (priority.length ? priority : targets.markets).slice(0, 4);
+    }
+    const priority = markets.filter((m) => m.status === "priority");
+    return (priority.length ? priority : markets).slice(0, 4);
+  }, [markets, targets?.markets]);
+
+  const targetKeywords = useMemo(() => {
+    const demand = targets?.markets.flatMap((m) => m.demand_signals.map((s) => ({ id: s.id, label: s.theme, status: "target" }))) ?? [];
+    if (demand.length) return demand.slice(0, 8);
+    return seoTargets.filter((item) => item.target_keyword.trim()).slice(0, 8).map((item) => ({ id: item.id, label: item.target_keyword, status: item.status }));
+  }, [seoTargets, targets?.markets]);
 
   async function saveOrigin() {
     setError("");
@@ -84,6 +287,29 @@ export default function OnsiteBoardPage() {
     }
   }
 
+  async function setupSnipersTest() {
+    setError("");
+    try {
+      const saved = await api<{ site_origin: string }>("/api/onsite/settings", {
+        method: "PATCH",
+        body: JSON.stringify({ site_origin: SNIPERS_TEST_ORIGIN }),
+      });
+      const known = new Set(pages.map((page) => page.path));
+      let added = 0;
+      for (const page of SNIPERS_TEST_PAGES) {
+        if (known.has(page.path)) continue;
+        await api<SitePage>("/api/onsite/pages", { method: "POST", body: JSON.stringify(page) });
+        known.add(page.path);
+        added += 1;
+      }
+      setOrigin(saved.site_origin);
+      setNote(`已设为 Snipers 官网测试：${saved.site_origin}，新增 ${added} 个诊断页面。`);
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "初始化 Snipers 官网测试失败");
+    }
+  }
+
   async function fetchSite() {
     setError("");
     try {
@@ -92,6 +318,177 @@ export default function OnsiteBoardPage() {
       load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "抓取失败");
+    }
+  }
+
+  async function crawlSite() {
+    setError("");
+    setBusyId("crawl-site");
+    try {
+      const res = await api<CrawlSession>("/api/onsite/crawl-site", {
+        method: "POST",
+        body: JSON.stringify({ max_urls: maxUrls, max_depth: maxDepth }),
+      });
+      setNote(res.note);
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "站点诊断抓取失败");
+    } finally {
+      setBusyId("");
+    }
+  }
+
+  async function importPerformanceFile(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setError("");
+    setBusyId("performance-import");
+    try {
+      const csvText = await file.text();
+      const result = await api<{ rows_imported: number; filename: string }>("/api/onsite/performance/import-csv", {
+        method: "POST",
+        body: JSON.stringify({ source: performanceSource, filename: file.name, csv_text: csvText }),
+      });
+      setNote(`已导入 ${result.filename}，共 ${result.rows_imported} 行搜索表现数据。`);
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "搜索表现 CSV 导入失败");
+    } finally {
+      setBusyId("");
+    }
+  }
+
+  async function runPageSpeed() {
+    setError("");
+    setBusyId("pagespeed");
+    try {
+      const res = await api<{ status: string; performance_score: number | null }[]>("/api/onsite/performance/pagespeed", {
+        method: "POST",
+        body: JSON.stringify({ urls: [], strategies: ["mobile", "desktop"], limit: 3 }),
+      });
+      const ok = res.filter((item) => item.status === "ok").length;
+      setNote(`PageSpeed 免费测速完成：成功 ${ok} 项，失败 ${res.length - ok} 项。`);
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "PageSpeed 测速失败");
+    } finally {
+      setBusyId("");
+    }
+  }
+
+  async function authorizeGsc() {
+    setError("");
+    try {
+      const res = await api<GscAuthUrl>("/api/onsite/gsc/auth-url");
+      if (!res.configured || !res.auth_url) {
+        setError(res.note || "服务器未配置 GSC OAuth。");
+        return;
+      }
+      window.location.href = res.auth_url;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "获取 GSC 授权链接失败");
+    }
+  }
+
+  async function syncGsc() {
+    setError("");
+    setBusyId("gsc-sync");
+    try {
+      const res = await api<GscSyncResult>("/api/onsite/gsc/sync", {
+        method: "POST",
+        body: JSON.stringify({ days: 28, row_limit: 25000 }),
+      });
+      setNote(`${res.note} ${res.date_start} 至 ${res.date_end}，导入 ${res.rows_imported} 行。`);
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "GSC 同步失败");
+    } finally {
+      setBusyId("");
+    }
+  }
+
+  async function submitIndexNow() {
+    setError("");
+    setBusyId("indexnow");
+    try {
+      const paths = pages.filter((p) => p.crawl_status === "ok").slice(0, 100).map((p) => p.path);
+      const res = await api<IndexNowSubmitResult>("/api/onsite/indexnow/submit", {
+        method: "POST",
+        body: JSON.stringify({ paths: paths.length ? paths : ["/"] }),
+      });
+      setNote(`${res.note} 本次提交 ${res.submitted} 个 URL。`);
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "IndexNow 提交失败");
+    } finally {
+      setBusyId("");
+    }
+  }
+
+  async function runDueSync() {
+    setError("");
+    setBusyId("run-due-sync");
+    try {
+      const res = await api<DataSyncRunDueResult>("/api/onsite/data-sync/run-due", {
+        method: "POST",
+        body: JSON.stringify({ force: false, sources: ["gsc"] }),
+      });
+      setNote(res.note || (res.ran ? "到期同步已完成。" : "当前没有到期的数据源。"));
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "到期同步执行失败");
+    } finally {
+      setBusyId("");
+    }
+  }
+
+  async function downloadReport() {
+    setError("");
+    try {
+      const report = await api<SeoReport>("/api/onsite/report");
+      const blob = new Blob([report.markdown], { type: "text/markdown;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `seo-report-${new Date(report.generated_at).toISOString().slice(0, 10)}.md`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      setNote("SEO 诊断报告已生成。");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "报告生成失败");
+    }
+  }
+
+  async function downloadReportTable() {
+    setError("");
+    try {
+      const report = await api<SeoReportTable>("/api/onsite/report-table");
+      const blob = new Blob([report.csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = report.filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      setNote("SEO 诊断表格已生成。");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "表格生成失败");
+    }
+  }
+
+  async function fetchPage(pageId: string) {
+    setError("");
+    try {
+      const res = await api<FetchRegistered>(`/api/onsite/pages/${pageId}/fetch`, { method: "POST" });
+      setNote(`${res.note} 状态 ${res.results[0]?.crawl_status ?? ""} · 验收 ${res.verified}`);
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "回抓失败");
     }
   }
 
@@ -104,225 +501,721 @@ export default function OnsiteBoardPage() {
 
   async function analyze() {
     setError("");
-    const res = await api<AiAssist>("/api/onsite/ai", { method: "POST", body: JSON.stringify({ step: "all" }) });
-    setNote(`${res.detail || res.status} ${res.evidence ? "· 见各条论证" : ""}`);
-    if (res.status === "未配置") setError(res.detail || "LLM 未配置，未编造分析。");
-    load();
+    setNote("正在生成本批 AI 整改建议，请稍等…");
+    setBusyId("ai-batch");
+    try {
+      const res = await api<AiAssist>("/api/onsite/ai", {
+        method: "POST",
+        body: JSON.stringify({ step: "all", limit: 5 }),
+      });
+      const more = res.remaining ? ` 还有约 ${res.remaining} 条，继续点击可处理下一批。` : "";
+      setNote((res.detail || `本批 AI 建议完成：${res.status}`) + more);
+      if (res.status === "未配置") setError(res.detail || "LLM 未配置，未编造分析。");
+      load();
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "批量生成 AI 建议失败";
+      setError(message.includes("Gateway Time-out") ? "网关超时：本批 AI 处理耗时过长。请稍后重试，系统现在已改为小批量处理。" : message);
+    } finally {
+      setBusyId("");
+    }
   }
 
-  async function aiIssue(id: string, step: string) {
+  async function aiIssue(id: string) {
     setError("");
+    setBusyId(id);
     try {
       const res = await api<AiAssist>(`/api/onsite/issues/${id}/ai`, {
         method: "POST",
-        body: JSON.stringify({ step }),
+        body: JSON.stringify({ step: "all" }),
       });
       setNote(res.detail || res.status);
       if (res.status === "未配置") setError(res.detail);
       load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "AI 失败");
+      setError(e instanceof Error ? e.message : "生成建议失败");
+    } finally {
+      setBusyId("");
     }
   }
 
-  async function saveDraft(id: string) {
-    const text = drafts[id];
+  async function saveDraft(issue: OnsiteIssue) {
+    const text = drafts[issue.id] ?? issue.proposed_change;
     if (!text?.trim()) {
-      setError("请先写改稿，分析与应用是两步");
+      setError("请先填写处理方案，AI 建议和人工执行是两步");
       return;
     }
-    await api(`/api/onsite/issues/${id}/draft`, { method: "PATCH", body: JSON.stringify({ proposed_change: text }) });
-    load();
+    setBusyId(issue.id);
+    try {
+      await api(`/api/onsite/issues/${issue.id}/draft`, { method: "PATCH", body: JSON.stringify({ proposed_change: text }) });
+      setNote("处理方案已保存，下一步交给执行人上线或进入人审。");
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "保存方案失败");
+    } finally {
+      setBusyId("");
+    }
   }
 
   async function apply(issue: OnsiteIssue) {
     setError("");
+    setBusyId(issue.id);
     try {
       if (issue.severity === "low" && issue.risk === "low") {
         await api(`/api/onsite/issues/${issue.id}/apply-draft`, { method: "POST" });
+        setNote("已标记为交付执行人。执行完成后可回抓复测。");
       } else {
-        await api(`/api/onsite/issues/${issue.id}/confirm-apply`, {
+        await api(`/api/onsite/issues/${issue.id}/mark-executed`, {
           method: "POST",
-          body: JSON.stringify({ confirmed: true }),
+          body: JSON.stringify({ confirmed: true, note: "人工确认已在客户网站或执行环境处理，等待系统复测。" }),
         });
+        setNote("已记录人工执行，下一步回抓复测。");
       }
       load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "失败");
+      setError(e instanceof Error ? e.message : "推进失败");
+    } finally {
+      setBusyId("");
     }
+  }
+
+  async function retestIssue(issue: OnsiteIssue) {
+    setError("");
+    setBusyId(issue.id);
+    try {
+      const row = await api<OnsiteIssue>(`/api/onsite/issues/${issue.id}/retest`, { method: "POST" });
+      setNote(row.status === "verified" ? "复测通过，本条已验收。" : `复测完成，当前状态：${statusLabel[row.status] ?? row.status}`);
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "复测失败");
+    } finally {
+      setBusyId("");
+    }
+  }
+
+  async function ignoreIssue(issue: OnsiteIssue) {
+    setError("");
+    setBusyId(issue.id);
+    try {
+      await api<OnsiteIssue>(`/api/onsite/issues/${issue.id}/wont-fix`, {
+        method: "POST",
+        body: JSON.stringify({ note: "本轮测试暂不处理。" }),
+      });
+      setNote("已忽略本条，不再进入优先处理清单。");
+      if (expandedId === issue.id) setExpandedId("");
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "忽略失败");
+    } finally {
+      setBusyId("");
+    }
+  }
+
+  async function copyDraft(issue: OnsiteIssue) {
+    const text = drafts[issue.id] ?? issue.proposed_change;
+    if (!text?.trim()) {
+      setError("没有可复制的处理方案。");
+      return;
+    }
+    await navigator.clipboard.writeText(text);
+    setNote("处理方案已复制。");
   }
 
   async function create(e: FormEvent) {
     e.preventDefault();
     await api<SitePage>("/api/onsite/pages", { method: "POST", body: JSON.stringify(form) });
     setForm({ path: "/", locale: "en-US", title: "" });
+    setNote("已加入诊断页面清单。");
     load();
   }
 
   if (!board) return <p className="text-sm text-slate-500">{error || "加载中…"}</p>;
 
-  const groups = (["critical", "high", "low"] as const).filter((k) => filter === "all" || filter === k);
-
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">站内改页 + 人审</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          只抓已登记页。观察层来自线上回抓，改稿写在工单里，互不覆盖。确认上线后会再抓一次做验收。无
-          GSC 的收录保持未测。
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold">SEO 诊断优先级工作台</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            选择客户官网，抓取站点事实，生成待处理队列、AI 整改材料和可导出报告。
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={crawlOrSeed} variant="outline">
+            <ClipboardList className="mr-2 h-4 w-4" />
+            从内链扩清单
+          </Button>
+          <Button onClick={analyze} disabled={busyId === "ai-batch"}>
+            <Bot className="mr-2 h-4 w-4" />
+            {busyId === "ai-batch" ? "生成中…" : "生成一批 AI 建议"}
+          </Button>
+          <Button onClick={downloadReport} variant="outline">
+            <Download className="mr-2 h-4 w-4" />
+            导出文档
+          </Button>
+          <Button onClick={downloadReportTable} variant="outline">
+            <Download className="mr-2 h-4 w-4" />
+            导出表格
+          </Button>
+        </div>
       </div>
 
-      <Card>
+      <Card className="rounded-md">
         <CardHeader>
-          <CardTitle>站点 origin</CardTitle>
+          <CardTitle>诊断网站</CardTitle>
         </CardHeader>
-        <CardContent className="flex flex-wrap items-end gap-2">
-          <Input
-            className="min-w-[280px] flex-1"
-            placeholder="https://www.snipers.com.cn"
-            value={origin}
-            onChange={(e) => setOrigin(e.target.value)}
-          />
-          <Button type="button" variant="outline" onClick={saveOrigin}>
-            保存 origin
-          </Button>
-          <Button type="button" onClick={fetchSite}>
-            抓这一站
-          </Button>
+        <CardContent className="space-y-4">
+          <div className="grid gap-3 lg:grid-cols-[1fr_auto_auto]">
+            <Input
+              placeholder="https://www.customer.com"
+              value={origin}
+              onChange={(e) => setOrigin(e.target.value)}
+            />
+            <Button type="button" variant="outline" onClick={saveOrigin}>
+              保存/切换网站
+            </Button>
+            <Button type="button" variant="outline" onClick={setupSnipersTest}>
+              使用 Snipers 测试
+            </Button>
+          </div>
+          <div className="grid gap-3 lg:grid-cols-[120px_120px_auto_auto_1fr]">
+            <Input
+              type="number"
+              min={1}
+              max={300}
+              value={maxUrls}
+              onChange={(e) => setMaxUrls(Number(e.target.value))}
+              aria-label="最大 URL"
+            />
+            <Input
+              type="number"
+              min={0}
+              max={5}
+              value={maxDepth}
+              onChange={(e) => setMaxDepth(Number(e.target.value))}
+              aria-label="最大深度"
+            />
+            <Button type="button" onClick={fetchSite} variant="outline">
+              <RefreshCcw className="mr-2 h-4 w-4" />
+              抓已登记页
+            </Button>
+            <Button type="button" onClick={crawlSite} disabled={busyId === "crawl-site"}>
+              <ClipboardList className="mr-2 h-4 w-4" />
+              站点诊断抓取
+            </Button>
+            <div className="text-xs text-slate-500">
+              当前：{origin || "未设置"} · URL 上限 {maxUrls} · 深度 {maxDepth}
+            </div>
+          </div>
+          {sessions[0] ? (
+            <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+              最近抓取：发现 {sessions[0].discovered} · 成功 {sessions[0].fetched} · 失败 {sessions[0].failed} · 新增问题 {sessions[0].created} · JS {sessions[0].needs_js}
+            </div>
+          ) : null}
         </CardContent>
       </Card>
 
-      <div className="flex flex-wrap gap-2">
-        <Button onClick={crawlOrSeed} variant="outline">
-          从内链扩清单（不抓线上）
-        </Button>
-        <Button onClick={analyze}>AI 分析 / 内容 / 审核 / 论证</Button>
-      </div>
-      {note ? <p className="text-sm text-slate-600">{note}</p> : null}
+      <Card className="rounded-md">
+        <CardHeader>
+          <CardTitle>诊断目标</CardTitle>
+          <p className="mt-1 text-sm text-slate-500">SEO 诊断会优先围绕目标国家、目标关键词和核心页面排序。</p>
+        </CardHeader>
+        <CardContent className="grid gap-4 lg:grid-cols-3">
+          <div className="rounded-md border border-slate-200 p-3">
+            <div className="text-xs font-medium text-slate-500">目标国家 / 市场</div>
+            <div className="mt-2 space-y-2">
+              {targetMarkets.length ? (
+                targetMarkets.map((market) => (
+                  <div key={market.id} className="flex items-center justify-between gap-3 text-sm">
+                    <span className="font-medium text-slate-800">{market.name}</span>
+                    <span className="text-xs text-slate-500">{market.country_code} · {market.primary_locale}</span>
+                  </div>
+                ))
+              ) : (
+                <div className="text-sm text-slate-500">未设置。先在洞察模块登记目标市场。</div>
+              )}
+            </div>
+          </div>
+          <div className="rounded-md border border-slate-200 p-3">
+            <div className="text-xs font-medium text-slate-500">目标关键词 / 选题</div>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {targetKeywords.length ? (
+                targetKeywords.map((item) => (
+                  <Badge key={item.id} tone={item.status === "ready" ? "green" : "blue"}>
+                    {item.label}
+                  </Badge>
+                ))
+              ) : (
+                <div className="text-sm text-slate-500">未设置。先登记核心产品词、行业词和采购意图词。</div>
+              )}
+            </div>
+          </div>
+          <div className="rounded-md border border-slate-200 p-3">
+            <div className="text-xs font-medium text-slate-500">搜索表现 / 测速</div>
+            <div className="mt-2 space-y-2 text-sm text-slate-700">
+              <div className="flex items-center justify-between gap-3">
+                <span>Google Search Console</span>
+                <Badge tone={performance?.gsc_status === "已导入" ? "green" : "amber"}>{performance?.gsc_status ?? "读取中"}</Badge>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span>Bing Webmaster</span>
+                <Badge tone={performance?.bing_status === "已导入" ? "green" : "amber"}>{performance?.bing_status ?? "读取中"}</Badge>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span>PageSpeed Insights</span>
+                <Badge tone={performance?.pagespeed_status === "已测速" ? "green" : "amber"}>{performance?.pagespeed_status ?? "读取中"}</Badge>
+              </div>
+              <p className="text-xs text-slate-500">导入或测速后，文档和表格会带上曝光、点击、CTR、排名和速度证据。</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
-      <div className="grid gap-3 md:grid-cols-3">
-        {(["critical", "high", "low"] as const).map((k) => (
-          <button key={k} type="button" onClick={() => setFilter(filter === k ? "all" : k)} className="text-left">
-            <Card className={filter === k ? "border-brand-600" : ""}>
-              <CardHeader>
-                <CardTitle className="text-sm">{sevLabel[k]}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-semibold">{board.counts[k]}</div>
-                <p className="mt-1 text-xs text-slate-500">
-                  {board.analyzed_pages}/{board.pages} 页已分析
-                </p>
-              </CardContent>
-            </Card>
-          </button>
-        ))}
-      </div>
-
-      {groups.map((sev) => (
-        <Card key={sev}>
-          <CardHeader>
-            <CardTitle>
-              <Badge tone={sevTone[sev]}>{sevLabel[sev]}</Badge>
-              <span className="ml-2 text-sm font-normal text-slate-500">{board.groups[sev].length} 条待处理</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {board.groups[sev].length === 0 ? <p className="text-sm text-slate-500">这一档没有待处理问题。</p> : null}
-            {board.groups[sev].map((i) => (
-              <div key={i.id} className="rounded-md border p-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Link className="font-medium text-brand-700" href={`/onsite/${i.page_id}`}>
-                    {i.page_title || i.page_path}
-                  </Link>
-                  <span className="text-xs text-slate-400">{i.page_path}</span>
-                  <Badge>{catLabel[i.category] ?? i.category}</Badge>
-                  <Badge tone="amber">{i.metric_status === "untested" ? "未测" : i.metric_status}</Badge>
-                  <Badge tone="blue">{statusLabel[i.status] ?? i.status}</Badge>
+      <Card className="rounded-md">
+        <CardHeader>
+          <CardTitle>SEO 表现数据源</CardTitle>
+          <p className="mt-1 text-sm text-slate-500">免费数据优先：GSC/Bing CSV 用于真实搜索表现，PageSpeed 用于速度体验。</p>
+        </CardHeader>
+        <CardContent className="grid gap-4 xl:grid-cols-4">
+          <div className="rounded-md border border-slate-200 p-3">
+            <div className="flex items-center gap-2 text-sm font-medium text-slate-800">
+              <Search className="h-4 w-4" />
+              GSC 自动同步
+            </div>
+            <div className="mt-3 space-y-2 text-sm text-slate-700">
+              <div className="flex items-center justify-between gap-3">
+                <span>OAuth 配置</span>
+                <Badge tone={gsc?.configured ? "green" : "amber"}>{gsc?.configured ? "已配置" : "未配置"}</Badge>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span>客户授权</span>
+                <Badge tone={gsc?.connected ? "green" : "amber"}>{gsc?.connected ? "已连接" : "未连接"}</Badge>
+              </div>
+              <div className="truncate text-xs text-slate-500">{gsc?.site_url || gsc?.note || "读取中"}</div>
+              {gsc?.last_sync_at ? <div className="text-xs text-slate-500">最近同步 {new Date(gsc.last_sync_at).toLocaleString("zh-CN")}</div> : null}
+              {gsc?.last_error ? <div className="text-xs text-red-600">{gsc.last_error}</div> : null}
+            </div>
+            <div className="mt-3 grid gap-2">
+              <Button type="button" variant="outline" onClick={authorizeGsc} disabled={!gsc?.configured}>
+                授权 GSC
+              </Button>
+              <Button type="button" onClick={syncGsc} disabled={!gsc?.connected || busyId === "gsc-sync"}>
+                {busyId === "gsc-sync" ? "同步中…" : "同步 28 天"}
+              </Button>
+            </div>
+          </div>
+          <div className="rounded-md border border-slate-200 p-3">
+            <div className="flex items-center gap-2 text-sm font-medium text-slate-800">
+              <Upload className="h-4 w-4" />
+              导入搜索表现 CSV
+            </div>
+            <div className="mt-3 grid gap-2 sm:grid-cols-[150px_1fr]">
+              <select
+                className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm outline-none focus:border-emerald-500"
+                value={performanceSource}
+                onChange={(e) => setPerformanceSource(e.target.value as "gsc_csv" | "bing_csv")}
+              >
+                <option value="gsc_csv">GSC CSV</option>
+                <option value="bing_csv">Bing CSV</option>
+              </select>
+              <Input
+                type="file"
+                accept=".csv,text/csv"
+                onChange={importPerformanceFile}
+                disabled={busyId === "performance-import"}
+              />
+            </div>
+            <div className="mt-3 text-xs text-slate-500">
+              已导入 {performance?.imports.length ?? 0} 批；支持查询、页面、国家、设备、点击、曝光、CTR、平均排名等常见中英文字段。
+            </div>
+          </div>
+          <div className="rounded-md border border-slate-200 p-3">
+            <div className="flex items-center gap-2 text-sm font-medium text-slate-800">
+              <Gauge className="h-4 w-4" />
+              免费测速
+            </div>
+            <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+              <div className="rounded-md bg-slate-50 p-2">
+                <div className="text-lg font-semibold">{performance?.speed_latest.length ?? 0}</div>
+                <div className="text-[11px] text-slate-500">测速记录</div>
+              </div>
+              <div className="rounded-md bg-slate-50 p-2">
+                <div className="text-lg font-semibold">{performance?.speed_latest[0]?.performance_score ?? "-"}</div>
+                <div className="text-[11px] text-slate-500">最近性能</div>
+              </div>
+              <div className="rounded-md bg-slate-50 p-2">
+                <div className="text-lg font-semibold">{performance?.speed_latest[0]?.seo_score ?? "-"}</div>
+                <div className="text-[11px] text-slate-500">最近 SEO</div>
+              </div>
+            </div>
+            <Button type="button" onClick={runPageSpeed} disabled={busyId === "pagespeed"} className="mt-3 w-full">
+              <Gauge className="mr-2 h-4 w-4" />
+              {busyId === "pagespeed" ? "测速中…" : "测首页和核心页"}
+            </Button>
+          </div>
+          <div className="rounded-md border border-slate-200 p-3">
+            <div className="flex items-center gap-2 text-sm font-medium text-slate-800">
+              <BarChart3 className="h-4 w-4" />
+              搜索表现摘要
+            </div>
+            <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+              <div className="rounded-md bg-slate-50 p-2">
+                <div className="text-lg font-semibold">{performance?.total_impressions ?? 0}</div>
+                <div className="text-[11px] text-slate-500">曝光</div>
+              </div>
+              <div className="rounded-md bg-slate-50 p-2">
+                <div className="text-lg font-semibold">{performance?.total_clicks ?? 0}</div>
+                <div className="text-[11px] text-slate-500">点击</div>
+              </div>
+              <div className="rounded-md bg-slate-50 p-2">
+                <div className="text-lg font-semibold">{performance?.avg_ctr ?? "-"}</div>
+                <div className="text-[11px] text-slate-500">CTR%</div>
+              </div>
+            </div>
+            <div className="mt-3 space-y-1 text-xs text-slate-600">
+              {(performance?.by_query ?? []).slice(0, 3).map((item) => (
+                <div key={item.key} className="flex items-center justify-between gap-2">
+                  <span className="truncate">{item.key}</span>
+                  <span className="shrink-0 text-slate-500">{item.impressions} / {item.clicks}</span>
                 </div>
-                <p className="mt-1 text-sm">{i.title}</p>
-                <p className="text-sm text-slate-500">{i.detail}</p>
-                {i.evidence ? <pre className="mt-2 whitespace-pre-wrap text-xs text-slate-500">{i.evidence}</pre> : null}
-                {i.ai_review ? <p className="mt-1 text-xs text-slate-600">初审：{i.ai_review}</p> : null}
-                {i.proposed_change ? <p className="mt-1 text-xs text-slate-500">已写改稿：{i.proposed_change}</p> : null}
-                <Textarea
-                  className="mt-2"
-                  placeholder="改稿草稿（分析不会自动写入）"
-                  value={drafts[i.id] ?? i.proposed_change}
-                  onChange={(e) => setDrafts({ ...drafts, [i.id]: e.target.value })}
-                />
-                <div className="mt-2 flex flex-wrap gap-2">
-                  <Button size="sm" onClick={() => aiIssue(i.id, "all")}>
-                    AI 本条
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => saveDraft(i.id)}>
-                    保存改稿
-                  </Button>
-                  {i.severity === "low" ? (
-                    <Button size="sm" variant="outline" onClick={() => apply(i)}>
-                      标记改稿已交付
-                    </Button>
-                  ) : (
-                    <Button size="sm" onClick={() => apply(i)}>
-                      确认已上线（回抓验收）
-                    </Button>
-                  )}
+              ))}
+              {performance?.by_query.length ? null : <div className="text-slate-500">导入 GSC/Bing CSV 后显示关键词表现。</div>}
+            </div>
+          </div>
+        </CardContent>
+        <CardContent className="grid gap-4 border-t border-slate-100 pt-4 lg:grid-cols-3">
+          <div className="rounded-md border border-slate-200 p-3">
+            <div className="text-sm font-medium text-slate-800">Bing Webmaster</div>
+            <div className="mt-2 flex items-center justify-between gap-3 text-sm">
+              <span>API Key</span>
+              <Badge tone={bing?.configured ? "green" : "amber"}>{bing?.configured ? "已配置" : "未配置"}</Badge>
+            </div>
+            <p className="mt-2 text-xs text-slate-500">{bing?.note || "读取中"}</p>
+          </div>
+          <div className="rounded-md border border-slate-200 p-3">
+            <div className="text-sm font-medium text-slate-800">IndexNow</div>
+            <div className="mt-2 flex items-center justify-between gap-3 text-sm">
+              <span>{indexNow?.host || "未设置官网"}</span>
+              <Badge tone={indexNow?.configured ? "green" : "amber"}>{indexNow?.configured ? "可提交" : "未配置"}</Badge>
+            </div>
+            <p className="mt-2 truncate text-xs text-slate-500">{indexNow?.key_location || indexNow?.note || "读取中"}</p>
+            {indexNow?.last_submitted_at ? <p className="mt-1 text-xs text-slate-500">最近提交 {new Date(indexNow.last_submitted_at).toLocaleString("zh-CN")}</p> : null}
+            <Button type="button" variant="outline" onClick={submitIndexNow} disabled={!indexNow?.configured || busyId === "indexnow"} className="mt-3 w-full">
+              {busyId === "indexnow" ? "提交中…" : "提交已抓取 URL"}
+            </Button>
+          </div>
+          <div className="rounded-md border border-slate-200 p-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-sm font-medium text-slate-800">同步历史</div>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={runDueSync}
+                disabled={!gsc?.connected || busyId === "run-due-sync"}
+              >
+                {busyId === "run-due-sync" ? "检查中…" : "运行到期同步"}
+              </Button>
+            </div>
+            <div className="mt-2 space-y-2">
+              {(syncStatus?.runs ?? []).slice(0, 3).map((run) => (
+                <div key={run.id} className="flex items-center justify-between gap-3 text-xs text-slate-600">
+                  <span>{run.source} · {run.mode} · {run.status}</span>
+                  <span>{run.rows_imported ? `${run.rows_imported} 行` : run.submitted ? `${run.submitted} URL` : "-"}</span>
+                </div>
+              ))}
+              {syncStatus?.runs.length ? null : <p className="text-xs text-slate-500">暂无同步记录。</p>}
+            </div>
+            <p className="mt-2 text-xs text-slate-500">服务器定时任务也可以调用同一个入口，避免依赖浏览器常开。</p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-3 md:grid-cols-4 xl:grid-cols-10">
+        <Card className="rounded-md">
+          <CardContent className="py-4">
+            <div className="text-2xl font-semibold">{board.pages}</div>
+            <div className="text-xs text-slate-500">登记页面</div>
+          </CardContent>
+        </Card>
+        <Card className="rounded-md">
+          <CardContent className="py-4">
+            <div className="text-2xl font-semibold">{stats.fetched}</div>
+            <div className="text-xs text-slate-500">已抓取</div>
+          </CardContent>
+        </Card>
+        <Card className="rounded-md border-red-200">
+          <CardContent className="py-4">
+            <div className="text-2xl font-semibold text-red-700">{board.counts.critical}</div>
+            <div className="text-xs text-slate-500">Critical</div>
+          </CardContent>
+        </Card>
+        <Card className="rounded-md border-amber-200">
+          <CardContent className="py-4">
+            <div className="text-2xl font-semibold text-amber-700">{board.counts.high}</div>
+            <div className="text-xs text-slate-500">High</div>
+          </CardContent>
+        </Card>
+        <Card className="rounded-md border-emerald-200">
+          <CardContent className="py-4">
+            <div className="text-2xl font-semibold text-emerald-700">{board.counts.low}</div>
+            <div className="text-xs text-slate-500">Low</div>
+          </CardContent>
+        </Card>
+        <Card className="rounded-md">
+          <CardContent className="py-4">
+            <div className="text-2xl font-semibold">{stats.waitingDraft}</div>
+            <div className="text-xs text-slate-500">待方案</div>
+          </CardContent>
+        </Card>
+        <Card className="rounded-md">
+          <CardContent className="py-4">
+            <div className="text-2xl font-semibold">{stats.needsReview}</div>
+            <div className="text-xs text-slate-500">需人审</div>
+          </CardContent>
+        </Card>
+        <Card className="rounded-md">
+          <CardContent className="py-4">
+            <div className="text-2xl font-semibold">{stats.readyToExecute}</div>
+            <div className="text-xs text-slate-500">待上线</div>
+          </CardContent>
+        </Card>
+        <Card className="rounded-md">
+          <CardContent className="py-4">
+            <div className="text-2xl font-semibold">{stats.waitingRetest}</div>
+            <div className="text-xs text-slate-500">待回抓</div>
+          </CardContent>
+        </Card>
+        <Card className="rounded-md">
+          <CardContent className="py-4">
+            <div className="text-2xl font-semibold text-emerald-700">{stats.solved}</div>
+            <div className="text-xs text-slate-500">已解决</div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {note ? <p className="text-sm text-slate-600">{note}</p> : null}
+      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+
+      <Card className="rounded-md">
+        <CardHeader className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <CardTitle>优先处理清单</CardTitle>
+              <p className="mt-1 text-sm text-slate-500">默认按风险、执行状态和页面路径排序。点击一条展开处理区。</p>
+            </div>
+            <Badge tone="amber">{visibleIssues.length} / {issues.length} 条</Badge>
+          </div>
+          <div className="grid gap-3 xl:grid-cols-[1fr_auto]">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+              <Input
+                className="pl-9"
+                placeholder="搜索 URL、页面名、问题类型、处理方案"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {filters.map((item) => (
+                <Button
+                  key={item.key}
+                  size="sm"
+                  variant={filter === item.key ? "default" : "outline"}
+                  onClick={() => setFilter(item.key)}
+                >
+                  {item.label}
+                </Button>
+              ))}
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {visibleIssues.length === 0 ? (
+            <div className="rounded-md border border-dashed border-slate-200 p-5 text-sm text-slate-500">
+              当前筛选下没有待处理问题。
+            </div>
+          ) : null}
+          {visibleIssues.map((issue) => {
+            const expanded = expandedId === issue.id;
+            const severityTone = sevTone[issue.severity as keyof typeof sevTone] ?? "green";
+            return (
+              <div key={issue.id} className={cn("rounded-md border", expanded ? "border-brand-600" : "border-slate-200")}>
+                <button
+                  type="button"
+                  className="grid w-full gap-3 p-4 text-left lg:grid-cols-[72px_1fr_180px_150px_110px]"
+                  onClick={() => setExpandedId(expanded ? "" : issue.id)}
+                >
+                  <div>
+                    <Badge tone={severityTone}>{priorityLabel(issue)}</Badge>
+                    <div className="mt-2 text-xs text-slate-500">{sevLabel[issue.severity] ?? issue.severity}</div>
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-medium text-slate-900">{issue.title}</span>
+                      <Badge>{catLabel[issue.category] ?? issue.category}</Badge>
+                      <Badge tone="amber">{issue.metric_status === "untested" ? "未测" : issue.metric_status}</Badge>
+                    </div>
+                    <div className="mt-1 flex flex-wrap gap-2 text-xs text-slate-500">
+                      <span className="text-brand-700">{issue.page_title || issue.page_path}</span>
+                      <span>{issue.page_path}</span>
+                    </div>
+                  </div>
+                  <div>
+                    <Badge tone={statusTone[issue.status] ?? "default"}>{statusLabel[issue.status] ?? issue.status}</Badge>
+                    <div className="mt-2 text-xs text-slate-500">{issue.risk === "high" ? "需要人审" : "低风险可先交付"}</div>
+                  </div>
+                  <div className="text-sm text-slate-600">{nextStep(issue)}</div>
+                  <div className="text-right text-xs font-medium text-brand-700">{expanded ? "收起" : "展开处理"}</div>
+                </button>
+
+                {expanded ? (
+                  <div className="border-t border-slate-100 bg-slate-50/60 p-4">
+                    <div className="grid gap-4 xl:grid-cols-[1fr_1fr]">
+                      <div className="space-y-2">
+                        <div className="text-xs font-medium text-slate-500">诊断证据</div>
+                        <p className="text-sm text-slate-700">{issue.detail || "暂无详情。"}</p>
+                        {issue.evidence ? (
+                          <pre className="max-h-44 overflow-auto whitespace-pre-wrap rounded-md bg-white p-3 text-xs text-slate-500">
+                            {issue.evidence}
+                          </pre>
+                        ) : null}
+                        {issue.ai_review ? <p className="text-xs text-slate-600">AI 初审：{issue.ai_review}</p> : null}
+                        <div className="grid gap-2 pt-2 md:grid-cols-2">
+                          <div className="rounded-md border border-slate-200 bg-white p-3">
+                            <div className="text-xs font-medium text-slate-500">影响</div>
+                            <p className="mt-1 text-sm text-slate-700">{issue.impact || "影响页面可被理解和复测。"}</p>
+                          </div>
+                          <div className="rounded-md border border-slate-200 bg-white p-3">
+                            <div className="text-xs font-medium text-slate-500">执行角色</div>
+                            <p className="mt-1 text-sm text-slate-700">{issue.owner_hint || "客户经理 / 执行人"}</p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="text-xs font-medium text-slate-500">处理方案</div>
+                        <div className="rounded-md border border-slate-200 bg-white p-3 text-sm text-slate-700">
+                          <div className="text-xs font-medium text-slate-500">建议动作</div>
+                          <p className="mt-1">{issue.recommended_action || "结合诊断证据补充处理方案，人工确认后执行。"}</p>
+                          <div className="mt-3 text-xs font-medium text-slate-500">复测方法</div>
+                          <p className="mt-1">{issue.retest_method || "执行后重新抓取页面并比对观察层。"}</p>
+                        </div>
+                        <Textarea
+                          className="min-h-[120px] bg-white"
+                          placeholder="填写给技术/客户网站负责人的处理方案。AI 建议不会自动执行。"
+                          value={drafts[issue.id] ?? issue.proposed_change}
+                          onChange={(e) => setDrafts({ ...drafts, [issue.id]: e.target.value })}
+                        />
+                        <div className="flex flex-wrap gap-2">
+                          <Button asChild size="sm" variant="outline">
+                            <Link href={`/onsite/${issue.page_id}`}>查看单页观察</Link>
+                          </Button>
+                          <Button size="sm" onClick={() => aiIssue(issue.id)} disabled={busyId === issue.id}>
+                            <Bot className="mr-1.5 h-3.5 w-3.5" />
+                            生成处理建议
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={() => saveDraft(issue)} disabled={busyId === issue.id}>
+                            保存方案
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={() => copyDraft(issue)}>
+                            <Copy className="mr-1.5 h-3.5 w-3.5" />
+                            复制方案
+                          </Button>
+                          {issue.status === "confirmed" || issue.status === "draft_applied" ? (
+                            <Button size="sm" variant="outline" onClick={() => retestIssue(issue)} disabled={busyId === issue.id}>
+                              <RefreshCcw className="mr-1.5 h-3.5 w-3.5" />
+                              复测本条
+                            </Button>
+                          ) : issue.severity === "low" && issue.risk === "low" ? (
+                            <Button size="sm" variant="outline" onClick={() => apply(issue)} disabled={busyId === issue.id}>
+                              交付执行人
+                            </Button>
+                          ) : (
+                            <Button size="sm" onClick={() => apply(issue)} disabled={busyId === issue.id}>
+                              <Wrench className="mr-1.5 h-3.5 w-3.5" />
+                              标记已执行
+                            </Button>
+                          )}
+                          <Button size="sm" variant="outline" onClick={() => ignoreIssue(issue)} disabled={busyId === issue.id}>
+                            <XCircle className="mr-1.5 h-3.5 w-3.5" />
+                            忽略
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            );
+          })}
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-6 xl:grid-cols-[1fr_0.9fr]">
+        <Card className="rounded-md">
+          <CardHeader>
+            <CardTitle>登记诊断页面</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form className="grid gap-3 md:grid-cols-4" onSubmit={create}>
+              <Input placeholder="路径" value={form.path} onChange={(e) => setForm({ ...form, path: e.target.value })} required />
+              <Input placeholder="语言" value={form.locale} onChange={(e) => setForm({ ...form, locale: e.target.value })} />
+              <Input placeholder="页面名称" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
+              <Button type="submit">加入清单</Button>
+            </form>
+            <div className="mt-4 max-h-56 overflow-auto rounded-md border border-slate-200">
+              {pages.map((p) => (
+                <Link
+                  key={p.id}
+                  href={`/onsite/${p.id}`}
+                  className="grid gap-1 border-b border-slate-100 px-3 py-2 text-sm last:border-b-0 hover:bg-slate-50 md:grid-cols-[1fr_auto]"
+                >
+                  <div>
+                    <div className="font-medium text-brand-700">{p.path}</div>
+                    <div className="mt-1 flex flex-wrap gap-2 text-xs text-slate-500">
+                      <span>{p.priority_hint ?? "P2"}</span>
+                      <span>{p.page_type ?? "other"}</span>
+                      <span>深度 {p.url_depth ?? 0}</span>
+                      <span>{p.discovery_source ?? "manual"}</span>
+                      <span>sitemap {p.is_in_sitemap ?? "未测"}</span>
+                      <span>字数 {p.word_count ?? 0}</span>
+                      <span>缺 alt {p.images_missing_alt ?? 0}/{p.image_count ?? 0}</span>
+                      <span>TTFB {p.ttfb_ms ?? "未测"}{p.ttfb_ms ? "ms" : ""}</span>
+                      <span>跳转 {p.redirect_count ?? 0}</span>
+                      <span>{p.content_type || "未知类型"}</span>
+                    </div>
+                  </div>
+                  <div className="text-xs text-slate-500 md:text-right">
+                    <div>{crawlStatusLabel[p.crawl_status] ?? p.crawl_status}</div>
+                    {p.body_hash ? <div>hash {p.body_hash.slice(0, 8)}</div> : null}
+                    <div>{p.fetched_at ? new Date(p.fetched_at).toLocaleString("zh-CN") : "尚未抓取"}</div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="rounded-md">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle>内容提纲（次要）</CardTitle>
+            <CheckCircle2 className="h-5 w-5 text-slate-400" />
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <p className="text-sm text-slate-500">关键词到 SERP 特征暂不作为主诊断。没有搜索源时保持未测。</p>
+            {briefs.length === 0 ? <p className="text-sm text-slate-500">还没有提纲。站内问题优先。</p> : null}
+            {briefs.slice(0, 5).map((b) => (
+              <div key={b.id} className="rounded-md border border-slate-200 p-3">
+                <div className="font-medium">{b.title}</div>
+                <div className="mt-1 flex flex-wrap gap-2 text-xs text-slate-500">
+                  <span>{b.target_keyword}</span>
+                  <span>{b.locale}</span>
+                  <Badge tone="amber">SERP {b.serp_features}</Badge>
                 </div>
               </div>
             ))}
           </CardContent>
         </Card>
-      ))}
-
-      <Card>
-        <CardHeader>
-          <CardTitle>登记种子页</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form className="grid gap-3 md:grid-cols-4" onSubmit={create}>
-            <Input placeholder="路径" value={form.path} onChange={(e) => setForm({ ...form, path: e.target.value })} required />
-            <Input placeholder="语言" value={form.locale} onChange={(e) => setForm({ ...form, locale: e.target.value })} />
-            <Input placeholder="标题" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
-            <Button type="submit">加入清单</Button>
-          </form>
-          <ul className="mt-3 space-y-1 text-xs text-slate-500">
-            {pages.map((p) => (
-              <li key={p.id}>
-                <Link className="text-brand-700" href={`/onsite/${p.id}`}>
-                  {p.path}
-                </Link>
-                {" · "}
-                {crawlStatusLabel[p.crawl_status] ?? p.crawl_status}
-                {" · "}
-                {p.fetched_at ? new Date(p.fetched_at).toLocaleString("zh-CN") : "尚未抓取"}
-              </li>
-            ))}
-          </ul>
-          <p className="mt-2 text-xs text-slate-500">已登记 {pages.length} 页。点路径进入单页观察与改稿。</p>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>内容提纲（次要）</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          <p className="text-sm text-slate-500">关键词 → SERP 特征。没有搜索源时特征为未测，不编造精选摘要。</p>
-          {briefs.length === 0 ? <p className="text-sm text-slate-500">还没有提纲。站内问题优先。</p> : null}
-          {briefs.map((b) => (
-            <div key={b.id} className="flex items-center justify-between rounded-md border p-3">
-              <div>
-                <div className="font-medium">{b.title}</div>
-                <div className="text-xs text-slate-500">
-                  {b.target_keyword} · {b.locale}
-                </div>
-              </div>
-              <Badge tone="amber">SERP {b.serp_features}</Badge>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      </div>
     </div>
   );
 }

@@ -36,8 +36,21 @@ def test_geo_prompt_slots_are_untested_not_zero(client: TestClient, demo_user) -
     assert body["prompts"] == 1
     assert body["untested"] == 8
     assert body["recorded"] == 0
+    assert body["mention_rate"] == "未测"
     assert body["cite_rate"] == "未测"
+    assert body["verified_citation_rate"] == "未测"
     assert "percent" not in body
+
+
+def test_geo_seed_prompt_panel_explains_missing_targets(client: TestClient, demo_user) -> None:
+    headers = auth_header(client)
+    seeded = client.post("/api/geo/prompt-panel/seed", headers=headers)
+    assert seeded.status_code == 200
+    body = seeded.json()
+    assert body["created"] == 0
+    assert body["skipped"] == 0
+    assert body["prompts"] == 0
+    assert "没有可生成问句" in body["note"]
 
 
 def test_record_observation_and_llms_asset_confirm(client: TestClient, demo_user) -> None:
@@ -176,3 +189,196 @@ def test_geo_ticket_verify_requires_confirm_and_can_reopen(client: TestClient, d
     )
     assert diagnosis.json()["diagnosis"] == "competitor_dominated"
     assert diagnosis.json()["cite_rate"] == "未测"
+
+
+def test_geo_prompt_panel_evidence_rates_and_exports(client: TestClient, demo_user) -> None:
+    headers = auth_header(client)
+    client.post(
+        "/api/seo-pages",
+        headers=headers,
+        json={"title": "Industrial Pump Guide", "target_keyword": "industrial pump supplier", "locale": "en-US"},
+    )
+    seeded = client.post("/api/geo/prompt-panel/seed", headers=headers)
+    assert seeded.status_code == 200
+    assert seeded.json()["created"] >= 1
+
+    prompts = client.get("/api/geo/prompts", headers=headers).json()
+    prompt = prompts[0]
+    obs = prompt["observations"][0]
+    recorded = client.patch(
+        f"/api/geo/observations/{obs['id']}",
+        headers=headers,
+        json={
+            "status": "cited",
+            "surface": "consumer_scrape",
+            "response_excerpt": "The answer cites Example Pump Co. as a source.",
+            "citation_urls": "https://example.com/pumps",
+            "brand_mentions": "Example Pump Co.",
+            "competitor_mentions": "Competitor Pump",
+            "interpretation_note": "真实前台抽样，不等于稳定排名。",
+        },
+    )
+    assert recorded.status_code == 200
+    assert recorded.json()["surface"] == "consumer_scrape"
+    assert recorded.json()["evidence_tier"] == "cited"
+    assert "example.com" in recorded.json()["citation_urls"]
+
+    refreshed = client.get("/api/geo/prompts", headers=headers).json()[0]
+    assert refreshed["cite_rate"] == "100.0%"
+    assert refreshed["verified_citation_rate"] == "0.0%"
+    assert refreshed["absorption_rate"] == "100.0%"
+
+    summary = client.get("/api/geo/summary", headers=headers).json()
+    assert summary["cite_rate"] == "100.0%"
+    assert summary["verified_citation_rate"] == "0.0%"
+    assert summary["absorption_rate"] == "100.0%"
+    assert summary["competitor_mentions"] == 1
+
+    report = client.get("/api/geo/report", headers=headers)
+    assert report.status_code == 200
+    markdown = report.json()["markdown"]
+    assert "GEO 可见性诊断报告" in markdown
+    assert "引用率" in markdown
+    assert "吸收率" in markdown
+    assert "Competitor Pump" in markdown
+
+    table = client.get("/api/geo/report-table", headers=headers)
+    assert table.status_code == 200
+    csv_text = table.json()["csv"]
+    assert "问句,语言,诊断层,引擎" in csv_text
+    assert "证据层级,证据说明" in csv_text
+    assert "consumer_scrape" in csv_text
+    assert "https://example.com/pumps" in csv_text
+
+
+def test_geo_verified_citation_is_separate_from_plain_citation(client: TestClient, demo_user) -> None:
+    headers = auth_header(client)
+    prompt = client.post(
+        "/api/geo/prompts",
+        headers=headers,
+        json={"prompt_text": "best industrial pump manufacturer", "locale": "en-US"},
+    ).json()
+    obs = prompt["observations"][0]
+    verified = client.patch(
+        f"/api/geo/observations/{obs['id']}",
+        headers=headers,
+        json={
+            "status": "verified",
+            "surface": "consumer_scrape",
+            "sample_type": "manual_incognito",
+            "citation_urls": "https://example.com/industrial-pumps",
+            "brand_mentions": "Example Pump",
+            "response_excerpt": "Example Pump is cited as a source.",
+            "interpretation_note": "人工打开 URL 确认可访问且属于客户官网。",
+        },
+    )
+    assert verified.status_code == 200, verified.text
+    assert verified.json()["evidence_tier"] == "verified"
+    assert verified.json()["evidence_label"] == "引用已核验"
+
+    refreshed = client.get("/api/geo/prompts", headers=headers).json()[0]
+    assert refreshed["mention_rate"] == "100.0%"
+    assert refreshed["cite_rate"] == "100.0%"
+    assert refreshed["verified_citation_rate"] == "100.0%"
+
+    summary = client.get("/api/geo/summary", headers=headers).json()
+    assert summary["verified_citation_rate"] == "100.0%"
+
+
+def test_geo_sample_run_freezes_manual_observations_as_evidence(client: TestClient, demo_user) -> None:
+    headers = auth_header(client)
+    client.put(
+        "/api/project-targets",
+        headers=headers,
+        json={"site_origin": "https://example.com", "markets": []},
+    )
+    prompt = client.post(
+        "/api/geo/prompts",
+        headers=headers,
+        json={"prompt_text": "best industrial pump supplier", "locale": "en-US"},
+    ).json()
+    obs = prompt["observations"][0]
+    client.patch(
+        f"/api/geo/observations/{obs['id']}",
+        headers=headers,
+        json={
+            "status": "verified",
+            "surface": "manual_ai_answer",
+            "response_excerpt": "Example is listed with https://example.com/pumps as a source.",
+            "citation_urls": "https://example.com/pumps https://industry.example.org/list",
+            "brand_mentions": "Example",
+            "competitor_mentions": "Pump Rival",
+            "interpretation_note": "人工核验 URL 可访问。",
+        },
+    )
+
+    created = client.post(
+        "/api/geo/sample-runs/from-observations",
+        headers=headers,
+        json={"note": "客户测试第一轮"},
+    )
+    assert created.status_code == 201, created.text
+    run = created.json()
+    assert run["protocol_version"] == "geo-test-protocol-v1"
+    assert run["results_count"] == 1
+    assert run["mention_rate"] == "100.0%"
+    assert run["cite_rate"] == "100.0%"
+    assert run["verified_citation_rate"] == "100.0%"
+    result = run["results"][0]
+    assert result["evidence_id"].startswith("ev_")
+    assert result["owned_citations"] == ["https://example.com/pumps"]
+    assert result["third_party_citations"] == ["https://industry.example.org/list"]
+    assert result["verification_status"] == "passed"
+    assert result["prompt_text_hash"]
+    assert result["answer_text_hash"]
+
+    runs = client.get("/api/geo/sample-runs", headers=headers)
+    assert runs.status_code == 200
+    assert runs.json()[0]["id"] == run["id"]
+
+    summary = client.get("/api/geo/summary", headers=headers).json()
+    assert summary["sample_runs"] == 1
+    assert summary["evidence_results"] == 1
+    assert summary["latest_run_id"] == run["id"]
+
+    report = client.get("/api/geo/report", headers=headers).json()["markdown"]
+    assert "证据运行" in report
+    assert run["config_hash"] in report
+    assert result["evidence_id"] in report
+
+    table = client.get("/api/geo/report-table", headers=headers).json()["csv"]
+    assert "run_id,evidence_id,prompt_hash,answer_hash" in table
+    assert result["evidence_id"] in table
+
+
+def test_geo_draft_tickets_from_evidence_rules(client: TestClient, demo_user) -> None:
+    headers = auth_header(client)
+    prompt = client.post(
+        "/api/geo/prompts",
+        headers=headers,
+        json={"prompt_text": "recommended warehouse robot suppliers", "locale": "en-US"},
+    ).json()
+    obs = prompt["observations"][0]
+    client.patch(
+        f"/api/geo/observations/{obs['id']}",
+        headers=headers,
+        json={
+            "status": "mentioned",
+            "response_excerpt": "The answer mentions Example but recommends RivalBot more often.",
+            "brand_mentions": "Example",
+            "competitor_mentions": "RivalBot",
+        },
+    )
+
+    drafted = client.post("/api/geo/tickets/draft-from-evidence", headers=headers)
+    assert drafted.status_code == 200, drafted.text
+    body = drafted.json()
+    assert body["created"] >= 3
+    titles = {ticket["title"] for ticket in body["tickets"]}
+    assert "GEO-MEAS-002 仅被提及但没有自有引用" in titles
+    assert "GEO-OFF-001 竞品在回答中占位" in titles
+    assert "GEO-MEAS-003 采样次数不足" in titles
+
+    second = client.post("/api/geo/tickets/draft-from-evidence", headers=headers).json()
+    assert second["created"] == 0
+    assert second["skipped"] >= 3

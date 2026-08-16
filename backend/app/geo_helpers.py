@@ -34,7 +34,7 @@ CHECKLIST_DEFS = (
     ("primary_entity", "品牌或产品名称前后一致"),
 )
 
-OBS_STATUSES = {"untested", "mentioned", "not_mentioned", "cited"}
+OBS_STATUSES = {"untested", "mentioned", "not_mentioned", "cited", "verified"}
 CHECK_STATUSES = {"untested", "pass", "fail"}
 
 DIAGNOSES = {

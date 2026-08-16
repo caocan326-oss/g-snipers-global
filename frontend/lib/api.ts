@@ -77,6 +77,68 @@ export type DashboardSummary = {
   llm_status: string;
 };
 
+export type WorkbenchItem = {
+  id: string;
+  title: string;
+  subtitle: string;
+  href: string;
+  status: string;
+  tone: "default" | "green" | "amber" | "blue" | "red" | "brand";
+  meta: string;
+  action_label: string;
+};
+
+export type WorkbenchChain = {
+  key: string;
+  title: string;
+  href: string;
+  primary: number;
+  secondary: string;
+  health: string;
+  tone: "default" | "green" | "amber" | "blue" | "red" | "brand";
+  action_label: string;
+};
+
+export type WorkbenchSeoBucket = {
+  key: string;
+  clicks: number;
+  impressions: number;
+  ctr: number | null;
+  position: number | null;
+};
+
+export type WorkbenchSeoPerformance = {
+  days: number;
+  data_status: string;
+  total_clicks: number;
+  total_impressions: number;
+  avg_ctr: number | null;
+  avg_position: number | null;
+  indexed_pages: number;
+  index_pending_pages: number;
+  backlink_domains: number;
+  unverified_backlinks: number;
+  authority_status: string;
+  pagespeed_status: string;
+  latest_speed_score: number | null;
+  top_countries: WorkbenchSeoBucket[];
+  top_keywords: WorkbenchSeoBucket[];
+  top_pages: WorkbenchSeoBucket[];
+};
+
+export type Workbench = {
+  summary: DashboardSummary;
+  site_origin: string;
+  diagnostic_status: string;
+  seo_performance: WorkbenchSeoPerformance;
+  next_actions: WorkbenchItem[];
+  seo_items: WorkbenchItem[];
+  geo_items: WorkbenchItem[];
+  recent_signals: WorkbenchItem[];
+  chains: WorkbenchChain[];
+  deferred_modules: WorkbenchItem[];
+};
+
 export type AiStatus = {
   configured: boolean;
   status: string;
@@ -96,6 +158,128 @@ export type AiAssist = {
   review_verdict: string;
   evidence: string;
   detail: string;
+  processed?: number;
+  remaining?: number;
+  limit?: number;
+};
+
+export type SeoPerformanceBucket = {
+  key: string;
+  clicks: number;
+  impressions: number;
+  ctr: number | null;
+  position: number | null;
+};
+
+export type PageSpeedAudit = {
+  id: string;
+  url: string;
+  strategy: string;
+  status: string;
+  performance_score: number | null;
+  seo_score: number | null;
+  accessibility_score: number | null;
+  best_practices_score: number | null;
+  lcp_ms: number | null;
+  inp_ms: number | null;
+  cls: number | null;
+  detail: string;
+  audited_at: string | null;
+};
+
+export type SeoPerformanceSummary = {
+  gsc_status: string;
+  bing_status: string;
+  pagespeed_status: string;
+  total_clicks: number;
+  total_impressions: number;
+  avg_ctr: number | null;
+  avg_position: number | null;
+  by_country: SeoPerformanceBucket[];
+  by_query: SeoPerformanceBucket[];
+  by_page: SeoPerformanceBucket[];
+  speed_latest: PageSpeedAudit[];
+  imports: {
+    id: string;
+    source: string;
+    filename: string;
+    rows_imported: number;
+    note: string;
+    imported_at: string | null;
+  }[];
+};
+
+export type GscStatus = {
+  configured: boolean;
+  connected: boolean;
+  status: string;
+  site_url: string;
+  last_sync_at: string | null;
+  last_error: string;
+  redirect_uri: string;
+  note: string;
+};
+
+export type GscAuthUrl = {
+  configured: boolean;
+  auth_url: string;
+  redirect_uri: string;
+  note: string;
+};
+
+export type GscSyncResult = {
+  status: string;
+  rows_imported: number;
+  date_start: string;
+  date_end: string;
+  note: string;
+  last_error: string;
+};
+
+export type DataSyncRun = {
+  id: string;
+  source: string;
+  mode: string;
+  status: string;
+  rows_imported: number;
+  submitted: number;
+  note: string;
+  started_at: string | null;
+  finished_at: string | null;
+};
+
+export type DataSyncStatus = {
+  runs: DataSyncRun[];
+};
+
+export type DataSyncRunDueResult = {
+  status: string;
+  ran: number;
+  skipped: number;
+  runs: DataSyncRun[];
+  note: string;
+};
+
+export type BingStatus = {
+  configured: boolean;
+  status: string;
+  note: string;
+};
+
+export type IndexNowStatus = {
+  configured: boolean;
+  host: string;
+  key_location: string;
+  last_submitted_at: string | null;
+  last_status: string;
+  note: string;
+};
+
+export type IndexNowSubmitResult = {
+  status: string;
+  submitted: number;
+  http_status: number | null;
+  note: string;
 };
 
 export type Market = {
@@ -145,6 +329,17 @@ export type MarketDetail = Market & {
   competitors: Competitor[];
   demand_signals: DemandSignal[];
   brief: InsightBrief | null;
+};
+
+export type ProjectTargets = {
+  site_origin: string;
+  markets: MarketDetail[];
+  target_market_count: number;
+  keyword_count: number;
+  competitor_count: number;
+  primary_market_id: string | null;
+  readiness: string;
+  note: string;
 };
 
 export type ChainFeed = {
@@ -199,7 +394,16 @@ export type GeoObservation = {
   engine: string;
   engine_label?: string;
   region?: string;
+  surface?: string;
+  sample_type?: string;
   status: string;
+  evidence_tier?: string;
+  evidence_label?: string;
+  response_excerpt?: string;
+  citation_urls?: string;
+  brand_mentions?: string;
+  competitor_mentions?: string;
+  interpretation_note?: string;
   notes: string | null;
   observed_at: string | null;
 };
@@ -210,13 +414,107 @@ export type GeoPrompt = {
   locale: string;
   market_id: string | null;
   seo_page_id: string | null;
+  demand_signal_id?: string | null;
+  prompt_pack_id?: string;
+  prompt_key?: string;
+  prompt_type?: string;
   diagnosis: string;
   diagnosis_label: string;
   observations: GeoObservation[];
   cite_rate?: string;
+  mention_rate?: string;
+  verified_citation_rate?: string;
+  competitor_rate?: string;
   absorption_rate?: string;
   ai_status?: string;
   evidence?: string;
+};
+
+export type GeoSummary = {
+  prompts: number;
+  untested: number;
+  recorded: number;
+  checklist_untested: number;
+  assets_draft: number;
+  tickets_open: number;
+  mention_rate: string;
+  cite_rate: string;
+  verified_citation_rate: string;
+  competitor_rate: string;
+  absorption_rate: string;
+  competitor_mentions: number;
+  sample_runs?: number;
+  evidence_results?: number;
+  latest_run_id?: string | null;
+};
+
+export type GeoReport = {
+  title: string;
+  markdown: string;
+  generated_at: string;
+};
+
+export type GeoReportTable = {
+  filename: string;
+  csv: string;
+  generated_at: string;
+};
+
+export type GeoSampleResult = {
+  id: string;
+  run_id: string;
+  prompt_id: string;
+  observation_id: string | null;
+  evidence_id: string;
+  trial_index: number;
+  prompt_type?: string;
+  engine: string;
+  engine_label?: string;
+  model: string;
+  web_grounded: string;
+  surface: string;
+  prompt_text_hash: string;
+  answer_text_hash: string;
+  answer_excerpt: string;
+  mentioned: boolean;
+  citations: string[];
+  owned_citations: string[];
+  third_party_citations: string[];
+  brand_hits: string;
+  competitor_hits: string;
+  verification_status: string;
+  verification_note: string;
+  sampled_at: string | null;
+};
+
+export type GeoSampleRun = {
+  id: string;
+  protocol_version: string;
+  prompt_set_id: string;
+  config_hash: string;
+  domain: string;
+  brand_names: string[];
+  engines: string[];
+  trials_per_prompt: number;
+  region_hint: string;
+  language: string;
+  status: string;
+  note: string;
+  started_at: string | null;
+  finished_at: string | null;
+  results_count: number;
+  mention_rate: string;
+  cite_rate: string;
+  verified_citation_rate: string;
+  results: GeoSampleResult[];
+  aggregate?: Record<string, unknown>;
+};
+
+export type GeoTicketDraft = {
+  created: number;
+  skipped: number;
+  note: string;
+  tickets: GeoTicket[];
 };
 
 export type GeoTicket = {
@@ -260,12 +558,28 @@ export type SitePage = {
   fetched_at?: string | null;
   final_url?: string;
   http_status?: number | null;
+  content_type?: string;
+  ttfb_ms?: number | null;
+  redirect_count?: number;
+  html_bytes?: number;
+  body_hash?: string;
   needs_js?: boolean;
   html_lang?: string;
   hreflang?: string;
   viewport?: string;
   json_ld_types?: string;
   crawl_error?: string;
+  discovery_source?: string;
+  is_in_sitemap?: string;
+  meta_robots?: string;
+  x_robots_tag?: string;
+  word_count?: number;
+  image_count?: number;
+  images_missing_alt?: number;
+  external_link_count?: number;
+  page_type?: string;
+  url_depth?: number;
+  priority_hint?: string;
   notes: string | null;
   open_issue_count: number;
   analyzed_at?: string | null;
@@ -325,13 +639,51 @@ export type OnsiteIssue = {
   ai_review?: string;
   ai_review_verdict?: string;
   evidence?: string;
+  impact?: string;
+  recommended_action?: string;
+  review_required?: boolean;
+  retest_method?: string;
+  owner_hint?: string;
 };
 
 export type OnsiteBoard = {
   pages: number;
   analyzed_pages: number;
   counts: { critical: number; high: number; low: number };
+  status_counts: Record<string, number>;
+  workflow_counts: Record<string, number>;
   groups: { critical: OnsiteIssue[]; high: OnsiteIssue[]; low: OnsiteIssue[] };
+};
+
+export type CrawlSession = {
+  id: string;
+  origin: string;
+  mode: string;
+  max_urls: number;
+  max_depth: number;
+  status: string;
+  discovered: number;
+  fetched: number;
+  failed: number;
+  created: number;
+  verified: number;
+  robots_blocked: number;
+  needs_js: number;
+  note: string;
+  started_at: string | null;
+  finished_at: string | null;
+};
+
+export type SeoReport = {
+  title: string;
+  markdown: string;
+  generated_at: string;
+};
+
+export type SeoReportTable = {
+  filename: string;
+  csv: string;
+  generated_at: string;
 };
 
 export type ContentBrief = {
