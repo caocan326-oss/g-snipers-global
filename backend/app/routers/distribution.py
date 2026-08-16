@@ -1,5 +1,8 @@
 from datetime import datetime, timezone
+from html.parser import HTMLParser
+from urllib.parse import urlparse
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -11,9 +14,11 @@ from app.risk import require_confirm
 from app.schemas import (
     ConfirmReadyIn,
     DistributionJobCreate,
+    DistributionGuideOut,
     DistributionJobOut,
     DistributionJobUpdate,
     DistributionSubmitResultIn,
+    PlacementCheckOut,
     ProviderOut,
     SendResultOut,
 )
@@ -33,6 +38,61 @@ TASK_TYPES = {
     "link_claim",
     "monitor_only",
 }
+
+TASK_MATERIALS = {
+    "profile_create": ["客户官网 URL", "英文公司简介", "英文品类词", "主营产品/能力", "公开联系人", "认证/资质（仅限已确认）"],
+    "profile_update": ["现有档案 URL", "需要修正的字段", "标准英文简介", "官网目标页", "认证/品类确认"],
+    "brand_fix": ["错误截图或 URL", "标准品牌名", "官网证明页", "建议替换文案"],
+    "product_listing": ["产品英文名", "规格/参数", "产品页 URL", "图片或附件链接", "禁止宣传语检查"],
+    "listicle_pitch": ["榜单/文章 URL", "入选理由", "客户事实亮点", "联系人邮箱", "人工终审后的 pitch"],
+    "guest_or_pr": ["PR/稿件草稿", "Fact Pack", "客户终审记录", "媒体联系人", "风险说明"],
+    "distributor_align": ["分销商页面 URL", "标准品牌名", "目标官网 URL", "统一产品描述", "客户授权说明"],
+    "link_claim": ["未链接提及 URL", "建议链接目标页", "联系对象", "礼貌修正口径"],
+    "monitor_only": ["监控 URL", "需要观察的品牌/产品词", "复测周期", "变更记录口径"],
+}
+
+TASK_CHECKLIST = {
+    "profile_create": ["确认平台适合目标国家和品类", "使用客户确认过的英文事实，不编造认证和客户案例", "把品类映射到平台允许的 category", "人工登录或提交表单", "提交后回填 result_url"],
+    "profile_update": ["打开现有档案并核对品牌名/官网/品类", "只修改事实错误或缺失字段", "保留提交截图或备注", "提交后回填 result_url"],
+    "brand_fix": ["确认第三方页面确实写错", "准备标准品牌名和官网证明", "通过平台、邮件或联系人请求修正", "回填处理线程或结果 URL"],
+    "product_listing": ["确认产品资料已通过客户终审", "避免堆砌关键词和夸大参数", "按平台字段填写产品/能力", "回填产品或档案 URL"],
+    "listicle_pitch": ["确认榜单主题和客户品类相关", "使用事实型 pitch，不承诺排名或付费结果", "人工发送并记录联系人", "若上线，回填文章 URL"],
+    "guest_or_pr": ["客户终审稿件后才能外发", "检查 banned claims 和认证表述", "人工发送或提交", "上线后核验 URL"],
+    "distributor_align": ["确认分销商关系真实", "统一品牌名、型号和官网链接", "通过商务/邮件推进修改", "上线后核验页面"],
+    "link_claim": ["确认第三方已有真实提及", "建议添加最相关官网 URL", "不要强制要求 dofollow", "回填对方修改后的 URL"],
+    "monitor_only": ["确认只做观察不提交", "记录当前页面状态", "定期复查是否删除、改链或改描述"],
+}
+
+
+class _LinkParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.links: list[tuple[str, str]] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag.lower() != "a":
+            return
+        values = {key.lower(): value or "" for key, value in attrs}
+        href = values.get("href", "")
+        if href:
+            self.links.append((href, values.get("rel", "")))
+
+
+def _platform_for_job(db: Session, job: DistributionJob) -> SourcePlatform | None:
+    return db.get(SourcePlatform, job.platform_id) if job.platform_id else None
+
+
+def _safe_http_url(url: str) -> bool:
+    parsed = urlparse(url)
+    return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
+
+
+def _host_match(url: str, target_url: str) -> bool:
+    parsed_url = urlparse(url)
+    parsed_target = urlparse(target_url)
+    if not parsed_target.netloc:
+        return False
+    return parsed_target.netloc.lower() in parsed_url.netloc.lower()
 
 
 def _job_out(row: DistributionJob) -> DistributionJobOut:
@@ -197,6 +257,118 @@ def submit_result(
     db.commit()
     db.refresh(job)
     return job
+
+
+@router.get("/jobs/{job_id}/guide", response_model=DistributionGuideOut)
+def job_guide(
+    job_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> DistributionGuideOut:
+    job = db.get(DistributionJob, job_id)
+    if job is None or job.tenant_id != user.tenant_id:
+        raise HTTPException(status_code=404, detail="分发任务不存在")
+    platform = _platform_for_job(db, job)
+    mode = platform.submission_mode if platform else "manual"
+    risk_notes = [
+        "AI 只能生成草稿和检查清单，不能无人审对外发布。",
+        "禁止自动登录、绕验证码、自动群发、自动购买付费位或批量注册目录账号。",
+    ]
+    if platform and platform.risk_level == "high":
+        risk_notes.append("该平台标记为高风险，PR、榜单或付费合作必须客户/负责人终审。")
+    if mode == "manual_login":
+        risk_notes.append("该平台需要人工登录；未绑定可用账号时任务应保持受阻。")
+    elif mode == "email_outreach":
+        risk_notes.append("系统只生成邮件/投稿草稿，最终发送必须由人工完成。")
+    elif mode == "paid_placement":
+        risk_notes.append("付费合作不能自动下单，预算和合同需人工确认。")
+    return DistributionGuideOut(
+        job_id=job.id,
+        platform_name=platform.name if platform else "",
+        submission_mode=mode,
+        task_type=job.task_type,
+        materials=TASK_MATERIALS.get(job.task_type, ["客户官网 URL", "标准英文简介", "结果 URL"]),
+        checklist=TASK_CHECKLIST.get(job.task_type, ["确认资料真实", "人工执行", "回填 result_url", "复测核验"]),
+        risk_notes=risk_notes,
+        placement_checks=["result_url 可访问", "页面文本包含品牌/域名线索", "页面存在指向客户目标页或官网的链接", "记录 checked_at 和核验结论"],
+    )
+
+
+@router.post("/jobs/{job_id}/check-placement", response_model=PlacementCheckOut)
+def check_placement(
+    job_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> PlacementCheckOut:
+    job = db.get(DistributionJob, job_id)
+    if job is None or job.tenant_id != user.tenant_id:
+        raise HTTPException(status_code=404, detail="分发任务不存在")
+    result_url = (job.result_url or "").strip()
+    if not result_url:
+        raise HTTPException(status_code=400, detail="请先填写 result_url")
+    if not _safe_http_url(result_url):
+        raise HTTPException(status_code=400, detail="result_url 必须是 http/https URL")
+
+    http_status: int | None = None
+    is_live = False
+    brand_mentioned = False
+    target_link_found = False
+    link_attr = "unknown"
+    note = ""
+    try:
+        with httpx.Client(timeout=20, follow_redirects=True, headers={"User-Agent": "G-Snipers-PlacementCheck/0.1"}) as client:
+            response = client.get(result_url)
+        http_status = response.status_code
+        is_live = 200 <= response.status_code < 400
+        text = response.text[:300000]
+        target_host = urlparse(job.target_url).netloc.lower()
+        result_text = text.lower()
+        brand_mentioned = bool(target_host and target_host in result_text)
+        parser = _LinkParser()
+        parser.feed(text)
+        for href, rel in parser.links:
+            if _host_match(href, job.target_url):
+                target_link_found = True
+                link_attr = rel or "unknown"
+                break
+        if is_live and (brand_mentioned or target_link_found):
+            job.verify_status = "live"
+            job.status = "done"
+            note = "Placement 已可访问，并发现客户域名或目标链接。"
+        elif is_live:
+            job.verify_status = "unknown"
+            job.status = "verifying"
+            note = "URL 可访问，但未在页面文本或链接中确认客户线索，需要人工复核。"
+        else:
+            job.verify_status = "failed"
+            job.status = "submitted"
+            note = f"URL 返回 HTTP {response.status_code}，暂未通过存活核验。"
+    except httpx.HTTPError as exc:
+        job.verify_status = "failed"
+        job.status = "submitted"
+        note = f"核验请求失败：{str(exc)[:200]}"
+
+    job.last_result = "Placement 核验"
+    job.last_detail = note
+    job.last_checked_at = datetime.now(timezone.utc)
+    if job.gap_id:
+        gap = db.get(BacklinkGap, job.gap_id)
+        if gap and gap.tenant_id == user.tenant_id:
+            evidence = f"Placement check：{note}"
+            _sync_gap_from_job(gap, job, evidence=evidence)
+            gap.retest_result = note
+    db.commit()
+    return PlacementCheckOut(
+        job_id=job.id,
+        result_url=result_url,
+        target_url=job.target_url,
+        http_status=http_status,
+        is_live=is_live,
+        brand_mentioned=brand_mentioned,
+        target_link_found=target_link_found,
+        link_attr=link_attr,
+        note=note,
+    )
 
 
 @router.post("/jobs/{job_id}/send", response_model=SendResultOut)

@@ -21,11 +21,14 @@ import {
   api,
   type AiAssist,
   type BacklinkGap,
+  type DistGuide,
   type DistJob,
   type DistProvider,
+  type PlacementCheck,
   type PlatformAccount,
   type PlatformConnector,
   type SourcePlatform,
+  type SourcePlatformSeed,
 } from "@/lib/api";
 
 const verifyLabel: Record<string, string> = {
@@ -200,6 +203,8 @@ export default function OffsitePage() {
     notes: "",
   });
   const [resultForms, setResultForms] = useState<Record<string, string>>({});
+  const [guides, setGuides] = useState<Record<string, DistGuide>>({});
+  const [placementChecks, setPlacementChecks] = useState<Record<string, PlacementCheck>>({});
 
   const stats = useMemo(() => {
     const activeOpportunities = gaps.filter((g) => !["won", "closed", "ignored", "skipped"].includes(g.status)).length;
@@ -352,6 +357,14 @@ export default function OffsitePage() {
     loadPlatforms();
   }
 
+  async function seedPlatforms() {
+    setError("");
+    setNote("");
+    const res = await api<SourcePlatformSeed>("/api/offsite/platforms/seed-b2b", { method: "POST" });
+    setPlatforms(res.platforms);
+    setNote(`已导入 ${res.created} 个 B2B 常用平台，跳过 ${res.skipped} 个已有平台。`);
+  }
+
   async function createAccount(e: FormEvent) {
     e.preventDefault();
     setError("");
@@ -385,6 +398,22 @@ export default function OffsitePage() {
       body: JSON.stringify({ result_url: resultUrl, verify_status: "pending", evidence: "人工提交 result_url，等待 Placement 核验。" }),
     });
     setNote("result_url 已记录，并已回写到原始站外机会。");
+    loadGaps();
+    loadDist();
+  }
+
+  async function loadGuide(jobId: string) {
+    setError("");
+    const guide = await api<DistGuide>(`/api/distribution/jobs/${jobId}/guide`);
+    setGuides({ ...guides, [jobId]: guide });
+  }
+
+  async function checkPlacement(jobId: string) {
+    setError("");
+    setNote("");
+    const checked = await api<PlacementCheck>(`/api/distribution/jobs/${jobId}/check-placement`, { method: "POST" });
+    setPlacementChecks({ ...placementChecks, [jobId]: checked });
+    setNote(checked.note);
     loadGaps();
     loadDist();
   }
@@ -689,6 +718,36 @@ export default function OffsitePage() {
                           </a>
                         ) : null}
                         {j.last_detail ? <p className="mt-2 text-xs leading-5 text-slate-500">{j.last_detail}</p> : null}
+                        {guides[j.id] ? (
+                          <div className="mt-3 grid gap-2 text-sm md:grid-cols-2">
+                            <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                              <div className="font-medium text-slate-900">执行材料</div>
+                              <ul className="mt-2 space-y-1 text-xs leading-5 text-slate-600">
+                                {guides[j.id].materials.map((item) => <li key={item}>- {item}</li>)}
+                              </ul>
+                            </div>
+                            <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                              <div className="font-medium text-slate-900">人工执行清单</div>
+                              <ul className="mt-2 space-y-1 text-xs leading-5 text-slate-600">
+                                {guides[j.id].checklist.map((item) => <li key={item}>- {item}</li>)}
+                              </ul>
+                            </div>
+                            <div className="rounded-md border border-amber-200 bg-amber-50 p-3 md:col-span-2">
+                              <div className="font-medium text-amber-900">边界提醒</div>
+                              <ul className="mt-2 space-y-1 text-xs leading-5 text-amber-800">
+                                {guides[j.id].risk_notes.map((item) => <li key={item}>- {item}</li>)}
+                              </ul>
+                            </div>
+                          </div>
+                        ) : null}
+                        {placementChecks[j.id] ? (
+                          <div className="mt-3 grid gap-2 text-xs text-slate-600 sm:grid-cols-4">
+                            <span className="rounded-md bg-slate-50 px-3 py-2">HTTP：{placementChecks[j.id].http_status ?? "未返回"}</span>
+                            <span className="rounded-md bg-slate-50 px-3 py-2">可访问：{placementChecks[j.id].is_live ? "是" : "否"}</span>
+                            <span className="rounded-md bg-slate-50 px-3 py-2">目标链接：{placementChecks[j.id].target_link_found ? "发现" : "未确认"}</span>
+                            <span className="rounded-md bg-slate-50 px-3 py-2">rel：{placementChecks[j.id].link_attr}</span>
+                          </div>
+                        ) : null}
                       </div>
                       <div className="flex shrink-0 flex-wrap gap-2 lg:max-w-xs">
                         <Input
@@ -699,6 +758,12 @@ export default function OffsitePage() {
                         />
                         <Button size="sm" variant="outline" onClick={() => submitResult(j)}>
                           记录结果 URL
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => loadGuide(j.id)}>
+                          执行指南
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => checkPlacement(j.id)}>
+                          核验 URL
                         </Button>
                         <Button size="sm" variant="outline" onClick={() => recordDistribution(j.id, false)}>
                           仅保存草稿
@@ -874,6 +939,17 @@ export default function OffsitePage() {
       {tab === "platforms" ? (
         <section className="grid gap-5 xl:grid-cols-[1fr_420px]">
           <div className="space-y-4">
+            <div className="rounded-md border border-slate-200 bg-white p-4">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <h2 className="font-semibold text-slate-950">B2B 平台资源库</h2>
+                  <p className="mt-1 text-sm leading-6 text-slate-500">
+                    先导入常用出口 B2B 站外源，再按客户行业补充垂直目录、协会、分销商和媒体。导入不会覆盖已有平台。
+                  </p>
+                </div>
+                <Button type="button" onClick={seedPlatforms}>导入 B2B 常用平台</Button>
+              </div>
+            </div>
             <div className="grid gap-3 lg:grid-cols-2">
               {platforms.map((p) => (
                 <Card key={p.id} className="rounded-md">

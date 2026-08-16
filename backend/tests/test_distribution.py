@@ -198,3 +198,101 @@ def test_platform_account_connector_and_manual_login_block(client: TestClient, d
     platforms = client.get("/api/offsite/platforms", headers=headers).json()
     assert platforms[0]["accounts_count"] == 1
     assert platforms[0]["connectors_count"] == 1
+
+
+def test_b2b_platform_seed_and_job_guide(client: TestClient, demo_user) -> None:
+    headers = auth_header(client)
+    seeded = client.post("/api/offsite/platforms/seed-b2b", headers=headers)
+    assert seeded.status_code == 200, seeded.text
+    assert seeded.json()["created"] >= 6
+    assert any(row["platform_key"] == "thomasnet" for row in seeded.json()["platforms"])
+
+    again = client.post("/api/offsite/platforms/seed-b2b", headers=headers)
+    assert again.status_code == 200
+    assert again.json()["created"] == 0
+    assert again.json()["skipped"] >= seeded.json()["created"]
+
+    platform = next(row for row in seeded.json()["platforms"] if row["platform_key"] == "engineering_media")
+    job = client.post(
+        "/api/distribution/jobs",
+        headers=headers,
+        json={
+            "platform_id": platform["id"],
+            "title": "媒体榜单 Pitch",
+            "target_url": "https://example.com/en/products",
+            "provider_key": "directory",
+            "task_type": "listicle_pitch",
+        },
+    )
+    assert job.status_code == 201, job.text
+    guide = client.get(f"/api/distribution/jobs/{job.json()['id']}/guide", headers=headers)
+    assert guide.status_code == 200, guide.text
+    assert guide.json()["submission_mode"] == "email_outreach"
+    assert any("pitch" in item.lower() for item in guide.json()["materials"])
+    assert any("人工" in item for item in guide.json()["risk_notes"])
+
+
+def test_placement_check_writes_back_to_offsite_issue(client: TestClient, demo_user, monkeypatch) -> None:
+    headers = auth_header(client)
+    gap = client.post(
+        "/api/offsite/gaps",
+        headers=headers,
+        json={
+            "title": "行业目录上线核验",
+            "competitor_name": "Competitor",
+            "referring_domain": "directory.example",
+            "priority": "P1",
+        },
+    )
+    assert gap.status_code == 201, gap.text
+    job = client.post(
+        "/api/distribution/jobs",
+        headers=headers,
+        json={
+            "gap_id": gap.json()["id"],
+            "title": "核验目录页",
+            "target_url": "https://example.com/en/products",
+            "provider_key": "directory",
+            "task_type": "profile_update",
+            "result_url": "https://directory.example/vendor",
+        },
+    )
+    assert job.status_code == 201, job.text
+
+    class FakeResponse:
+        status_code = 200
+        text = '<html><body>Example supplier <a href="https://example.com/en/products" rel="nofollow">official site</a></body></html>'
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def get(self, url: str):
+            assert url == "https://directory.example/vendor"
+            return FakeResponse()
+
+    from app.routers import distribution
+
+    monkeypatch.setattr(distribution.httpx, "Client", FakeClient)
+    checked = client.post(f"/api/distribution/jobs/{job.json()['id']}/check-placement", headers=headers)
+    assert checked.status_code == 200, checked.text
+    assert checked.json()["is_live"] is True
+    assert checked.json()["target_link_found"] is True
+    assert checked.json()["link_attr"] == "nofollow"
+
+    jobs = client.get("/api/distribution/jobs", headers=headers).json()
+    row = next(item for item in jobs if item["id"] == job.json()["id"])
+    assert row["status"] == "done"
+    assert row["verify_status"] == "live"
+
+    gaps = client.get("/api/offsite/gaps", headers=headers).json()
+    refreshed = next(item for item in gaps if item["id"] == gap.json()["id"])
+    assert refreshed["status"] == "won"
+    assert refreshed["verify_status"] == "valid"
+    assert "Placement check" in refreshed["evidence"]

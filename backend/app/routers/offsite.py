@@ -21,6 +21,7 @@ from app.schemas import (
     PlatformConnectorOut,
     SourcePlatformCreate,
     SourcePlatformOut,
+    SourcePlatformSeedOut,
 )
 
 router = APIRouter(prefix="/api/offsite", tags=["offsite"])
@@ -46,6 +47,113 @@ PRIORITIES = {"P0", "P1", "P2", "P3"}
 SUBMISSION_MODES = {"manual_login", "email_outreach", "form_public", "paid_placement", "api_none"}
 ACCOUNT_STATUSES = {"active", "needs_2fa", "locked", "expired", "banned", "retired"}
 AUTH_METHODS = {"password_vault", "sso", "oauth", "api_key_vault", "manual_only"}
+
+B2B_PLATFORM_SEEDS = [
+    {
+        "platform_key": "thomasnet",
+        "name": "ThomasNet",
+        "domain": "thomasnet.com",
+        "source_type": "directory",
+        "regions": "US, North America",
+        "industry_tags": "industrial, manufacturing, supplier discovery",
+        "base_url": "https://www.thomasnet.com/",
+        "listing_model": "directory_profile",
+        "submission_mode": "manual_login",
+        "risk_level": "medium",
+        "notes": "北美工业采购目录。适合供应商档案认领、品类补全、官网和认证信息一致性维护；不做自动登录提交。",
+    },
+    {
+        "platform_key": "globalspec",
+        "name": "GlobalSpec / Engineering360",
+        "domain": "globalspec.com",
+        "source_type": "directory",
+        "regions": "US, Global",
+        "industry_tags": "engineering, components, specifications",
+        "base_url": "https://www.globalspec.com/",
+        "listing_model": "directory_profile",
+        "submission_mode": "manual_login",
+        "risk_level": "medium",
+        "notes": "工程和技术产品检索源。优先核对供应商、规格、品类和官网链接。",
+    },
+    {
+        "platform_key": "industrynet",
+        "name": "IndustryNet",
+        "domain": "industrynet.com",
+        "source_type": "directory",
+        "regions": "US, North America",
+        "industry_tags": "industrial suppliers, RFQ",
+        "base_url": "https://www.industrynet.com/",
+        "listing_model": "directory_profile",
+        "submission_mode": "manual_login",
+        "risk_level": "medium",
+        "notes": "北美工业供应商发现源。适合 profile_create/profile_update，提交结果必须回填 result_url。",
+    },
+    {
+        "platform_key": "kompass",
+        "name": "Kompass",
+        "domain": "kompass.com",
+        "source_type": "directory",
+        "regions": "Global, EU",
+        "industry_tags": "global b2b, company directory",
+        "base_url": "https://www.kompass.com/",
+        "listing_model": "directory_profile",
+        "submission_mode": "manual_login",
+        "risk_level": "medium",
+        "notes": "全球 B2B 公司目录。适合出口企业多语种档案和品类描述核对。",
+    },
+    {
+        "platform_key": "europages",
+        "name": "Europages",
+        "domain": "europages.com",
+        "source_type": "marketplace",
+        "regions": "EU, Global",
+        "industry_tags": "europe b2b, exporter",
+        "base_url": "https://www.europages.com/",
+        "listing_model": "marketplace",
+        "submission_mode": "manual_login",
+        "risk_level": "medium",
+        "notes": "欧洲 B2B 平台。适合 profile_update、product_listing，多语种内容必须人工终审。",
+    },
+    {
+        "platform_key": "mfg",
+        "name": "MFG.com",
+        "domain": "mfg.com",
+        "source_type": "marketplace",
+        "regions": "US, Global",
+        "industry_tags": "custom manufacturing, RFQ, machining",
+        "base_url": "https://www.mfg.com/",
+        "listing_model": "marketplace",
+        "submission_mode": "manual_login",
+        "risk_level": "medium",
+        "notes": "定制制造和 RFQ 平台。更偏获客与能力露出，不把提交视为 SEO 提升保证。",
+    },
+    {
+        "platform_key": "engineering_media",
+        "name": "Engineering / Industrial Media",
+        "domain": "engineering.com",
+        "source_type": "media",
+        "regions": "US, Global",
+        "industry_tags": "media, listicle, PR, roundup",
+        "base_url": "https://www.engineering.com/",
+        "listing_model": "media",
+        "submission_mode": "email_outreach",
+        "risk_level": "high",
+        "notes": "行业媒体、榜单、测评和 PR 入口的代表资源。只生成 pitch/媒体包草稿，必须人工发送和终审。",
+    },
+    {
+        "platform_key": "distributor_pages",
+        "name": "Distributor / Partner Pages",
+        "domain": "",
+        "source_type": "distributor",
+        "regions": "Target markets",
+        "industry_tags": "dealer, distributor, partner, reseller",
+        "base_url": "",
+        "listing_model": "distributor",
+        "submission_mode": "email_outreach",
+        "risk_level": "low",
+        "notes": "客户真实分销商、代理商、合作伙伴页面。重点是品牌名、官网链接、型号和描述一致性。",
+    },
+]
 
 
 def _platform_out(row: SourcePlatform) -> SourcePlatformOut:
@@ -204,6 +312,32 @@ def create_platform(
         .one()
     )
     return _platform_out(row)
+
+
+@router.post("/platforms/seed-b2b", response_model=SourcePlatformSeedOut)
+def seed_b2b_platforms(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> SourcePlatformSeedOut:
+    created = 0
+    skipped = 0
+    for item in B2B_PLATFORM_SEEDS:
+        exists = (
+            db.query(SourcePlatform)
+            .filter(SourcePlatform.tenant_id == user.tenant_id, SourcePlatform.platform_key == item["platform_key"])
+            .first()
+        )
+        if exists:
+            skipped += 1
+            continue
+        db.add(SourcePlatform(tenant_id=user.tenant_id, has_official_api=False, status="active", **item))
+        created += 1
+    db.commit()
+    rows = (
+        db.query(SourcePlatform)
+        .options(selectinload(SourcePlatform.accounts), selectinload(SourcePlatform.connectors))
+        .filter(SourcePlatform.tenant_id == user.tenant_id)
+        .order_by(SourcePlatform.status, SourcePlatform.name)
+        .all()
+    )
+    return SourcePlatformSeedOut(created=created, skipped=skipped, platforms=[_platform_out(row) for row in rows])
 
 
 @router.get("/accounts", response_model=list[PlatformAccountOut])

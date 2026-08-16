@@ -1292,6 +1292,29 @@ class DistributionSubmitResultIn(BaseModel):
     verify_status: str = "pending"
 
 
+class DistributionGuideOut(BaseModel):
+    job_id: str
+    platform_name: str = ""
+    submission_mode: str = ""
+    task_type: str = ""
+    materials: list[str] = []
+    checklist: list[str] = []
+    risk_notes: list[str] = []
+    placement_checks: list[str] = []
+
+
+class PlacementCheckOut(BaseModel):
+    job_id: str
+    result_url: str
+    target_url: str = ""
+    http_status: int | None = None
+    is_live: bool = False
+    brand_mentioned: bool = False
+    target_link_found: bool = False
+    link_attr: str = "unknown"
+    note: str
+
+
 class ExecutionItemOut(BaseModel):
     id: str
     source_module: str
@@ -1338,6 +1361,12 @@ class SourcePlatformOut(SourcePlatformCreate):
     id: str
     accounts_count: int = 0
     connectors_count: int = 0
+
+
+class SourcePlatformSeedOut(BaseModel):
+    created: int
+    skipped: int
+    platforms: list[SourcePlatformOut] = []
 
 
 class PlatformAccountCreate(BaseModel):

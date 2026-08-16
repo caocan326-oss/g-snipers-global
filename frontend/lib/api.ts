@@ -875,6 +875,29 @@ export type DistJob = {
   last_checked_at: string | null;
 };
 
+export type DistGuide = {
+  job_id: string;
+  platform_name: string;
+  submission_mode: string;
+  task_type: string;
+  materials: string[];
+  checklist: string[];
+  risk_notes: string[];
+  placement_checks: string[];
+};
+
+export type PlacementCheck = {
+  job_id: string;
+  result_url: string;
+  target_url: string;
+  http_status: number | null;
+  is_live: boolean;
+  brand_mentioned: boolean;
+  target_link_found: boolean;
+  link_attr: string;
+  note: string;
+};
+
 export type ExecutionItem = {
   id: string;
   source_module: string;
@@ -918,6 +941,12 @@ export type SourcePlatform = {
   notes: string;
   accounts_count: number;
   connectors_count: number;
+};
+
+export type SourcePlatformSeed = {
+  created: number;
+  skipped: number;
+  platforms: SourcePlatform[];
 };
 
 export type PlatformAccount = {
