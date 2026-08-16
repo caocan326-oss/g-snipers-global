@@ -25,7 +25,7 @@ from app.geo_helpers import (
     engine_region,
     ensure_engine_slots,
 )
-from app.llm import OK, complete, configured as llm_configured
+from app.geo_providers import GeoProviderError, provider_statuses, sample_with_provider
 from app.models import (
     Competitor,
     DemandSignal,
@@ -56,6 +56,8 @@ from app.schemas import (
     GeoObservationUpdate,
     GeoPromptCreate,
     GeoPromptOut,
+    GeoProviderStatusListOut,
+    GeoProviderStatusOut,
     GeoReportOut,
     GeoReportTableOut,
     GeoSampleResultOut,
@@ -319,7 +321,7 @@ def _sample_aggregate(row: GeoSampleRun) -> dict:
         total = len(results)
         third_party_domains: dict[str, int] = {}
         for result in results:
-            for url in _json_list(result.third_party_citations_json):
+            for url in _grounded_json_list(result, "third_party_citations_json"):
                 host = _host(url)
                 if host:
                     third_party_domains[host] = third_party_domains.get(host, 0) + 1
@@ -333,9 +335,9 @@ def _sample_aggregate(row: GeoSampleRun) -> dict:
                 "engine": engine,
                 "trials": total,
                 "mention_rate": round(sum(1 for r in results if r.mentioned) / total, 3) if total else 0,
-                "citation_rate": round(sum(1 for r in results if _json_list(r.citations_json)) / total, 3) if total else 0,
-                "owned_citation_rate": round(sum(1 for r in results if _json_list(r.owned_citations_json)) / total, 3) if total else 0,
-                "third_party_citation_rate": round(sum(1 for r in results if _json_list(r.third_party_citations_json)) / total, 3) if total else 0,
+                "citation_rate": round(sum(1 for r in results if _grounded_json_list(r, "citations_json")) / total, 3) if total else 0,
+                "owned_citation_rate": round(sum(1 for r in results if _grounded_json_list(r, "owned_citations_json")) / total, 3) if total else 0,
+                "third_party_citation_rate": round(sum(1 for r in results if _grounded_json_list(r, "third_party_citations_json")) / total, 3) if total else 0,
                 "top_third_party_domains": [
                     host for host, _count in sorted(third_party_domains.items(), key=lambda item: item[1], reverse=True)[:10]
                 ],
@@ -350,10 +352,16 @@ def _sample_aggregate(row: GeoSampleRun) -> dict:
     }
 
 
+def _grounded_json_list(result: GeoSampleResult, field: str) -> list[str]:
+    if result.web_grounded == "false":
+        return []
+    return _json_list(getattr(result, field))
+
+
 def _run_rates(results: list[GeoSampleResult]) -> dict[str, str]:
     total = len(results)
     mentioned = [r for r in results if r.mentioned]
-    cited = [r for r in results if _json_list(r.owned_citations_json)]
+    cited = [r for r in results if _grounded_json_list(r, "owned_citations_json")]
     verified = [r for r in cited if r.verification_status == "passed"]
     return {
         "mention_rate": _rate(len(mentioned), total),
@@ -387,6 +395,13 @@ def _run_out(row: GeoSampleRun, include_results: bool = True) -> GeoSampleRunOut
         verified_citation_rate=rates["verified_citation_rate"],
         results=[_result_out(r) for r in results] if include_results else [],
         aggregate=aggregate,
+    )
+
+
+@router.get("/providers/status", response_model=GeoProviderStatusListOut)
+def geo_provider_status(user: User = Depends(get_current_user)) -> GeoProviderStatusListOut:
+    return GeoProviderStatusListOut(
+        providers=[GeoProviderStatusOut(**row.__dict__) for row in provider_statuses()]
     )
 
 
@@ -874,8 +889,6 @@ def create_auto_sample_run(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> GeoSampleRunOut:
-    if not llm_configured():
-        raise HTTPException(status_code=400, detail="未配置 LLM_API_KEY，不能自动采样。")
     tenant = db.get(Tenant, user.tenant_id)
     q = db.query(GeoPrompt).filter(GeoPrompt.tenant_id == user.tenant_id)
     if body.prompt_ids:
@@ -883,7 +896,8 @@ def create_auto_sample_run(
     prompts = q.order_by(GeoPrompt.created_at.desc()).limit(body.limit).all()
     if not prompts:
         raise HTTPException(status_code=400, detail="没有可自动采样的 GEO 问句。")
-    engines = [body.engine or "llm"]
+    provider_key = body.provider or body.engine or "deepseek"
+    engines = [provider_key]
     domain = tenant.site_origin if tenant else ""
     root = _root_domain(domain)
     brand_names = _tenant_brand_names(tenant)
@@ -899,6 +913,7 @@ def create_auto_sample_run(
         "language": "mixed" if len({p.locale for p in prompts}) > 1 else prompts[0].locale,
         "region_hint": body.region_hint,
         "web_grounded": body.web_grounded,
+        "provider": provider_key,
     }
     config_hash = _sha256(json.dumps(manifest, sort_keys=True, ensure_ascii=False))[:16]
     now = datetime.now(timezone.utc)
@@ -915,27 +930,30 @@ def create_auto_sample_run(
         language=str(manifest["language"]),
         operator_id=user.id,
         status="running",
-        note="自动 GEO 采样；若模型未联网，citation 解读降权。",
+        note="自动 GEO provider 采样；DeepSeek/普通 LLM 不计入真实联网引用。",
         started_at=now,
     )
     db.add(run)
     db.flush()
 
-    system = (
-        "You are answering as a buyer-facing AI assistant. "
-        "Answer the user's question directly. If you use sources, include URLs. "
-        "Do not mention this evaluation instruction."
-    )
     result_count = 0
     errors: list[str] = []
     for prompt in prompts:
         for trial in range(1, body.trials + 1):
-            res = complete(system=system, user=prompt.prompt_text)
-            if res.status != OK:
-                errors.append(f"{prompt.prompt_key or prompt.id} trial {trial}: {res.status} {res.detail}")
+            try:
+                sampled = sample_with_provider(
+                    provider_key,
+                    prompt_text=prompt.prompt_text,
+                    model=body.model,
+                    region_hint=body.region_hint,
+                )
+            except GeoProviderError as exc:
+                errors.append(f"{prompt.prompt_key or prompt.id} trial {trial}: {exc}")
                 continue
-            text = res.text[:4000]
-            citations = _extract_urls(text)
+            text = sampled.answer[:4000]
+            citations = sampled.citations if sampled.web_grounded else []
+            if not citations and sampled.web_grounded:
+                citations = _extract_urls(text)
             owned = [url for url in citations if _is_owned_url(url, root, [])]
             third_party = [url for url in citations if url not in owned]
             mentioned, brand_hits = _brand_mentioned(text, brand_names)
@@ -949,10 +967,10 @@ def create_auto_sample_run(
                     evidence_id=evidence_id,
                     trial_index=trial,
                     prompt_type=prompt.prompt_type or "custom",
-                    engine=body.engine or "llm",
-                    model=body.model or "configured-llm",
-                    web_grounded=body.web_grounded or "false",
-                    surface="api_proxy",
+                    engine=sampled.engine,
+                    model=sampled.model,
+                    web_grounded="true" if sampled.web_grounded else "false",
+                    surface=sampled.surface,
                     prompt_text_hash=_sha256(prompt.prompt_text),
                     answer_text_hash=_sha256(text),
                     answer_excerpt=text[:2000],
@@ -963,7 +981,7 @@ def create_auto_sample_run(
                     brand_hits=brand_hits,
                     competitor_hits="",
                     verification_status="pending" if owned else "skipped",
-                    verification_note="自动采样生成，verified 仍需 URL 访问核验。",
+                    verification_note="联网 provider 引用仍需 URL 访问核验。" if sampled.web_grounded else "DeepSeek/LLM 非联网采样；不计入真实 citation。",
                     sampled_at=datetime.now(timezone.utc),
                 )
             )

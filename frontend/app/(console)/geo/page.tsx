@@ -1,6 +1,6 @@
 "use client";
 
-import { Download, Wand2 } from "lucide-react";
+import { Activity, Database, Download, FileText, Globe2, ShieldCheck, Wand2 } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +14,7 @@ import {
   type GeoAsset,
   type GeoChecklistItem,
   type GeoPrompt,
+  type GeoProviderStatusList,
   type GeoReport,
   type GeoReportTable,
   type GeoSampleRun,
@@ -63,6 +64,13 @@ const ticketStatus: Record<string, string> = {
   reopened: "已重开",
 };
 
+const providerRoleLabel: Record<string, string> = {
+  analysis: "分析建议",
+  search: "联网搜索",
+  citation: "引用来源",
+  crawler: "抓取证据",
+};
+
 export default function GeoPage() {
   const [tab, setTab] = useState<"sample" | "tickets" | "assets">("sample");
   const [prompts, setPrompts] = useState<GeoPrompt[]>([]);
@@ -70,6 +78,7 @@ export default function GeoPage() {
   const [targets, setTargets] = useState<ProjectTargets | null>(null);
   const [tickets, setTickets] = useState<GeoTicket[]>([]);
   const [runs, setRuns] = useState<GeoSampleRun[]>([]);
+  const [providers, setProviders] = useState<GeoProviderStatusList | null>(null);
   const [assets, setAssets] = useState<GeoAsset[]>([]);
   const [pages, setPages] = useState<SeoPage[]>([]);
   const [pageId, setPageId] = useState("");
@@ -112,6 +121,7 @@ export default function GeoPage() {
     loadAssets();
     api<SeoPage[]>("/api/seo-pages").then(setPages).catch(() => undefined);
     api<ProjectTargets>("/api/project-targets").then(setTargets).catch(() => undefined);
+    api<GeoProviderStatusList>("/api/geo/providers/status").then(setProviders).catch(() => undefined);
   }, []);
 
   async function aiPrompt(id: string) {
@@ -197,13 +207,13 @@ export default function GeoPage() {
     try {
       const run = await api<GeoSampleRun>("/api/geo/sample-runs/from-observations", {
         method: "POST",
-        body: JSON.stringify({ note: "从当前人工 GEO 观测生成证据运行。" }),
+        body: JSON.stringify({ note: "从当前人工 GEO 观测固化一批可追溯证据。" }),
       });
-      setNote(`已生成证据运行 ${run.id}，包含 ${run.results_count} 条证据，config hash ${run.config_hash}。`);
+      setNote(`已固化一批 GEO 证据：${run.results_count} 条记录，批次 ${run.id}，配置指纹 ${run.config_hash}。`);
       loadPrompts();
       loadRuns();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "生成证据运行失败");
+      setError(e instanceof Error ? e.message : "固化证据失败");
     } finally {
       setBusyAction("");
     }
@@ -233,13 +243,14 @@ export default function GeoPage() {
         method: "POST",
         body: JSON.stringify({
           engine: "llm",
+          provider: "deepseek",
           trials: 1,
           limit: 8,
           web_grounded: "false",
           region_hint: "API",
         }),
       });
-      setNote(`自动采样完成：run ${run.id}，证据 ${run.results_count} 条。若模型未联网，citation 仅作低权重观测。`);
+      setNote(`DeepSeek 采样完成：run ${run.id}，证据 ${run.results_count} 条。该结果用于判断品牌是否被提及，不计入真实联网引用率。`);
       loadRuns();
       loadPrompts();
     } catch (e) {
@@ -344,7 +355,7 @@ export default function GeoPage() {
               <div className="mt-3 grid gap-2">
                 <Textarea
                   className="min-h-[72px]"
-                  placeholder="回答摘录：粘贴 AI 答案里和客户/竞品/来源相关的片段"
+                  placeholder="回答摘录：粘贴 AI 答案里提到客户、竞品或引用来源的片段"
                   defaultValue={o.response_excerpt || ""}
                   onBlur={(e) => setObs(o.id, o.status, { response_excerpt: e.target.value })}
                 />
@@ -366,7 +377,7 @@ export default function GeoPage() {
                   />
                 </div>
                 <Input
-                  placeholder="解释备注：例如 consumer_scrape / web_rank / api_proxy，不混同口径"
+                  placeholder="备注：说明这条证据来自人工记录、AI 回答、搜索结果或其他来源"
                   defaultValue={o.interpretation_note || o.notes || ""}
                   onBlur={(e) => setObs(o.id, o.status, { interpretation_note: e.target.value, notes: e.target.value })}
                 />
@@ -380,44 +391,94 @@ export default function GeoPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">GEO Prompt Lab</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          围绕客户目标国家、关键词和竞品生成买家问句，人工记录真实 AI 采样。正文提及、引用、已核验引用分开计算。
-        </p>
-      </div>
-
-      <div className="space-y-2">
-        <div className="flex flex-wrap gap-2">
+      <section className="rounded-md border border-slate-200 bg-white px-5 py-4 shadow-sm">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge tone="brand">GEO 可见度诊断</Badge>
+              <Badge tone={summary?.recorded ? "green" : "amber"}>{summary?.recorded ? "已有观测" : "待采样"}</Badge>
+              <Badge tone="blue">geo-test-protocol-v1</Badge>
+            </div>
+            <h1 className="mt-3 text-2xl font-semibold text-slate-950">GEO 可见度与引用证据</h1>
+            <p className="mt-1 max-w-4xl text-sm leading-6 text-slate-500">
+              用买家真实会问的问题测试 AI 是否提到客户、是否引用客户官网、是否被竞品压制。非联网 AI 结果只作为分析参考，不计入真实引用率。
+            </p>
+          </div>
+          <div className="grid w-full gap-2 text-sm md:grid-cols-3 xl:w-[560px]">
+            <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+              <div className="flex items-center gap-2 text-xs text-slate-500"><Activity className="h-4 w-4" />最近采样</div>
+              <div className="mt-1 truncate font-mono text-xs font-medium text-slate-900">{summary?.latest_run_id ?? "暂无"}</div>
+            </div>
+            <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+              <div className="flex items-center gap-2 text-xs text-slate-500"><Database className="h-4 w-4" />证据条目</div>
+              <div className="mt-1 font-medium text-slate-900">{summary?.evidence_results ?? 0}</div>
+            </div>
+            <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+              <div className="flex items-center gap-2 text-xs text-slate-500"><ShieldCheck className="h-4 w-4" />核验引用</div>
+              <div className="mt-1 font-medium text-slate-900">{summary?.verified_citation_rate ?? "未测"}</div>
+            </div>
+          </div>
+        </div>
+        <div className="mt-4 flex flex-wrap gap-2">
           <Button size="sm" onClick={seedPromptPanel} disabled={busyAction === "seed-prompts"}>
             <Wand2 className="mr-2 h-4 w-4" />
-            {busyAction === "seed-prompts" ? "生成中…" : "从 SEO 目标生成问句"}
+            {busyAction === "seed-prompts" ? "生成中…" : "生成买家问题"}
           </Button>
           <Button size="sm" variant="outline" onClick={createEvidenceRun} disabled={busyAction === "evidence-run"}>
-            {busyAction === "evidence-run" ? "生成中…" : "生成证据运行"}
+            {busyAction === "evidence-run" ? "整理中…" : "固化当前证据"}
           </Button>
           <Button size="sm" variant="outline" onClick={draftTicketsFromEvidence} disabled={busyAction === "draft-tickets"}>
-            {busyAction === "draft-tickets" ? "生成中…" : "从证据生成工单"}
+            {busyAction === "draft-tickets" ? "生成中…" : "生成整改工单"}
           </Button>
           <Button size="sm" onClick={runAutoSample} disabled={busyAction === "auto-sample"}>
-            {busyAction === "auto-sample" ? "采样中…" : "自动采样一轮"}
+            <Globe2 className="mr-2 h-4 w-4" />
+            {busyAction === "auto-sample" ? "采样中…" : "DeepSeek 采样"}
           </Button>
           <Button size="sm" variant="outline" onClick={downloadGeoReport}>
-            <Download className="mr-2 h-4 w-4" />
-            导出报告
+            <FileText className="mr-2 h-4 w-4" />
+            导出 GEO 报告
           </Button>
           <Button size="sm" variant="outline" onClick={downloadGeoTable}>
             <Download className="mr-2 h-4 w-4" />
-            导出证据表
+            导出证据表格
           </Button>
         </div>
-        {note ? <p className="text-sm text-emerald-700">{note}</p> : null}
-        {error ? <p className="text-sm text-red-600">{error}</p> : null}
-      </div>
+        {note ? <p className="mt-3 text-sm text-emerald-700">{note}</p> : null}
+        {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
+      </section>
 
       <Card className="rounded-md">
         <CardHeader>
-          <CardTitle>GEO 测试目标</CardTitle>
+          <CardTitle>AI 数据源与可信边界</CardTitle>
+          <p className="mt-1 text-sm text-slate-500">
+            DeepSeek 负责分析和建议；只有联网搜索类数据源返回引用来源时，才计入“真实引用”。
+          </p>
+        </CardHeader>
+        <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+          {(providers?.providers ?? []).map((provider) => (
+            <div key={provider.key} className="rounded-md border border-slate-200 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="truncate text-sm font-medium text-slate-800">{provider.label}</div>
+                <Badge tone={provider.configured ? "green" : "amber"}>
+                  {provider.configured ? "已配置" : "未配置"}
+                </Badge>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <Badge tone={provider.web_grounded ? "blue" : "default"}>
+                  {provider.web_grounded ? "可产生联网引用" : "分析参考"}
+                </Badge>
+                <Badge tone={provider.role === "analysis" ? "brand" : "default"}>{providerRoleLabel[provider.role] ?? provider.role}</Badge>
+              </div>
+              <p className="mt-2 line-clamp-3 text-xs text-slate-500">{provider.note}</p>
+              <p className="mt-2 text-[11px] text-slate-400">配置项：{provider.env_var}</p>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
+      <Card className="rounded-md">
+        <CardHeader>
+          <CardTitle>GEO 观测目标</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-3 lg:grid-cols-3">
           <div className="rounded-md border border-slate-200 p-3">
@@ -432,7 +493,7 @@ export default function GeoPage() {
             </div>
           </div>
           <div className="rounded-md border border-slate-200 p-3">
-            <div className="text-xs font-medium text-slate-500">问句来源关键词</div>
+            <div className="text-xs font-medium text-slate-500">问题来源搜索词</div>
             <div className="mt-2 flex flex-wrap gap-2">
               {(targets?.markets.flatMap((market) => market.demand_signals) ?? []).slice(0, 8).map((signal) => (
                 <Badge key={signal.id} tone="blue">{signal.theme}</Badge>
@@ -501,13 +562,13 @@ export default function GeoPage() {
       <div className="grid gap-3 md:grid-cols-3">
         <Card className="rounded-md">
           <CardContent className="flex items-center justify-between py-4 text-sm">
-            <span className="text-slate-500">证据运行</span>
+            <span className="text-slate-500">采样批次</span>
             <span className="font-semibold text-slate-900">{summary?.sample_runs ?? 0}</span>
           </CardContent>
         </Card>
         <Card className="rounded-md">
           <CardContent className="flex items-center justify-between py-4 text-sm">
-            <span className="text-slate-500">证据条目</span>
+            <span className="text-slate-500">证据记录</span>
             <span className="font-semibold text-slate-900">{summary?.evidence_results ?? 0}</span>
           </CardContent>
         </Card>
@@ -521,8 +582,8 @@ export default function GeoPage() {
 
       <Card className="rounded-md">
         <CardHeader>
-          <CardTitle>证据运行记录</CardTitle>
-          <p className="text-sm text-slate-500">正式报告里的引用类结论，需要绑定 run_id、evidence_id、hash 和核验状态。</p>
+          <CardTitle>采样批次记录</CardTitle>
+          <p className="text-sm text-slate-500">正式报告里的引用结论必须能追溯到采样批次、证据编号、配置 hash 和核验状态。</p>
         </CardHeader>
         <CardContent className="space-y-3">
           {runs.length ? runs.map((run) => (
@@ -537,7 +598,7 @@ export default function GeoPage() {
                 <Badge tone={run.status === "done" ? "green" : "amber"}>{run.status}</Badge>
               </div>
               <div className="mt-3 grid gap-2 text-xs text-slate-600 md:grid-cols-4">
-                <div>config hash：<span className="font-mono">{run.config_hash}</span></div>
+                <div>配置指纹：<span className="font-mono">{run.config_hash}</span></div>
                 <div>提及：{run.mention_rate}</div>
                 <div>自有引用：{run.cite_rate}</div>
                 <div>核验引用：{run.verified_citation_rate}</div>
@@ -550,19 +611,19 @@ export default function GeoPage() {
                 ))}
               </div>
             </div>
-          )) : <p className="text-sm text-slate-500">暂无证据运行。记录一条观测后，可以点击“生成证据运行”。</p>}
+          )) : <p className="text-sm text-slate-500">暂无采样批次。记录一条观测后，可以点击“固化当前证据”。</p>}
         </CardContent>
       </Card>
 
       <div className="flex gap-2">
         <Button size="sm" variant={tab === "sample" ? "default" : "outline"} onClick={() => setTab("sample")}>
-          采样
+          问句采样
         </Button>
         <Button size="sm" variant={tab === "tickets" ? "default" : "outline"} onClick={() => setTab("tickets")}>
-          工单验收
+          整改验收
         </Button>
         <Button size="sm" variant={tab === "assets" ? "default" : "outline"} onClick={() => setTab("assets")}>
-          资产（llms.txt / 可引用）
+          可引用资产
         </Button>
       </div>
 
@@ -573,7 +634,7 @@ export default function GeoPage() {
               <CardHeader>
                 <CardTitle className="text-base">{p.prompt_text}</CardTitle>
                 <p className="text-xs text-slate-500">
-                  {p.prompt_key || "custom"} · {p.prompt_type || "custom"} · {p.prompt_pack_id || "custom"} · {p.locale} · 提及 {p.mention_rate ?? "未测"} · 引用 {p.cite_rate ?? "未测"} · 核验 {p.verified_citation_rate ?? "未测"} · 竞品 {p.competitor_rate ?? "未测"}
+                  来源 {p.prompt_key || "自定义"} · 类型 {p.prompt_type || "自定义"} · 问题组 {p.prompt_pack_id || "自定义"} · {p.locale} · 提及 {p.mention_rate ?? "未测"} · 引用 {p.cite_rate ?? "未测"} · 核验 {p.verified_citation_rate ?? "未测"} · 竞品 {p.competitor_rate ?? "未测"}
                 </p>
                 {p.evidence ? <pre className="mt-2 whitespace-pre-wrap text-xs text-slate-500">{p.evidence}</pre> : null}
                 <div className="mt-2 flex items-center gap-2">
@@ -595,20 +656,20 @@ export default function GeoPage() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
-                {slotGroup(p, "western", "西方引擎")}
-                {slotGroup(p, "china", "中国引擎（可手填，未测即可）")}
+                {slotGroup(p, "western", "海外 AI / 搜索引擎")}
+                {slotGroup(p, "china", "中国 AI / 搜索引擎（可手工记录）")}
               </CardContent>
             </Card>
           ))}
           <Card>
             <CardHeader>
-              <CardTitle>加入采样问句</CardTitle>
+              <CardTitle>新增买家问题</CardTitle>
             </CardHeader>
             <CardContent>
               <form className="grid gap-3 md:grid-cols-3" onSubmit={addPrompt}>
                 <Input
                   className="md:col-span-2"
-                  placeholder="买家会问模型的原句"
+                  placeholder="例如：Which supplier is reliable for industrial pumps in the US?"
                   value={form.prompt_text}
                   onChange={(e) => setForm({ ...form, prompt_text: e.target.value })}
                   required
@@ -663,7 +724,7 @@ export default function GeoPage() {
           ))}
           <Card>
             <CardHeader>
-              <CardTitle>从问句开验收工单</CardTitle>
+              <CardTitle>从问题生成整改工单</CardTitle>
             </CardHeader>
             <CardContent>
               <form className="space-y-3" onSubmit={addTicket}>
@@ -673,7 +734,7 @@ export default function GeoPage() {
                   onChange={(e) => setTicketForm({ ...ticketForm, prompt_id: e.target.value })}
                   required
                 >
-                  <option value="">选择问句</option>
+                  <option value="">选择买家问题</option>
                   {prompts.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.prompt_text}
@@ -681,7 +742,7 @@ export default function GeoPage() {
                   ))}
                 </select>
                 <Input
-                  placeholder="工单标题"
+                  placeholder="整改任务标题"
                   value={ticketForm.title}
                   onChange={(e) => setTicketForm({ ...ticketForm, title: e.target.value })}
                   required
@@ -698,16 +759,16 @@ export default function GeoPage() {
                   ))}
                 </select>
                 <Textarea
-                  placeholder="理由"
+                  placeholder="为什么需要整改"
                   value={ticketForm.rationale}
                   onChange={(e) => setTicketForm({ ...ticketForm, rationale: e.target.value })}
                 />
                 <Textarea
-                  placeholder="验收标准（不要写「已让引擎引用」）"
+                  placeholder="验收标准，例如：页面已补充可引用信息，并完成复测"
                   value={ticketForm.acceptance_criteria}
                   onChange={(e) => setTicketForm({ ...ticketForm, acceptance_criteria: e.target.value })}
                 />
-                <Button type="submit">开工单</Button>
+                <Button type="submit">创建整改工单</Button>
               </form>
             </CardContent>
           </Card>
@@ -720,7 +781,7 @@ export default function GeoPage() {
             <CardHeader className="flex flex-row items-center justify-between">
               <div>
                 <CardTitle>llms.txt 草稿</CardTitle>
-                <p className="mt-1 text-sm text-slate-500">本链资产，不是 SoV 看板。不会自动挂到客户域名。</p>
+                <p className="mt-1 text-sm text-slate-500">这是给 AI 理解网站用的可引用资产草稿，不会自动发布到客户域名。</p>
               </div>
               <Button variant="outline" onClick={generateLlms}>
                 按选题生成
@@ -737,7 +798,7 @@ export default function GeoPage() {
                     onBlur={(e) => saveAsset(llms.id, e.target.value)}
                   />
                   <Button variant="outline" onClick={() => aiAsset(llms.id)}>
-                    AI 改稿
+                    AI 优化草稿
                   </Button>
                   <Button onClick={() => readyAsset(llms.id)}>我已确认，标记可交付</Button>
                 </>
@@ -763,7 +824,7 @@ export default function GeoPage() {
           ) : null}
           <Card>
             <CardHeader>
-              <CardTitle>挂在选题上的勾选</CardTitle>
+              <CardTitle>内容可引用性检查</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               <select

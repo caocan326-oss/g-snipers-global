@@ -67,9 +67,9 @@ export default function SeoListPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">多语言 SEO 工作台</h1>
+        <h1 className="text-2xl font-semibold">SEO 内容生产</h1>
         <p className="mt-1 text-sm text-slate-500">
-          执行链路：选题 → 大纲 → 正文 → Meta → 审核 → 人工确认可交付。不是诊断工具，也不会自动发布到站点。
+          面向目标市场生产 SEO 内容资产：选题、大纲、正文、Meta 和审核分步推进。这里不会自动发布到客户网站。
         </p>
       </div>
 
@@ -119,19 +119,19 @@ export default function SeoListPage() {
         <CardContent>
           <form className="grid gap-3 md:grid-cols-5" onSubmit={onCreate}>
             <Input
-              placeholder="标题"
+              placeholder="内容标题"
               value={form.title}
               onChange={(e) => setForm({ ...form, title: e.target.value })}
               required
             />
             <Input
-              placeholder="目标关键词"
+              placeholder="目标搜索词"
               value={form.target_keyword}
               onChange={(e) => setForm({ ...form, target_keyword: e.target.value })}
               required
             />
             <Input
-              placeholder="语言 locale"
+              placeholder="语言，例如 en-US"
               value={form.locale}
               onChange={(e) => setForm({ ...form, locale: e.target.value })}
             />
@@ -140,14 +140,14 @@ export default function SeoListPage() {
               value={form.market_id}
               onChange={(e) => setForm({ ...form, market_id: e.target.value })}
             >
-              <option value="">不绑定市场</option>
+              <option value="">暂不绑定市场</option>
               {markets.map((m) => (
                 <option key={m.id} value={m.id}>
                   {m.name}
                 </option>
               ))}
             </select>
-            <Button type="submit">进入编辑</Button>
+            <Button type="submit">创建并编辑</Button>
           </form>
           {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
         </CardContent>

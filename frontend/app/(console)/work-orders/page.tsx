@@ -9,15 +9,15 @@ import { Input } from "@/components/ui/input";
 import { api, type WorkOrder } from "@/lib/api";
 
 const typeLabel: Record<string, string> = {
-  insight: "洞察",
+  insight: "市场线索",
   seo_outline: "SEO 大纲",
   seo_draft: "SEO 正文",
   seo_meta: "SEO Meta",
   geo_monitor: "GEO 监测",
   geo_asset: "GEO 资产",
-  onsite: "站内",
-  offsite: "站外",
-  distribution: "分发",
+  onsite: "SEO 整改",
+  offsite: "站外曝光",
+  distribution: "内容分发",
   other: "其他",
 };
 
@@ -64,9 +64,9 @@ export default function WorkOrdersPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">工单</h1>
+        <h1 className="text-2xl font-semibold">交付工单</h1>
         <p className="mt-1 text-sm text-slate-500">
-          支撑洞察调研与 SEO 执行（大纲 / 正文 / Meta）。类型仅限工作台需要的几种。
+          把诊断结论拆成可领取、可执行、可验收的任务，覆盖 SEO 整改、GEO 可见度、内容资产和站外跟进。
         </p>
       </div>
 
@@ -116,12 +116,12 @@ export default function WorkOrdersPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>新建工单</CardTitle>
+          <CardTitle>新建交付工单</CardTitle>
         </CardHeader>
         <CardContent>
           <form className="grid gap-3 md:grid-cols-4" onSubmit={create}>
             <Input
-              placeholder="标题"
+              placeholder="任务标题"
               value={form.title}
               onChange={(e) => setForm({ ...form, title: e.target.value })}
               required
@@ -138,11 +138,11 @@ export default function WorkOrdersPage() {
               ))}
             </select>
             <Input
-              placeholder="验收标准"
+              placeholder="验收标准，例如：已上线并完成复测"
               value={form.acceptance_criteria}
               onChange={(e) => setForm({ ...form, acceptance_criteria: e.target.value })}
             />
-            <Button type="submit">创建</Button>
+            <Button type="submit">创建工单</Button>
           </form>
           {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
         </CardContent>

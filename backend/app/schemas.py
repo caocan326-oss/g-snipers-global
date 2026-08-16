@@ -521,11 +521,28 @@ class GeoSampleRunCreate(BaseModel):
 class GeoAutoSampleIn(BaseModel):
     prompt_ids: list[str] = []
     engine: str = "llm"
+    provider: str = "deepseek"
     model: str = ""
     trials: int = Field(default=1, ge=1, le=3)
     limit: int = Field(default=8, ge=1, le=30)
     region_hint: str = ""
     web_grounded: str = "false"
+
+
+class GeoProviderStatusOut(BaseModel):
+    key: str
+    label: str
+    configured: bool
+    web_grounded: bool
+    env_var: str
+    role: str
+    status: str
+    note: str = ""
+
+
+class GeoProviderStatusListOut(BaseModel):
+    providers: list[GeoProviderStatusOut] = []
+    note: str = "DeepSeek/LLM 可用于分析；联网 AI 搜索 provider 只有返回 citation/source 时才计入真实引用。"
 
 
 class GeoSampleResultOut(BaseModel):

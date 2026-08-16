@@ -282,9 +282,9 @@ export default function OnsiteBoardPage() {
         body: JSON.stringify({ site_origin: origin }),
       });
       setOrigin(res.site_origin);
-      setNote(`已保存站点 origin：${res.site_origin}`);
+      setNote(`已保存客户官网：${res.site_origin}`);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "保存 origin 失败");
+      setError(e instanceof Error ? e.message : "保存官网失败");
     }
   }
 
@@ -333,7 +333,7 @@ export default function OnsiteBoardPage() {
       setNote(res.note);
       load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "站点诊断抓取失败");
+      setError(e instanceof Error ? e.message : "全站诊断抓取失败");
     } finally {
       setBusyId("");
     }
@@ -534,7 +534,7 @@ export default function OnsiteBoardPage() {
       });
       const more = res.remaining ? ` 还有约 ${res.remaining} 条，继续点击可处理下一批。` : "";
       setNote((res.detail || `本批 AI 建议完成：${res.status}`) + more);
-      if (res.status === "未配置") setError(res.detail || "LLM 未配置，未编造分析。");
+      if (res.status === "未配置") setError(res.detail || "AI 建议服务未配置，本次不会生成建议。");
       load();
     } catch (e) {
       const message = e instanceof Error ? e.message : "批量生成 AI 建议失败";
@@ -565,7 +565,7 @@ export default function OnsiteBoardPage() {
   async function saveDraft(issue: OnsiteIssue) {
     const text = drafts[issue.id] ?? issue.proposed_change;
     if (!text?.trim()) {
-      setError("请先填写处理方案，AI 建议和人工执行是两步");
+      setError("请先填写整改方案。AI 建议只提供参考，仍需要人工确认后执行。");
       return;
     }
     setBusyId(issue.id);
@@ -658,9 +658,9 @@ export default function OnsiteBoardPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">SEO 诊断优先级工作台</h1>
+          <h1 className="text-2xl font-semibold">SEO 诊断与整改工作台</h1>
           <p className="mt-1 text-sm text-slate-500">
-            选择客户官网，抓取站点事实，生成待处理队列、AI 整改材料和可导出报告。
+            从客户官网抓取页面证据，按风险优先级生成整改清单、AI 建议和可导出的客户报告。
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -670,15 +670,15 @@ export default function OnsiteBoardPage() {
           </Button>
           <Button onClick={analyze} disabled={busyId === "ai-batch"}>
             <Bot className="mr-2 h-4 w-4" />
-            {busyId === "ai-batch" ? "生成中…" : "生成一批 AI 建议"}
+            {busyId === "ai-batch" ? "生成中…" : "批量生成 AI 整改建议"}
           </Button>
           <Button onClick={downloadReport} variant="outline">
             <Download className="mr-2 h-4 w-4" />
-            导出文档
+            导出客户报告
           </Button>
           <Button onClick={downloadReportTable} variant="outline">
             <Download className="mr-2 h-4 w-4" />
-            导出表格
+            导出执行表格
           </Button>
         </div>
       </div>
@@ -741,7 +741,7 @@ export default function OnsiteBoardPage() {
       <Card className="rounded-md">
         <CardHeader>
           <CardTitle>诊断目标</CardTitle>
-          <p className="mt-1 text-sm text-slate-500">SEO 诊断会优先围绕目标国家、目标关键词和核心页面排序。</p>
+          <p className="mt-1 text-sm text-slate-500">SEO 诊断会围绕目标国家、核心搜索词、竞品和关键页面排序，让报告更贴近客户实际获客市场。</p>
         </CardHeader>
         <CardContent className="grid gap-4 lg:grid-cols-3">
           <div className="rounded-md border border-slate-200 p-3">
@@ -755,12 +755,12 @@ export default function OnsiteBoardPage() {
                   </div>
                 ))
               ) : (
-                <div className="text-sm text-slate-500">未设置。先在洞察模块登记目标市场。</div>
+                <div className="text-sm text-slate-500">未设置。请先在首页填写客户诊断目标。</div>
               )}
             </div>
           </div>
           <div className="rounded-md border border-slate-200 p-3">
-            <div className="text-xs font-medium text-slate-500">目标关键词 / 选题</div>
+            <div className="text-xs font-medium text-slate-500">核心搜索词 / 选题</div>
             <div className="mt-2 flex flex-wrap gap-2">
               {targetKeywords.length ? (
                 targetKeywords.map((item) => (
@@ -788,7 +788,7 @@ export default function OnsiteBoardPage() {
                 <span>PageSpeed Insights</span>
                 <Badge tone={performance?.pagespeed_status === "已测速" ? "green" : "amber"}>{performance?.pagespeed_status ?? "读取中"}</Badge>
               </div>
-              <p className="text-xs text-slate-500">导入或测速后，文档和表格会带上曝光、点击、CTR、排名和速度证据。</p>
+              <p className="text-xs text-slate-500">接入或导入数据后，报告会带上曝光、点击、CTR、排名、SERP 和速度证据。</p>
             </div>
           </div>
         </CardContent>
@@ -797,7 +797,7 @@ export default function OnsiteBoardPage() {
       <Card className="rounded-md">
         <CardHeader>
           <CardTitle>SEO 表现数据源</CardTitle>
-          <p className="mt-1 text-sm text-slate-500">免费数据优先：GSC/Bing CSV 用于真实搜索表现，PageSpeed 用于速度体验。</p>
+          <p className="mt-1 text-sm text-slate-500">优先使用免费且可信的数据源：GSC/Bing 记录真实搜索表现，PageSpeed 记录速度体验，Bright Data 记录目标关键词的 Google SERP。</p>
         </CardHeader>
         <CardContent className="grid gap-4 xl:grid-cols-5">
           <div className="rounded-md border border-slate-200 p-3">
@@ -897,10 +897,10 @@ export default function OnsiteBoardPage() {
             </div>
             <Button type="button" onClick={runSerp} disabled={busyId === "serp"} className="mt-3 w-full">
               <Search className="mr-2 h-4 w-4" />
-              {busyId === "serp" ? "查询中…" : "按 SEO 目标查询"}
+              {busyId === "serp" ? "查询中…" : "查询目标关键词 SERP"}
             </Button>
             <p className="mt-2 text-xs text-slate-500">
-              {performance?.serp?.configured ? "用目标国家和关键词查询 Google 前 10。" : "服务器未配置 Bright Data SERP。"}
+              {performance?.serp?.configured ? "按目标国家和核心搜索词查询 Google 前 10，作为市场可见度证据。" : "服务器尚未配置 Bright Data SERP，关键词排名保持未测。"}
             </p>
           </div>
           <div className="rounded-md border border-slate-200 p-3">
@@ -936,8 +936,8 @@ export default function OnsiteBoardPage() {
         {performance?.serp?.latest_runs?.length ? (
           <CardContent className="border-t border-slate-100 pt-4">
             <div className="mb-3 flex items-center justify-between gap-3">
-              <div className="text-sm font-medium text-slate-800">最近 SERP 查询</div>
-              <Badge tone="blue">市场可见度证据</Badge>
+              <div className="text-sm font-medium text-slate-800">最近关键词排名查询</div>
+              <Badge tone="blue">SERP 证据</Badge>
             </div>
             <div className="grid gap-2 lg:grid-cols-2">
               {performance.serp.latest_runs.slice(0, 4).map((run) => (
@@ -1075,8 +1075,8 @@ export default function OnsiteBoardPage() {
         <CardHeader className="space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <CardTitle>优先处理清单</CardTitle>
-              <p className="mt-1 text-sm text-slate-500">默认按风险、执行状态和页面路径排序。点击一条展开处理区。</p>
+          <CardTitle>优先整改清单</CardTitle>
+              <p className="mt-1 text-sm text-slate-500">默认按风险、执行状态和页面路径排序。点击问题即可查看证据、建议动作和复测方法。</p>
             </div>
             <Badge tone="amber">{visibleIssues.length} / {issues.length} 条</Badge>
           </div>
@@ -1085,7 +1085,7 @@ export default function OnsiteBoardPage() {
               <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
               <Input
                 className="pl-9"
-                placeholder="搜索 URL、页面名、问题类型、处理方案"
+                placeholder="搜索 URL、页面名、问题类型或整改方案"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
               />
@@ -1176,7 +1176,7 @@ export default function OnsiteBoardPage() {
                         </div>
                         <Textarea
                           className="min-h-[120px] bg-white"
-                          placeholder="填写给技术/客户网站负责人的处理方案。AI 建议不会自动执行。"
+                          placeholder="填写给客户技术或内容执行人的整改方案。AI 建议不会自动执行。"
                           value={drafts[issue.id] ?? issue.proposed_change}
                           onChange={(e) => setDrafts({ ...drafts, [issue.id]: e.target.value })}
                         />
@@ -1189,11 +1189,11 @@ export default function OnsiteBoardPage() {
                             生成处理建议
                           </Button>
                           <Button size="sm" variant="outline" onClick={() => saveDraft(issue)} disabled={busyId === issue.id}>
-                            保存方案
+                            保存整改方案
                           </Button>
                           <Button size="sm" variant="outline" onClick={() => copyDraft(issue)}>
                             <Copy className="mr-1.5 h-3.5 w-3.5" />
-                            复制方案
+                            复制整改方案
                           </Button>
                           {issue.status === "confirmed" || issue.status === "draft_applied" ? (
                             <Button size="sm" variant="outline" onClick={() => retestIssue(issue)} disabled={busyId === issue.id}>
@@ -1228,14 +1228,14 @@ export default function OnsiteBoardPage() {
       <div className="grid gap-6 xl:grid-cols-[1fr_0.9fr]">
         <Card className="rounded-md">
           <CardHeader>
-            <CardTitle>登记诊断页面</CardTitle>
+          <CardTitle>登记重点页面</CardTitle>
           </CardHeader>
           <CardContent>
             <form className="grid gap-3 md:grid-cols-4" onSubmit={create}>
               <Input placeholder="路径" value={form.path} onChange={(e) => setForm({ ...form, path: e.target.value })} required />
               <Input placeholder="语言" value={form.locale} onChange={(e) => setForm({ ...form, locale: e.target.value })} />
               <Input placeholder="页面名称" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
-              <Button type="submit">加入清单</Button>
+              <Button type="submit">加入诊断清单</Button>
             </form>
             <div className="mt-4 max-h-56 overflow-auto rounded-md border border-slate-200">
               {pages.map((p) => (
@@ -1272,11 +1272,11 @@ export default function OnsiteBoardPage() {
 
         <Card className="rounded-md">
           <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>内容提纲（次要）</CardTitle>
+          <CardTitle>内容选题辅助</CardTitle>
             <CheckCircle2 className="h-5 w-5 text-slate-400" />
           </CardHeader>
           <CardContent className="space-y-2">
-            <p className="text-sm text-slate-500">关键词到 SERP 特征暂不作为主诊断。没有搜索源时保持未测。</p>
+            <p className="text-sm text-slate-500">这里辅助内容生产。真正的 SEO 诊断仍以抓取、收录、搜索表现和高风险整改为主。</p>
             {briefs.length === 0 ? <p className="text-sm text-slate-500">还没有提纲。站内问题优先。</p> : null}
             {briefs.slice(0, 5).map((b) => (
               <div key={b.id} className="rounded-md border border-slate-200 p-3">

@@ -55,9 +55,9 @@ export default function InsightsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">洞察投喂</h1>
+        <h1 className="text-2xl font-semibold">市场机会入口</h1>
         <p className="mt-1 text-sm text-slate-500">
-          选市场、记信号，再开到三条链：站内改页 / GEO 工单 / 外链跟进。不做机会分或 Share of Voice 看板。
+          记录目标市场、买家需求和竞品线索，再转成 SEO 诊断任务、GEO 整改工单或站外跟进。
         </p>
       </div>
 
@@ -81,7 +81,7 @@ export default function InsightsPage() {
                 <p className="text-sm text-slate-600">
                   信号 {m.demand_count} · 竞品 {m.competitor_count}
                 </p>
-                <p className="mt-2 text-xs text-slate-500">点进去把信号投喂到交付链。</p>
+                <p className="mt-2 text-xs text-slate-500">进入后可把需求线索转成具体交付任务。</p>
               </CardContent>
             </Card>
           </Link>
@@ -90,12 +90,12 @@ export default function InsightsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>新增目标市场</CardTitle>
+          <CardTitle>新增客户目标市场</CardTitle>
         </CardHeader>
         <CardContent>
           <form className="grid gap-3 md:grid-cols-5" onSubmit={onCreate}>
             <div>
-              <Label>名称</Label>
+              <Label>市场名称</Label>
               <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
             </div>
             <div>
@@ -111,14 +111,14 @@ export default function InsightsPage() {
               />
             </div>
             <div>
-              <Label>主语言</Label>
+              <Label>主要语言</Label>
               <Input
                 value={form.primary_locale}
                 onChange={(e) => setForm({ ...form, primary_locale: e.target.value })}
               />
             </div>
             <div className="flex items-end">
-              <Button type="submit">添加</Button>
+              <Button type="submit">添加市场</Button>
             </div>
           </form>
           {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}

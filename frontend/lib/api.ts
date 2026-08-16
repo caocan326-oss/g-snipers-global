@@ -564,6 +564,22 @@ export type GeoSampleRun = {
   aggregate?: Record<string, unknown>;
 };
 
+export type GeoProviderStatus = {
+  key: string;
+  label: string;
+  configured: boolean;
+  web_grounded: boolean;
+  env_var: string;
+  role: string;
+  status: string;
+  note: string;
+};
+
+export type GeoProviderStatusList = {
+  providers: GeoProviderStatus[];
+  note: string;
+};
+
 export type GeoTicketDraft = {
   created: number;
   skipped: number;

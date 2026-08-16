@@ -39,8 +39,8 @@ export default function LoginPage() {
       <Card className="w-full max-w-md">
         <CardHeader>
           <p className="text-xs uppercase tracking-wider text-brand-600">G-Snipers Overseas</p>
-          <CardTitle className="mt-1 text-xl">客户经理登录</CardTitle>
-          <p className="mt-1 text-sm text-slate-500">标准版：软件 + 专属客户经理。演示账号已预填。</p>
+          <CardTitle className="mt-1 text-xl">进入诊断工作台</CardTitle>
+          <p className="mt-1 text-sm text-slate-500">用于 SEO、GEO 和站外曝光诊断交付。演示账号已预填。</p>
         </CardHeader>
         <CardContent>
           <form className="space-y-4" onSubmit={onSubmit}>

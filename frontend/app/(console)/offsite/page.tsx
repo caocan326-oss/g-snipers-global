@@ -23,8 +23,8 @@ const verifyTone: Record<string, "amber" | "green" | "red" | "default"> = {
 };
 
 const kindLabel: Record<string, string> = {
-  inbound: "我方 inbound",
-  competitor: "竞品链",
+  inbound: "我方外链",
+  competitor: "竞品外链",
 };
 
 const gapLabel: Record<string, string> = {
@@ -131,10 +131,9 @@ export default function OffsitePage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">外链核验 + 分发台</h1>
+        <h1 className="text-2xl font-semibold">站外曝光与外链核验</h1>
         <p className="mt-1 text-sm text-slate-500">
-          断链式逐条核验（未核验 / 有效 / 失效 / 垃圾）+ 跟进。不是 Ahrefs 外链指数，没有域名评分。分发未配置
-          Key = 未配置，确认也不会发 HTTP。
+          逐条记录第三方提及、我方外链和竞品外链，核验有效、失效或垃圾链接。这里不冒充 Ahrefs/DR 权重；分发接口未配置时不会真实发送。
         </p>
       </div>
 
@@ -143,7 +142,7 @@ export default function OffsitePage() {
           核验清单
         </Button>
         <Button size="sm" variant={tab === "dist" ? "default" : "outline"} onClick={() => setTab("dist")}>
-          分发台
+          内容分发
         </Button>
       </div>
 
@@ -163,7 +162,7 @@ export default function OffsitePage() {
               </button>
             ))}
           </div>
-          <p className="text-xs text-slate-500">域名权重未测。本台不提供外链指数或 DR。</p>
+          <p className="text-xs text-slate-500">当前仅做链接事实核验和跟进管理，暂不提供域名权重、外链指数或 DR。</p>
           {(filter === "all" ? gaps : gaps.filter((g) => g.verify_status === filter)).map((g) => (
             <Card key={g.id}>
               <CardHeader className="flex flex-row items-start justify-between">
@@ -202,15 +201,15 @@ export default function OffsitePage() {
                 <div className="flex flex-wrap gap-2">
                   <Input
                     className="max-w-xs"
-                    placeholder="跟进对象"
+                    placeholder="联系人或跟进对象"
                     value={contact}
                     onChange={(e) => setContact(e.target.value)}
                   />
                   <Button size="sm" onClick={() => aiGap(g.id)}>
-                    AI 论证
+                    AI 分析价值
                   </Button>
                   <Button size="sm" variant="outline" onClick={() => addOutreach(g.id)}>
-                    加跟进
+                    添加跟进
                   </Button>
                 </div>
               </CardContent>
@@ -219,7 +218,7 @@ export default function OffsitePage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>登记一条链接</CardTitle>
+              <CardTitle>登记一条站外线索</CardTitle>
             </CardHeader>
             <CardContent>
               <form className="grid gap-3 md:grid-cols-3" onSubmit={addGap}>
@@ -228,17 +227,17 @@ export default function OffsitePage() {
                   value={form.kind}
                   onChange={(e) => setForm({ ...form, kind: e.target.value })}
                 >
-                  <option value="inbound">我方 inbound</option>
-                  <option value="competitor">竞品链</option>
+                  <option value="inbound">我方外链</option>
+                  <option value="competitor">竞品外链</option>
                 </select>
                 <Input
-                  placeholder="来源域"
+                  placeholder="来源域名"
                   value={form.referring_domain}
                   onChange={(e) => setForm({ ...form, referring_domain: e.target.value })}
                   required
                 />
                 <Input
-                  placeholder="链接 URL"
+                  placeholder="链接 URL 或第三方页面"
                   value={form.link_url}
                   onChange={(e) => setForm({ ...form, link_url: e.target.value })}
                 />
@@ -248,7 +247,7 @@ export default function OffsitePage() {
                   onChange={(e) => setForm({ ...form, competitor_name: e.target.value })}
                 />
                 <Input placeholder="备注" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
-                <Button type="submit">加入核验清单</Button>
+                <Button type="submit">加入站外清单</Button>
               </form>
             </CardContent>
           </Card>
@@ -282,10 +281,10 @@ export default function OffsitePage() {
                     <div className="flex items-center gap-2">
                       <Badge tone="amber">{j.last_result}</Badge>
                       <Button size="sm" variant="outline" onClick={() => send(j.id, false)}>
-                        未确认
+                        仅记录，不发送
                       </Button>
                       <Button size="sm" onClick={() => send(j.id, true)}>
-                        确认尝试发送
+                        确认发送
                       </Button>
                     </div>
                   </div>
@@ -296,18 +295,18 @@ export default function OffsitePage() {
           </Card>
           <Card>
             <CardHeader>
-              <CardTitle>新建分发任务</CardTitle>
+              <CardTitle>新建内容分发任务</CardTitle>
             </CardHeader>
             <CardContent>
               <form className="grid gap-3 md:grid-cols-2" onSubmit={createJob}>
                 <Input
-                  placeholder="标题"
+                  placeholder="任务标题"
                   value={distForm.title}
                   onChange={(e) => setDistForm({ ...distForm, title: e.target.value })}
                   required
                 />
                 <Input
-                  placeholder="目标 URL"
+                  placeholder="要推广的客户 URL"
                   value={distForm.target_url}
                   onChange={(e) => setDistForm({ ...distForm, target_url: e.target.value })}
                 />
@@ -323,7 +322,7 @@ export default function OffsitePage() {
                   ))}
                 </select>
                 <Input
-                  placeholder="摘要"
+                  placeholder="分发内容摘要"
                   value={distForm.payload_summary}
                   onChange={(e) => setDistForm({ ...distForm, payload_summary: e.target.value })}
                 />

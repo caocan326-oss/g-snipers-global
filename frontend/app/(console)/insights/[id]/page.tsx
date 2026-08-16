@@ -71,7 +71,7 @@ export default function MarketDetailPage() {
       const res = await api<ChainFeed>(`/api/demand-signals/${signalId}/${path}`, { method: "POST" });
       router.push(res.redirect_path);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "投喂失败");
+      setError(e instanceof Error ? e.message : "生成交付任务失败");
     }
   }
 
@@ -98,7 +98,7 @@ export default function MarketDetailPage() {
           <span className="text-base font-normal text-slate-400">{market.country_code}</span>
         </h1>
         <p className="mt-1 text-sm text-slate-500">
-          {market.region} · {market.primary_locale} · 投喂到三条交付链
+          {market.region} · {market.primary_locale} · 可转为 SEO、GEO 和站外跟进任务
         </p>
         {market.notes ? <p className="mt-2 text-sm text-slate-600">{market.notes}</p> : null}
       </div>
@@ -136,11 +136,11 @@ export default function MarketDetailPage() {
           <CardContent>
             <form className="space-y-3" onSubmit={saveBrief}>
               <div>
-                <Label>判断</Label>
+                <Label>市场判断</Label>
                 <Textarea value={brief.summary} onChange={(e) => setBrief({ ...brief, summary: e.target.value })} />
               </div>
               <div>
-                <Label>可投喂动作</Label>
+                <Label>建议转化动作</Label>
                 <Textarea
                   value={brief.recommended_actions}
                   onChange={(e) => setBrief({ ...brief, recommended_actions: e.target.value })}
@@ -200,11 +200,11 @@ export default function MarketDetailPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>信号 → 开到交付链</CardTitle>
+          <CardTitle>需求信号转交付任务</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-slate-500">
-            信号由客户经理录入。不是搜索量，也不是 Share of Voice。选一条，开站内任务、GEO 工单或外链跟进。
+            这里记录客户经理发现的买家需求、内容机会或竞品线索。它不是搜索量，也不是市场份额；选中一条后，可转成 SEO、GEO 或站外跟进任务。
           </p>
           <ul className="space-y-3">
             {market.demand_signals.map((s) => (
@@ -217,13 +217,13 @@ export default function MarketDetailPage() {
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <Button size="sm" onClick={() => feed(s.id, "open-onsite")}>
-                    开站内任务
+                    生成 SEO 任务
                   </Button>
                   <Button size="sm" variant="outline" onClick={() => feed(s.id, "open-geo-ticket")}>
-                    开 GEO 工单
+                    生成 GEO 工单
                   </Button>
                   <Button size="sm" variant="outline" onClick={() => feed(s.id, "open-link-followup")}>
-                    开外链跟进
+                    生成站外跟进
                   </Button>
                 </div>
               </li>

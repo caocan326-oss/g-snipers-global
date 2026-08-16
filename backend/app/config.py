@@ -32,6 +32,10 @@ class Settings(BaseSettings):
     brightdata_serp_endpoint: str = "https://api.brightdata.com/datasets/v3/scrape"
     onsite_render_js_enabled: bool = True
     onsite_render_timeout_ms: int = 30000
+    perplexity_api_key: str = ""
+    you_api_key: str = ""
+    exa_api_key: str = ""
+    tavily_api_key: str = ""
 
 
 settings = Settings()

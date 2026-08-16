@@ -1,6 +1,7 @@
+from types import SimpleNamespace
+
 from fastapi.testclient import TestClient
 
-from app.llm import LlmResult, OK
 from tests.conftest import auth_header
 
 
@@ -442,24 +443,23 @@ def test_geo_auto_sampling_aggregate_creates_ent_off_tickets(client: TestClient,
         },
     ).json()
 
-    import app.routers.geo as geo_router
-
-    monkeypatch.setattr(geo_router, "llm_configured", lambda: True)
     monkeypatch.setattr(
-        geo_router,
-        "complete",
-        lambda **kwargs: LlmResult(
-            configured=True,
-            status=OK,
-            text="Buyers often compare suppliers listed at https://www.thomasnet.com and https://www.globalspec.com.",
-            detail="",
+        "app.routers.geo.sample_with_provider",
+        lambda *args, **kwargs: SimpleNamespace(
+            provider="perplexity",
+            engine="perplexity",
+            model="fake-grounded",
+            answer="Buyers often compare suppliers listed at https://www.thomasnet.com and https://www.globalspec.com.",
+            citations=["https://www.thomasnet.com", "https://www.globalspec.com"],
+            web_grounded=True,
+            surface="api_search",
         ),
     )
 
     run = client.post(
         "/api/geo/sample-runs/auto",
         headers=headers,
-        json={"prompt_ids": [prompt["id"]], "trials": 3, "limit": 1, "engine": "llm", "web_grounded": "false"},
+        json={"prompt_ids": [prompt["id"]], "trials": 3, "limit": 1, "provider": "perplexity", "engine": "perplexity", "web_grounded": "true"},
     )
     assert run.status_code == 201, run.text
     body = run.json()
@@ -474,3 +474,47 @@ def test_geo_auto_sampling_aggregate_creates_ent_off_tickets(client: TestClient,
     titles = {ticket["title"] for ticket in drafted.json()["tickets"]}
     assert "GEO-ENT-003 品类问题下品牌关联弱" in titles
     assert "GEO-OFF-001 权威第三方源高频出现但自有引用弱" in titles
+
+
+def test_geo_provider_status_and_deepseek_non_grounded_does_not_count_citations(client: TestClient, demo_user, monkeypatch) -> None:
+    headers = auth_header(client)
+    prompt = client.post(
+        "/api/geo/prompts",
+        headers=headers,
+        json={
+            "prompt_text": "Best industrial valve suppliers",
+            "locale": "en-US",
+            "prompt_type": "category",
+        },
+    ).json()
+    status = client.get("/api/geo/providers/status", headers=headers)
+    assert status.status_code == 200
+    providers = {row["key"]: row for row in status.json()["providers"]}
+    assert providers["deepseek"]["web_grounded"] is False
+    assert providers["tavily"]["web_grounded"] is True
+
+    monkeypatch.setattr(
+        "app.routers.geo.sample_with_provider",
+        lambda *args, **kwargs: SimpleNamespace(
+            provider="deepseek",
+            engine="deepseek",
+            model="fake-llm",
+            answer="Example is mentioned with a possible URL https://example.com/pumps, but this is non-grounded text.",
+            citations=["https://example.com/pumps"],
+            web_grounded=False,
+            surface="llm_api_non_grounded",
+        ),
+    )
+    run = client.post(
+        "/api/geo/sample-runs/auto",
+        headers=headers,
+        json={"prompt_ids": [prompt["id"]], "trials": 1, "limit": 1, "provider": "deepseek"},
+    )
+    assert run.status_code == 201, run.text
+    body = run.json()
+    assert body["results_count"] == 1
+    assert body["cite_rate"] == "0.0%"
+    result = body["results"][0]
+    assert result["web_grounded"] == "false"
+    assert result["owned_citations"] == []
+    assert "非联网" in result["verification_note"]

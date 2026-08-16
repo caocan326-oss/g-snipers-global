@@ -79,7 +79,7 @@ export default function OnsiteEditorPage() {
       { method: "POST" }
     );
     setNote(`${res.note} 新建 ${res.created}。`);
-    if (res.ai_status === "未配置") setError("LLM 未配置，未编造分析。");
+    if (res.ai_status === "未配置") setError("AI 建议服务未配置，本次只保留抓取和规则诊断结果。");
     load();
   }
 
@@ -113,7 +113,7 @@ export default function OnsiteEditorPage() {
   async function saveDraft(issue: OnsiteIssue) {
     const text = drafts[issue.id] ?? issue.proposed_change;
     if (!text?.trim()) {
-      setError("请先填写处理方案，AI 建议和人工执行是两步");
+      setError("请先填写整改方案。AI 建议只提供参考，仍需要人工确认后执行。");
       return;
     }
     await api(`/api/onsite/issues/${issue.id}/draft`, { method: "PATCH", body: JSON.stringify({ proposed_change: text }) });
@@ -152,7 +152,7 @@ export default function OnsiteEditorPage() {
     <div className="space-y-6">
       <div>
         <Link href="/onsite" className="text-sm text-brand-700">
-          ← 问题看板
+          ← SEO 诊断看板
         </Link>
         <h1 className="mt-2 text-2xl font-semibold">{page.title}</h1>
         <p className="text-sm text-slate-500">
@@ -176,7 +176,7 @@ export default function OnsiteEditorPage() {
             回抓本页
           </Button>
           <Button variant="outline" onClick={analyze}>
-            按当前观察重跑分析
+            基于当前抓取重新诊断
           </Button>
         </div>
         {note ? <p className="mt-2 text-sm text-slate-600">{note}</p> : null}
@@ -211,7 +211,7 @@ export default function OnsiteEditorPage() {
                     <p className="mt-1 text-sm text-slate-700">{i.owner_hint || "客户经理 / 执行人"}</p>
                   </div>
                   <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
-                    <div className="text-xs font-medium text-slate-500">建议动作</div>
+                    <div className="text-xs font-medium text-slate-500">建议整改动作</div>
                     <p className="mt-1 text-sm text-slate-700">{i.recommended_action || "结合诊断证据补充处理方案，人工确认后执行。"}</p>
                   </div>
                   <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
@@ -221,7 +221,7 @@ export default function OnsiteEditorPage() {
                 </div>
                 <Textarea
                   className="mt-2"
-                  placeholder="改稿草稿"
+                  placeholder="填写给客户技术或内容执行人的整改方案"
                   value={drafts[i.id] ?? i.proposed_change}
                   onChange={(e) => setDrafts({ ...drafts, [i.id]: e.target.value })}
                 />
@@ -230,7 +230,7 @@ export default function OnsiteEditorPage() {
                     生成处理建议
                   </Button>
                   <Button size="sm" variant="outline" onClick={() => saveDraft(i)}>
-                    保存方案
+                    保存整改方案
                   </Button>
                   {i.status === "confirmed" || i.status === "draft_applied" ? (
                     <Button size="sm" variant="outline" onClick={fetchThis}>
@@ -291,14 +291,14 @@ export default function OnsiteEditorPage() {
               <Label>结构化数据草稿</Label>
               <Textarea value={page.structured_data} onChange={(e) => setPage({ ...page, structured_data: e.target.value })} />
             </div>
-            <Button type="submit">手改观察（不改线上，也不改改稿）</Button>
+                <Button type="submit">保存观察记录</Button>
           </CardContent>
         </Card>
       </form>
 
       <Card>
         <CardHeader>
-          <CardTitle>手工记一条</CardTitle>
+          <CardTitle>手工补充问题</CardTitle>
         </CardHeader>
         <CardContent>
           <form className="grid gap-2 md:grid-cols-4" onSubmit={addIssue}>
@@ -314,18 +314,18 @@ export default function OnsiteEditorPage() {
               ))}
             </select>
             <Input
-              placeholder="问题"
+              placeholder="问题标题"
               value={issueForm.title}
               onChange={(e) => setIssueForm({ ...issueForm, title: e.target.value })}
               required
             />
             <Input
-              placeholder="改稿（可后补）"
+              placeholder="整改方案（可后补）"
               value={issueForm.proposed_change}
               onChange={(e) => setIssueForm({ ...issueForm, proposed_change: e.target.value })}
             />
             <Button type="submit" variant="outline">
-              记问题
+              记录问题
             </Button>
           </form>
           {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}

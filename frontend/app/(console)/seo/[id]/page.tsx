@@ -122,7 +122,7 @@ export default function SeoEditorPage() {
           acceptance_criteria: "大纲、正文、Meta 齐全后提交审核，由客户经理确认可交付。",
         }),
       });
-      setOrderMsg(`已开工事单，可在工单列表领取（${order.id.slice(0, 8)}…）`);
+      setOrderMsg(`已创建交付工单，可在工单列表领取（${order.id.slice(0, 8)}…）`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "开单失败");
     } finally {
@@ -156,10 +156,10 @@ export default function SeoEditorPage() {
         </p>
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <Button size="sm" variant="outline" disabled={busy} onClick={openWorkOrder}>
-            为当前步骤开执行工单
+            为当前步骤创建工单
           </Button>
           <Link href="/geo" className="text-sm text-brand-700">
-            本页 GEO 清单 / 监测 →
+            查看 GEO 可见度 →
           </Link>
           {orderMsg ? <span className="text-sm text-slate-500">{orderMsg}</span> : null}
         </div>
@@ -183,7 +183,7 @@ export default function SeoEditorPage() {
           </CardHeader>
           <CardContent className="space-y-3">
             <p className="text-sm text-slate-500">
-              按目标语言直接写结构（不是英译中）。模板仅作起点，请按市场改写。
+              按目标市场语言直接组织结构。AI 模板只是起点，交付前需要结合客户业务和当地买家表达人工确认。
             </p>
             <Textarea
               className="min-h-[320px] font-mono"
@@ -257,7 +257,7 @@ export default function SeoEditorPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm text-slate-600">
-              标记「可交付」必须由客户经理确认。本切片不会自动发布到客户站点。
+              标记“可交付”必须由客户经理确认。系统只保存内容资产，不会自动发布到客户网站。
             </p>
             <div className="grid gap-3 text-sm md:grid-cols-3">
               <div className="rounded-md bg-slate-50 p-3">大纲 {page.outline ? "已有" : "缺失"}</div>
