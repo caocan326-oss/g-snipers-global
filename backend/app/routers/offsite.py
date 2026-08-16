@@ -1,17 +1,27 @@
-from fastapi import APIRouter, Depends, HTTPException
 from datetime import datetime, timezone
+import re
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, selectinload
 
 from app.ai_engine import assist_offsite_gap
 from app.auth import get_current_user
 from app.database import get_db
-from app.models import BacklinkGap, OutreachItem, PlatformAccount, PlatformConnector, SourcePlatform, User
+from app.models import BacklinkGap, ContentAsset, FactPack, OutreachItem, PlatformAccount, PlatformConnector, SourcePlatform, User
 from app.schemas import (
     AiAssistOut,
     AiStepIn,
     BacklinkGapCreate,
     BacklinkGapOut,
     BacklinkGapUpdate,
+    ContentAssetApproveIn,
+    ContentAssetCreate,
+    ContentAssetGenerateIn,
+    ContentAssetOut,
+    ContentAssetReviewOut,
+    ContentAssetUpdate,
+    FactPackCreate,
+    FactPackOut,
+    FactPackUpdate,
     LinkCheckerOut,
     OutreachCreate,
     OutreachOut,
@@ -47,6 +57,9 @@ PRIORITIES = {"P0", "P1", "P2", "P3"}
 SUBMISSION_MODES = {"manual_login", "email_outreach", "form_public", "paid_placement", "api_none"}
 ACCOUNT_STATUSES = {"active", "needs_2fa", "locked", "expired", "banned", "retired"}
 AUTH_METHODS = {"password_vault", "sso", "oauth", "api_key_vault", "manual_only"}
+FACT_PACK_STATUSES = {"draft", "approved", "archived"}
+ASSET_STATUSES = {"draft", "ai_reviewed", "human_approved", "rejected", "archived"}
+ASSET_TYPES = {"company_blurb", "profile_fields", "product_spec", "faq", "listicle_pitch", "pr_draft", "social_snippet"}
 
 B2B_PLATFORM_SEEDS = [
     {
@@ -212,6 +225,120 @@ def _connector_out(row: PlatformConnector) -> PlatformConnectorOut:
     )
 
 
+def _fact_pack_out(row: FactPack) -> FactPackOut:
+    return FactPackOut(
+        id=row.id,
+        name=row.name,
+        legal_name=row.legal_name,
+        brand_names=row.brand_names,
+        website=row.website,
+        product_categories_en=row.product_categories_en,
+        certifications=row.certifications,
+        key_specs=row.key_specs,
+        banned_claims=row.banned_claims,
+        contact_public=row.contact_public,
+        approved_boilerplate_en=row.approved_boilerplate_en,
+        status=row.status,
+        version=row.version,
+        approved_by=row.approved_by,
+        approved_at=row.approved_at,
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )
+
+
+def _asset_out(row: ContentAsset) -> ContentAssetOut:
+    return ContentAssetOut(
+        id=row.id,
+        fact_pack_id=row.fact_pack_id,
+        fact_pack_name=row.fact_pack.name if row.fact_pack else "",
+        asset_type=row.asset_type,
+        title=row.title,
+        body_md=row.body_md,
+        locale=row.locale,
+        keywords=row.keywords,
+        entities=row.entities,
+        status=row.status,
+        ai_review_status=row.ai_review_status,
+        ai_review=row.ai_review,
+        human_review_note=row.human_review_note,
+        approved_by=row.approved_by,
+        approved_at=row.approved_at,
+        version=row.version,
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )
+
+
+def _split_terms(value: str) -> list[str]:
+    return [part.strip() for part in value.replace("\n", ",").split(",") if part.strip()]
+
+
+def _generate_asset_body(fact: FactPack, asset_type: str) -> str:
+    brand = (_split_terms(fact.brand_names) or [fact.legal_name or "[NEED_INPUT: brand name]"])[0]
+    categories = fact.product_categories_en or "[NEED_INPUT: product categories]"
+    website = fact.website or "[NEED_INPUT: website]"
+    certifications = fact.certifications or "[NEED_INPUT: certifications if public]"
+    contact = fact.contact_public or "[NEED_INPUT: public contact]"
+    boilerplate = fact.approved_boilerplate_en.strip()
+    if asset_type == "profile_fields":
+        return "\n".join(
+            [
+                f"Company name: {fact.legal_name or brand}",
+                f"Brand: {brand}",
+                f"Website: {website}",
+                f"Categories: {categories}",
+                f"Certifications: {certifications}",
+                f"Public contact: {contact}",
+                f"Company description: {boilerplate or '[NEED_INPUT: approved English boilerplate]'}",
+            ]
+        )
+    if asset_type == "listicle_pitch":
+        return (
+            f"Hi [EDITOR_NAME],\n\n"
+            f"I am sharing {brand} for consideration in your supplier roundup about {categories}. "
+            f"Public facts we can verify: website {website}; certifications/qualifications: {certifications}; key specs: {fact.key_specs or '[NEED_INPUT: public specs]'}.\n\n"
+            f"Short description:\n{boilerplate or '[NEED_INPUT: approved English boilerplate]'}\n\n"
+            f"Please let us know if you need images, specs, or a formal media kit.\n"
+        )
+    return (
+        f"{brand} is a supplier focused on {categories}. "
+        f"{boilerplate or 'Its public company description still needs customer approval. [NEED_INPUT: approved English boilerplate]'} "
+        f"Website: {website}. Public certifications or qualifications: {certifications}."
+    )
+
+
+def _review_asset(row: ContentAsset, fact: FactPack | None) -> tuple[str, list[str]]:
+    findings: list[str] = []
+    body = row.body_md or ""
+    lower = body.lower()
+    if "[need_input" in lower:
+        findings.append("存在 [NEED_INPUT]，需要补齐事实后才能批准。")
+    if fact:
+        brands = _split_terms(fact.brand_names) or ([fact.legal_name] if fact.legal_name else [])
+        if brands and not any(brand.lower() in lower for brand in brands if brand):
+            findings.append("正文未出现 Fact Pack 中的品牌名。")
+        for claim in _split_terms(fact.banned_claims):
+            if claim.lower() in lower:
+                findings.append(f"命中禁用宣传语：{claim}")
+        certs = _split_terms(fact.certifications)
+        cert_words = ["iso", "ce", "ul", "fda", "rohs", "reach"]
+        mentioned = [word.upper() for word in cert_words if re.search(rf"\b{re.escape(word)}\b", lower)]
+        allowed = " ".join(certs).lower()
+        for word in mentioned:
+            if word.lower() not in allowed:
+                findings.append(f"出现认证/合规词 {word}，但 Fact Pack 未确认。")
+    else:
+        findings.append("未绑定 Fact Pack，不能进入人工批准。")
+    words = [part.strip(".,;:!?()[]{}").lower() for part in body.split()]
+    for keyword in _split_terms(row.keywords):
+        count = sum(1 for word in words if word == keyword.lower())
+        if count >= 5:
+            findings.append(f"关键词可能堆砌：{keyword} 出现 {count} 次。")
+    status = "pass" if not findings else "fail"
+    return status, findings
+
+
 def _gap_out(row: BacklinkGap) -> BacklinkGapOut:
     return BacklinkGapOut(
         id=row.id,
@@ -280,6 +407,225 @@ def link_checker(user: User = Depends(get_current_user), db: Session = Depends(g
         key = row.verify_status if row.verify_status in counts else "unverified"
         counts[key] += 1
     return LinkCheckerOut(counts=counts, domain_metric="未测", links=[_gap_out(r) for r in rows])
+
+
+@router.get("/fact-packs", response_model=list[FactPackOut])
+def list_fact_packs(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> list[FactPackOut]:
+    rows = db.query(FactPack).filter(FactPack.tenant_id == user.tenant_id).order_by(FactPack.created_at.desc()).all()
+    return [_fact_pack_out(row) for row in rows]
+
+
+@router.post("/fact-packs", response_model=FactPackOut, status_code=201)
+def create_fact_pack(
+    body: FactPackCreate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> FactPackOut:
+    if body.status not in FACT_PACK_STATUSES:
+        raise HTTPException(status_code=400, detail="无效事实包状态")
+    row = FactPack(tenant_id=user.tenant_id, **body.model_dump())
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return _fact_pack_out(row)
+
+
+@router.patch("/fact-packs/{fact_pack_id}", response_model=FactPackOut)
+def update_fact_pack(
+    fact_pack_id: str,
+    body: FactPackUpdate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> FactPackOut:
+    row = db.get(FactPack, fact_pack_id)
+    if row is None or row.tenant_id != user.tenant_id:
+        raise HTTPException(status_code=404, detail="事实包不存在")
+    payload = body.model_dump(exclude_unset=True)
+    if "status" in payload and payload["status"] not in FACT_PACK_STATUSES:
+        raise HTTPException(status_code=400, detail="无效事实包状态")
+    for field, value in payload.items():
+        setattr(row, field, value or "")
+    row.version += 1
+    if row.status != "approved":
+        row.approved_by = ""
+        row.approved_at = None
+    db.commit()
+    db.refresh(row)
+    return _fact_pack_out(row)
+
+
+@router.post("/fact-packs/{fact_pack_id}/approve", response_model=FactPackOut)
+def approve_fact_pack(
+    fact_pack_id: str,
+    body: ContentAssetApproveIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> FactPackOut:
+    if not body.confirmed:
+        raise HTTPException(status_code=400, detail="批准事实包需要人工确认")
+    row = db.get(FactPack, fact_pack_id)
+    if row is None or row.tenant_id != user.tenant_id:
+        raise HTTPException(status_code=404, detail="事实包不存在")
+    if not row.legal_name.strip() or not row.brand_names.strip() or not row.website.strip():
+        raise HTTPException(status_code=400, detail="事实包至少需要公司英文名、品牌名和官网")
+    row.status = "approved"
+    row.approved_by = user.email
+    row.approved_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(row)
+    return _fact_pack_out(row)
+
+
+@router.get("/content-assets", response_model=list[ContentAssetOut])
+def list_content_assets(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> list[ContentAssetOut]:
+    rows = (
+        db.query(ContentAsset)
+        .options(selectinload(ContentAsset.fact_pack))
+        .filter(ContentAsset.tenant_id == user.tenant_id)
+        .order_by(ContentAsset.created_at.desc())
+        .all()
+    )
+    return [_asset_out(row) for row in rows]
+
+
+@router.post("/content-assets", response_model=ContentAssetOut, status_code=201)
+def create_content_asset(
+    body: ContentAssetCreate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ContentAssetOut:
+    if body.asset_type not in ASSET_TYPES:
+        raise HTTPException(status_code=400, detail="无效内容资产类型")
+    fact = None
+    if body.fact_pack_id:
+        fact = db.get(FactPack, body.fact_pack_id)
+        if fact is None or fact.tenant_id != user.tenant_id:
+            raise HTTPException(status_code=404, detail="事实包不存在")
+    row = ContentAsset(tenant_id=user.tenant_id, **body.model_dump())
+    db.add(row)
+    db.commit()
+    row = db.query(ContentAsset).options(selectinload(ContentAsset.fact_pack)).filter(ContentAsset.id == row.id).one()
+    return _asset_out(row)
+
+
+@router.post("/content-assets/generate", response_model=ContentAssetOut, status_code=201)
+def generate_content_asset(
+    body: ContentAssetGenerateIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ContentAssetOut:
+    fact = db.get(FactPack, body.fact_pack_id)
+    if fact is None or fact.tenant_id != user.tenant_id:
+        raise HTTPException(status_code=404, detail="事实包不存在")
+    if fact.status != "approved":
+        raise HTTPException(status_code=400, detail="事实包未批准，不能生成对外内容草稿")
+    if body.asset_type not in ASSET_TYPES:
+        raise HTTPException(status_code=400, detail="无效内容资产类型")
+    title = body.title or f"{fact.name} · {body.asset_type}"
+    row = ContentAsset(
+        tenant_id=user.tenant_id,
+        fact_pack_id=fact.id,
+        asset_type=body.asset_type,
+        title=title,
+        body_md=_generate_asset_body(fact, body.asset_type),
+        locale=body.locale,
+        keywords=fact.product_categories_en,
+        entities=", ".join(part for part in [fact.legal_name, fact.brand_names, fact.certifications] if part),
+        status="draft",
+    )
+    db.add(row)
+    db.commit()
+    row = db.query(ContentAsset).options(selectinload(ContentAsset.fact_pack)).filter(ContentAsset.id == row.id).one()
+    return _asset_out(row)
+
+
+@router.patch("/content-assets/{asset_id}", response_model=ContentAssetOut)
+def update_content_asset(
+    asset_id: str,
+    body: ContentAssetUpdate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ContentAssetOut:
+    row = db.get(ContentAsset, asset_id)
+    if row is None or row.tenant_id != user.tenant_id:
+        raise HTTPException(status_code=404, detail="内容资产不存在")
+    payload = body.model_dump(exclude_unset=True)
+    if "asset_type" in payload and payload["asset_type"] not in ASSET_TYPES:
+        raise HTTPException(status_code=400, detail="无效内容资产类型")
+    if "status" in payload and payload["status"] not in ASSET_STATUSES:
+        raise HTTPException(status_code=400, detail="无效内容资产状态")
+    if payload.get("fact_pack_id"):
+        fact = db.get(FactPack, payload["fact_pack_id"])
+        if fact is None or fact.tenant_id != user.tenant_id:
+            raise HTTPException(status_code=404, detail="事实包不存在")
+    for field, value in payload.items():
+        setattr(row, field, value or "")
+    row.version += 1
+    if row.status != "human_approved":
+        row.approved_by = ""
+        row.approved_at = None
+    db.commit()
+    row = db.query(ContentAsset).options(selectinload(ContentAsset.fact_pack)).filter(ContentAsset.id == row.id).one()
+    return _asset_out(row)
+
+
+@router.post("/content-assets/{asset_id}/ai-review", response_model=ContentAssetReviewOut)
+def review_content_asset(
+    asset_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ContentAssetReviewOut:
+    row = (
+        db.query(ContentAsset)
+        .options(selectinload(ContentAsset.fact_pack))
+        .filter(ContentAsset.id == asset_id, ContentAsset.tenant_id == user.tenant_id)
+        .first()
+    )
+    if row is None:
+        raise HTTPException(status_code=404, detail="内容资产不存在")
+    status, findings = _review_asset(row, row.fact_pack)
+    row.ai_review_status = status
+    row.ai_review = "\n".join(findings) if findings else "规则初审通过：品牌、禁用词、认证和 NEED_INPUT 未发现阻断项。"
+    row.status = "ai_reviewed"
+    db.commit()
+    db.refresh(row)
+    return ContentAssetReviewOut(asset=_asset_out(row), findings=findings)
+
+
+@router.post("/content-assets/{asset_id}/approve", response_model=ContentAssetOut)
+def approve_content_asset(
+    asset_id: str,
+    body: ContentAssetApproveIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ContentAssetOut:
+    if not body.confirmed:
+        raise HTTPException(status_code=400, detail="批准内容资产需要人工确认")
+    row = (
+        db.query(ContentAsset)
+        .options(selectinload(ContentAsset.fact_pack))
+        .filter(ContentAsset.id == asset_id, ContentAsset.tenant_id == user.tenant_id)
+        .first()
+    )
+    if row is None:
+        raise HTTPException(status_code=404, detail="内容资产不存在")
+    if row.fact_pack is None or row.fact_pack.status != "approved":
+        raise HTTPException(status_code=400, detail="必须绑定已批准 Fact Pack")
+    status, findings = _review_asset(row, row.fact_pack)
+    if status != "pass":
+        row.ai_review_status = status
+        row.ai_review = "\n".join(findings)
+        db.commit()
+        raise HTTPException(status_code=400, detail="AI 初审未通过，不能人工批准")
+    row.status = "human_approved"
+    row.ai_review_status = "pass"
+    row.ai_review = "规则初审通过：品牌、禁用词、认证和 NEED_INPUT 未发现阻断项。"
+    row.human_review_note = body.note
+    row.approved_by = user.email
+    row.approved_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(row)
+    return _asset_out(row)
 
 
 @router.get("/platforms", response_model=list[SourcePlatformOut])

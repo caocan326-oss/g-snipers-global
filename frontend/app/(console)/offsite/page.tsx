@@ -21,9 +21,12 @@ import {
   api,
   type AiAssist,
   type BacklinkGap,
+  type ContentAsset,
+  type ContentAssetReview,
   type DistGuide,
   type DistJob,
   type DistProvider,
+  type FactPack,
   type PlacementCheck,
   type PlatformAccount,
   type PlatformConnector,
@@ -92,7 +95,7 @@ const taskTypeLabel: Record<string, string> = {
   monitor_only: "只监控",
 };
 
-type Tab = "opportunities" | "distribution" | "placements" | "platforms";
+type Tab = "opportunities" | "distribution" | "placements" | "content" | "platforms";
 
 function StatTile({ label, value, helper }: { label: string; value: string | number; helper: string }) {
   return (
@@ -136,6 +139,8 @@ export default function OffsitePage() {
   const [platforms, setPlatforms] = useState<SourcePlatform[]>([]);
   const [accounts, setAccounts] = useState<PlatformAccount[]>([]);
   const [connectors, setConnectors] = useState<PlatformConnector[]>([]);
+  const [factPacks, setFactPacks] = useState<FactPack[]>([]);
+  const [assets, setAssets] = useState<ContentAsset[]>([]);
   const [error, setError] = useState("");
   const [note, setNote] = useState("");
   const [form, setForm] = useState({
@@ -157,6 +162,7 @@ export default function OffsitePage() {
     gap_id: "",
     platform_id: "",
     account_id: "",
+    content_asset_id: "",
     title: "",
     target_url: "/",
     provider_key: "directory",
@@ -202,6 +208,27 @@ export default function OffsitePage() {
     env_var: "",
     notes: "",
   });
+  const [factForm, setFactForm] = useState({
+    name: "Default Fact Pack",
+    legal_name: "",
+    brand_names: "",
+    website: "",
+    product_categories_en: "",
+    certifications: "",
+    key_specs: "",
+    banned_claims: "",
+    contact_public: "",
+    approved_boilerplate_en: "",
+  });
+  const [assetForm, setAssetForm] = useState({
+    fact_pack_id: "",
+    asset_type: "company_blurb",
+    title: "",
+    body_md: "",
+    locale: "en",
+    keywords: "",
+    entities: "",
+  });
   const [resultForms, setResultForms] = useState<Record<string, string>>({});
   const [guides, setGuides] = useState<Record<string, DistGuide>>({});
   const [placementChecks, setPlacementChecks] = useState<Record<string, PlacementCheck>>({});
@@ -211,8 +238,9 @@ export default function OffsitePage() {
     const validPlacements = gaps.filter((g) => g.verify_status === "valid").length;
     const needsReview = gaps.filter((g) => g.verify_status === "unverified").length;
     const openJobs = jobs.filter((j) => !["sent", "done"].includes(j.status)).length;
-    return { activeOpportunities, validPlacements, needsReview, openJobs };
-  }, [gaps, jobs]);
+    const approvedAssets = assets.filter((a) => a.status === "human_approved").length;
+    return { activeOpportunities, validPlacements, needsReview, openJobs, approvedAssets };
+  }, [gaps, jobs, assets]);
 
   function loadGaps() {
     api<BacklinkGap[]>("/api/offsite/gaps").then(setGaps).catch((e) => setError(e.message));
@@ -248,12 +276,25 @@ export default function OffsitePage() {
       .catch((e) => setError(e.message));
   }
 
+  function loadContent() {
+    Promise.all([api<FactPack[]>("/api/offsite/fact-packs"), api<ContentAsset[]>("/api/offsite/content-assets")])
+      .then(([facts, rows]) => {
+        setFactPacks(facts);
+        setAssets(rows);
+        if (facts.length) {
+          setAssetForm((current) => ({ ...current, fact_pack_id: current.fact_pack_id || facts[0].id }));
+        }
+      })
+      .catch((e) => setError(e.message));
+  }
+
   useEffect(() => {
     const queryTab = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("tab") : "";
     if (queryTab === "dist") setTab("distribution");
     loadGaps();
     loadDist();
     loadPlatforms();
+    loadContent();
   }, []);
 
   async function addGap(e: FormEvent) {
@@ -285,6 +326,7 @@ export default function OffsitePage() {
       title: gap.title || `${gap.referring_domain} 站外曝光执行`,
       platform_id: platforms.find((p) => p.domain && gap.referring_domain.includes(p.domain))?.id || "",
       account_id: "",
+      content_asset_id: "",
       target_url: gap.result_url || gap.link_url || "/",
       provider_key: providers[0]?.key || "directory",
       task_type: gap.issue_type === "unlinked_mention" ? "link_claim" : gap.kind === "inbound" ? "monitor_only" : "profile_create",
@@ -341,7 +383,7 @@ export default function OffsitePage() {
     setError("");
     setNote("");
     await api("/api/distribution/jobs", { method: "POST", body: JSON.stringify(distForm) });
-    setDistForm({ ...distForm, gap_id: "", platform_id: "", account_id: "", title: "", payload_summary: "", result_url: "" });
+    setDistForm({ ...distForm, gap_id: "", platform_id: "", account_id: "", content_asset_id: "", title: "", payload_summary: "", result_url: "" });
     setNote("分发任务已创建，等待人工确认执行。");
     loadGaps();
     loadDist();
@@ -363,6 +405,71 @@ export default function OffsitePage() {
     const res = await api<SourcePlatformSeed>("/api/offsite/platforms/seed-b2b", { method: "POST" });
     setPlatforms(res.platforms);
     setNote(`已导入 ${res.created} 个 B2B 常用平台，跳过 ${res.skipped} 个已有平台。`);
+  }
+
+  async function saveFactPack(e: FormEvent) {
+    e.preventDefault();
+    setError("");
+    setNote("");
+    const saved = await api<FactPack>("/api/offsite/fact-packs", { method: "POST", body: JSON.stringify(factForm) });
+    setFactForm({ ...factForm, name: "Default Fact Pack", legal_name: "", brand_names: "", website: "", product_categories_en: "", certifications: "", key_specs: "", banned_claims: "", contact_public: "", approved_boilerplate_en: "" });
+    setAssetForm((current) => ({ ...current, fact_pack_id: saved.id }));
+    setNote("Fact Pack 已保存，批准后才能生成对外内容草稿。");
+    loadContent();
+  }
+
+  async function approveFactPack(id: string) {
+    setError("");
+    setNote("");
+    await api(`/api/offsite/fact-packs/${id}/approve`, { method: "POST", body: JSON.stringify({ confirmed: true, note: "人工确认事实源" }) });
+    setNote("Fact Pack 已人工批准。");
+    loadContent();
+  }
+
+  async function saveAsset(e: FormEvent) {
+    e.preventDefault();
+    setError("");
+    setNote("");
+    await api("/api/offsite/content-assets", { method: "POST", body: JSON.stringify(assetForm) });
+    setAssetForm({ ...assetForm, title: "", body_md: "", keywords: "", entities: "" });
+    setNote("内容资产已保存为草稿。");
+    loadContent();
+  }
+
+  async function generateAsset() {
+    if (!assetForm.fact_pack_id) {
+      setError("请先选择已批准的 Fact Pack。");
+      return;
+    }
+    setError("");
+    setNote("");
+    await api("/api/offsite/content-assets/generate", {
+      method: "POST",
+      body: JSON.stringify({
+        fact_pack_id: assetForm.fact_pack_id,
+        asset_type: assetForm.asset_type,
+        title: assetForm.title,
+        locale: assetForm.locale,
+      }),
+    });
+    setNote("已基于 Fact Pack 生成内容草稿。");
+    loadContent();
+  }
+
+  async function reviewAsset(id: string) {
+    setError("");
+    setNote("");
+    const res = await api<ContentAssetReview>(`/api/offsite/content-assets/${id}/ai-review`, { method: "POST" });
+    setNote(res.findings.length ? `AI 初审发现 ${res.findings.length} 个问题。` : "AI 初审通过，仍需人工批准。");
+    loadContent();
+  }
+
+  async function approveAsset(id: string) {
+    setError("");
+    setNote("");
+    await api(`/api/offsite/content-assets/${id}/approve`, { method: "POST", body: JSON.stringify({ confirmed: true, note: "人工终审通过" }) });
+    setNote("内容资产已人工批准，可以绑定到分发任务。");
+    loadContent();
   }
 
   async function createAccount(e: FormEvent) {
@@ -467,9 +574,10 @@ export default function OffsitePage() {
         </div>
       </section>
 
-      <section className="grid gap-3 lg:grid-cols-5">
+      <section className="grid gap-3 lg:grid-cols-6">
         <WorkflowStep icon={RadioTower} title="Source Platform" value={gaps.length} helper="第三方来源、竞品曝光和我方已获链接" />
         <WorkflowStep icon={ClipboardList} title="Opportunity" value={stats.activeOpportunities} helper="可跟进的曝光机会，先判断价值再行动" />
+        <WorkflowStep icon={Bot} title="Content Asset" value={stats.approvedAssets} helper="已人工批准、可用于站外提交的内容资产" />
         <WorkflowStep icon={Send} title="Distribution Task" value={stats.openJobs} helper="待人工确认的内容分发或投稿任务" />
         <WorkflowStep icon={Link2} title="Placement" value={stats.validPlacements} helper="真实存在、可被客户复核的站外证据" />
         <WorkflowStep icon={RefreshCw} title="Platform / Account" value={platforms.length} helper="平台资源、账号和可接入 Connector" />
@@ -484,6 +592,9 @@ export default function OffsitePage() {
         </Button>
         <Button size="sm" variant={tab === "placements" ? "default" : "outline"} onClick={() => setTab("placements")}>
           Placement 核验
+        </Button>
+        <Button size="sm" variant={tab === "content" ? "default" : "outline"} onClick={() => setTab("content")}>
+          内容资产
         </Button>
         <Button size="sm" variant={tab === "platforms" ? "default" : "outline"} onClick={() => setTab("platforms")}>
           平台与账号
@@ -836,6 +947,27 @@ export default function OffsitePage() {
                       </option>
                     ))}
                 </select>
+                <select
+                  className="h-10 w-full rounded-md border border-slate-200 px-3 text-sm"
+                  value={distForm.content_asset_id}
+                  onChange={(e) => {
+                    const asset = assets.find((item) => item.id === e.target.value);
+                    setDistForm({
+                      ...distForm,
+                      content_asset_id: e.target.value,
+                      payload_summary: asset ? asset.body_md : distForm.payload_summary,
+                    });
+                  }}
+                >
+                  <option value="">不绑定内容资产</option>
+                  {assets
+                    .filter((asset) => asset.status === "human_approved")
+                    .map((asset) => (
+                      <option key={asset.id} value={asset.id}>
+                        {asset.title} · {asset.asset_type}
+                      </option>
+                    ))}
+                </select>
                 <Input
                   placeholder="任务标题，例如：提交到行业目录"
                   value={distForm.title}
@@ -932,6 +1064,121 @@ export default function OffsitePage() {
                 </div>
               </div>
             ))}
+          </div>
+        </section>
+      ) : null}
+
+      {tab === "content" ? (
+        <section className="grid gap-5 xl:grid-cols-[1fr_420px]">
+          <div className="space-y-4">
+            <Card className="rounded-md">
+              <CardHeader>
+                <CardTitle>Fact Pack</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {factPacks.length ? factPacks.map((fact) => (
+                  <div key={fact.id} className="rounded-md border border-slate-200 p-4">
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="font-semibold text-slate-950">{fact.name}</h3>
+                          <Badge tone={fact.status === "approved" ? "green" : "amber"}>{fact.status === "approved" ? "已批准" : "草稿"}</Badge>
+                        </div>
+                        <p className="mt-1 text-sm text-slate-500">{fact.legal_name || "未填写公司英文名"} · {fact.website || "未填写官网"}</p>
+                        <p className="mt-2 text-sm leading-6 text-slate-600">{fact.approved_boilerplate_en || "还没有标准英文简介。"}</p>
+                        <div className="mt-2 grid gap-2 text-xs text-slate-500 md:grid-cols-2">
+                          <span>品牌：{fact.brand_names || "未填"}</span>
+                          <span>品类：{fact.product_categories_en || "未填"}</span>
+                          <span>认证：{fact.certifications || "未填"}</span>
+                          <span>禁用语：{fact.banned_claims || "未填"}</span>
+                        </div>
+                      </div>
+                      <Button size="sm" variant="outline" onClick={() => approveFactPack(fact.id)} disabled={fact.status === "approved"}>
+                        批准事实包
+                      </Button>
+                    </div>
+                  </div>
+                )) : <p className="text-sm text-slate-500">还没有 Fact Pack。先让客户确认事实源，再生成对外内容。</p>}
+              </CardContent>
+            </Card>
+
+            <Card className="rounded-md">
+              <CardHeader>
+                <CardTitle>Content Asset</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {assets.length ? assets.map((asset) => (
+                  <div key={asset.id} className="rounded-md border border-slate-200 p-4">
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="font-semibold text-slate-950">{asset.title}</h3>
+                          <Badge>{asset.asset_type}</Badge>
+                          <Badge tone={asset.status === "human_approved" ? "green" : asset.ai_review_status === "fail" ? "red" : "amber"}>
+                            {asset.status === "human_approved" ? "人工已批准" : asset.ai_review_status === "fail" ? "初审未过" : asset.status}
+                          </Badge>
+                        </div>
+                        <p className="mt-1 text-xs text-slate-500">{asset.fact_pack_name || "未绑定 Fact Pack"} · {asset.locale} · v{asset.version}</p>
+                        <p className="mt-3 whitespace-pre-wrap rounded-md bg-slate-50 p-3 text-sm leading-6 text-slate-700">{asset.body_md}</p>
+                        {asset.ai_review ? <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-slate-500">{asset.ai_review}</p> : null}
+                      </div>
+                      <div className="flex shrink-0 flex-wrap gap-2 lg:w-40">
+                        <Button size="sm" variant="outline" onClick={() => reviewAsset(asset.id)}>AI 初审</Button>
+                        <Button size="sm" onClick={() => approveAsset(asset.id)} disabled={asset.status === "human_approved"}>人工批准</Button>
+                      </div>
+                    </div>
+                  </div>
+                )) : <p className="text-sm text-slate-500">还没有内容资产。可以手工粘贴，也可以基于已批准 Fact Pack 生成草稿。</p>}
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="space-y-4">
+            <Card className="rounded-md">
+              <CardHeader><CardTitle>新增 Fact Pack</CardTitle></CardHeader>
+              <CardContent>
+                <form className="space-y-3" onSubmit={saveFactPack}>
+                  <Input placeholder="事实包名称" value={factForm.name} onChange={(e) => setFactForm({ ...factForm, name: e.target.value })} />
+                  <Input placeholder="公司英文全称" value={factForm.legal_name} onChange={(e) => setFactForm({ ...factForm, legal_name: e.target.value })} />
+                  <Input placeholder="品牌名，多个用逗号" value={factForm.brand_names} onChange={(e) => setFactForm({ ...factForm, brand_names: e.target.value })} />
+                  <Input placeholder="官网" value={factForm.website} onChange={(e) => setFactForm({ ...factForm, website: e.target.value })} />
+                  <Input placeholder="英文品类词" value={factForm.product_categories_en} onChange={(e) => setFactForm({ ...factForm, product_categories_en: e.target.value })} />
+                  <Input placeholder="认证/资质，仅填已确认" value={factForm.certifications} onChange={(e) => setFactForm({ ...factForm, certifications: e.target.value })} />
+                  <Input placeholder="公开参数/规格" value={factForm.key_specs} onChange={(e) => setFactForm({ ...factForm, key_specs: e.target.value })} />
+                  <Input placeholder="禁用宣传语，例如 world leader" value={factForm.banned_claims} onChange={(e) => setFactForm({ ...factForm, banned_claims: e.target.value })} />
+                  <Input placeholder="公开联系方式" value={factForm.contact_public} onChange={(e) => setFactForm({ ...factForm, contact_public: e.target.value })} />
+                  <textarea className="min-h-24 w-full rounded-md border border-slate-200 px-3 py-2 text-sm" placeholder="客户批准的标准英文简介" value={factForm.approved_boilerplate_en} onChange={(e) => setFactForm({ ...factForm, approved_boilerplate_en: e.target.value })} />
+                  <Button type="submit" className="w-full">保存 Fact Pack</Button>
+                </form>
+              </CardContent>
+            </Card>
+
+            <Card className="rounded-md">
+              <CardHeader><CardTitle>新增内容资产</CardTitle></CardHeader>
+              <CardContent>
+                <form className="space-y-3" onSubmit={saveAsset}>
+                  <select className="h-10 w-full rounded-md border border-slate-200 px-3 text-sm" value={assetForm.fact_pack_id} onChange={(e) => setAssetForm({ ...assetForm, fact_pack_id: e.target.value })}>
+                    <option value="">选择 Fact Pack</option>
+                    {factPacks.map((fact) => <option key={fact.id} value={fact.id}>{fact.name} · {fact.status}</option>)}
+                  </select>
+                  <select className="h-10 w-full rounded-md border border-slate-200 px-3 text-sm" value={assetForm.asset_type} onChange={(e) => setAssetForm({ ...assetForm, asset_type: e.target.value })}>
+                    <option value="company_blurb">公司简介</option>
+                    <option value="profile_fields">平台档案字段</option>
+                    <option value="product_spec">产品/规格</option>
+                    <option value="faq">FAQ</option>
+                    <option value="listicle_pitch">榜单 Pitch</option>
+                    <option value="pr_draft">PR 草稿</option>
+                  </select>
+                  <Input placeholder="标题" value={assetForm.title} onChange={(e) => setAssetForm({ ...assetForm, title: e.target.value })} required />
+                  <textarea className="min-h-32 w-full rounded-md border border-slate-200 px-3 py-2 text-sm" placeholder="正文，手工粘贴或点击下方生成草稿" value={assetForm.body_md} onChange={(e) => setAssetForm({ ...assetForm, body_md: e.target.value })} />
+                  <Input placeholder="关键词" value={assetForm.keywords} onChange={(e) => setAssetForm({ ...assetForm, keywords: e.target.value })} />
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <Button type="button" variant="outline" onClick={generateAsset}>从 Fact Pack 生成草稿</Button>
+                    <Button type="submit">保存内容资产</Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
           </div>
         </section>
       ) : null}

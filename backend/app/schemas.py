@@ -1247,6 +1247,7 @@ class DistributionJobCreate(BaseModel):
     gap_id: str | None = None
     platform_id: str | None = None
     account_id: str | None = None
+    content_asset_id: str | None = None
     task_type: str = "profile_create"
     payload_summary: str = ""
     owner_hint: str = ""
@@ -1259,6 +1260,7 @@ class DistributionJobOut(BaseModel):
     gap_id: str | None = None
     platform_id: str | None = None
     account_id: str | None = None
+    content_asset_id: str | None = None
     title: str
     target_url: str
     provider_key: str
@@ -1279,6 +1281,7 @@ class DistributionJobUpdate(BaseModel):
     status: str | None = None
     platform_id: str | None = None
     account_id: str | None = None
+    content_asset_id: str | None = None
     owner_hint: str | None = None
     result_url: str | None = None
     verify_status: str | None = None
@@ -1367,6 +1370,103 @@ class SourcePlatformSeedOut(BaseModel):
     created: int
     skipped: int
     platforms: list[SourcePlatformOut] = []
+
+
+class FactPackCreate(BaseModel):
+    name: str = "Default Fact Pack"
+    legal_name: str = ""
+    brand_names: str = ""
+    website: str = ""
+    product_categories_en: str = ""
+    certifications: str = ""
+    key_specs: str = ""
+    banned_claims: str = ""
+    contact_public: str = ""
+    approved_boilerplate_en: str = ""
+    status: str = "draft"
+
+
+class FactPackUpdate(BaseModel):
+    name: str | None = None
+    legal_name: str | None = None
+    brand_names: str | None = None
+    website: str | None = None
+    product_categories_en: str | None = None
+    certifications: str | None = None
+    key_specs: str | None = None
+    banned_claims: str | None = None
+    contact_public: str | None = None
+    approved_boilerplate_en: str | None = None
+    status: str | None = None
+
+
+class FactPackOut(FactPackCreate):
+    id: str
+    version: int = 1
+    approved_by: str = ""
+    approved_at: datetime | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class ContentAssetCreate(BaseModel):
+    fact_pack_id: str | None = None
+    asset_type: str = "company_blurb"
+    title: str
+    body_md: str = ""
+    locale: str = "en"
+    keywords: str = ""
+    entities: str = ""
+
+
+class ContentAssetUpdate(BaseModel):
+    fact_pack_id: str | None = None
+    asset_type: str | None = None
+    title: str | None = None
+    body_md: str | None = None
+    locale: str | None = None
+    keywords: str | None = None
+    entities: str | None = None
+    status: str | None = None
+    human_review_note: str | None = None
+
+
+class ContentAssetOut(BaseModel):
+    id: str
+    fact_pack_id: str | None = None
+    fact_pack_name: str = ""
+    asset_type: str
+    title: str
+    body_md: str
+    locale: str
+    keywords: str = ""
+    entities: str = ""
+    status: str
+    ai_review_status: str = "untested"
+    ai_review: str = ""
+    human_review_note: str = ""
+    approved_by: str = ""
+    approved_at: datetime | None = None
+    version: int = 1
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class ContentAssetReviewOut(BaseModel):
+    asset: ContentAssetOut
+    findings: list[str] = []
+
+
+class ContentAssetApproveIn(BaseModel):
+    confirmed: bool
+    note: str = ""
+
+
+class ContentAssetGenerateIn(BaseModel):
+    fact_pack_id: str
+    asset_type: str = "company_blurb"
+    title: str = ""
+    locale: str = "en"
 
 
 class PlatformAccountCreate(BaseModel):

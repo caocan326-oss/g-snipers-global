@@ -744,6 +744,60 @@ class PlatformConnector(Base):
     platform: Mapped[SourcePlatform] = relationship(back_populates="connectors")
 
 
+class FactPack(Base):
+    __tablename__ = "fact_packs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(200), default="Default Fact Pack")
+    legal_name: Mapped[str] = mapped_column(String(300), default="")
+    brand_names: Mapped[str] = mapped_column(Text, default="")
+    website: Mapped[str] = mapped_column(String(500), default="")
+    product_categories_en: Mapped[str] = mapped_column(Text, default="")
+    certifications: Mapped[str] = mapped_column(Text, default="")
+    key_specs: Mapped[str] = mapped_column(Text, default="")
+    banned_claims: Mapped[str] = mapped_column(Text, default="")
+    contact_public: Mapped[str] = mapped_column(Text, default="")
+    approved_boilerplate_en: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(String(20), default="draft", index=True)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    approved_by: Mapped[str] = mapped_column(String(120), default="")
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    assets: Mapped[list["ContentAsset"]] = relationship(back_populates="fact_pack")
+
+
+class ContentAsset(Base):
+    __tablename__ = "content_assets"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
+    fact_pack_id: Mapped[str | None] = mapped_column(ForeignKey("fact_packs.id"), index=True)
+    asset_type: Mapped[str] = mapped_column(String(40), default="company_blurb", index=True)
+    title: Mapped[str] = mapped_column(String(300), nullable=False)
+    body_md: Mapped[str] = mapped_column(Text, default="")
+    locale: Mapped[str] = mapped_column(String(20), default="en")
+    keywords: Mapped[str] = mapped_column(Text, default="")
+    entities: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(String(30), default="draft", index=True)
+    ai_review_status: Mapped[str] = mapped_column(String(20), default="untested")
+    ai_review: Mapped[str] = mapped_column(Text, default="")
+    human_review_note: Mapped[str] = mapped_column(Text, default="")
+    approved_by: Mapped[str] = mapped_column(String(120), default="")
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    fact_pack: Mapped[FactPack | None] = relationship(back_populates="assets")
+
+
 class OutreachItem(Base):
     __tablename__ = "outreach_items"
 
@@ -767,6 +821,7 @@ class DistributionJob(Base):
     gap_id: Mapped[str | None] = mapped_column(ForeignKey("backlink_gaps.id"), index=True)
     platform_id: Mapped[str | None] = mapped_column(ForeignKey("source_platforms.id"), index=True)
     account_id: Mapped[str | None] = mapped_column(ForeignKey("platform_accounts.id"), index=True)
+    content_asset_id: Mapped[str | None] = mapped_column(ForeignKey("content_assets.id"), index=True)
     title: Mapped[str] = mapped_column(String(300), nullable=False)
     target_url: Mapped[str] = mapped_column(String(500), nullable=False)
     provider_key: Mapped[str] = mapped_column(String(40), nullable=False)

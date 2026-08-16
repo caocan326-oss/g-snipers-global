@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
 from app.database import get_db
-from app.models import BacklinkGap, DistributionAttempt, DistributionJob, PlatformAccount, SourcePlatform, User
+from app.models import BacklinkGap, ContentAsset, DistributionAttempt, DistributionJob, PlatformAccount, SourcePlatform, User
 from app.providers import all_providers, get_provider
 from app.risk import require_confirm
 from app.schemas import (
@@ -140,6 +140,7 @@ def create_job(
             raise HTTPException(status_code=404, detail="站外机会不存在")
     platform = None
     account = None
+    asset = None
     if body.platform_id:
         platform = db.get(SourcePlatform, body.platform_id)
         if platform is None or platform.tenant_id != user.tenant_id:
@@ -152,6 +153,14 @@ def create_job(
             raise HTTPException(status_code=400, detail="账号不属于所选平台")
         if account.status != "active":
             raise HTTPException(status_code=400, detail="账号不可用，不能进入执行")
+    if body.content_asset_id:
+        asset = db.get(ContentAsset, body.content_asset_id)
+        if asset is None or asset.tenant_id != user.tenant_id:
+            raise HTTPException(status_code=404, detail="内容资产不存在")
+        if asset.status != "human_approved":
+            raise HTTPException(status_code=400, detail="内容资产未人工批准，不能进入分发任务")
+        if not body.payload_summary:
+            body.payload_summary = asset.body_md[:2000]
     row = DistributionJob(
         tenant_id=user.tenant_id,
         status="draft",
@@ -211,6 +220,18 @@ def update_job(
             job.account_id = account.id
         else:
             job.account_id = None
+    if "content_asset_id" in payload:
+        if payload["content_asset_id"]:
+            asset = db.get(ContentAsset, payload["content_asset_id"])
+            if asset is None or asset.tenant_id != user.tenant_id:
+                raise HTTPException(status_code=404, detail="内容资产不存在")
+            if asset.status != "human_approved":
+                raise HTTPException(status_code=400, detail="内容资产未人工批准，不能进入分发任务")
+            job.content_asset_id = asset.id
+            if not job.payload_summary:
+                job.payload_summary = asset.body_md[:2000]
+        else:
+            job.content_asset_id = None
     if "verify_status" in payload and payload["verify_status"]:
         if payload["verify_status"] not in VERIFY_STATUSES:
             raise HTTPException(status_code=400, detail="无效核验状态")

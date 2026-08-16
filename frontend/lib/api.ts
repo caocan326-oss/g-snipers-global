@@ -859,6 +859,7 @@ export type DistJob = {
   gap_id: string | null;
   platform_id: string | null;
   account_id: string | null;
+  content_asset_id: string | null;
   title: string;
   target_url: string;
   provider_key: string;
@@ -947,6 +948,52 @@ export type SourcePlatformSeed = {
   created: number;
   skipped: number;
   platforms: SourcePlatform[];
+};
+
+export type FactPack = {
+  id: string;
+  name: string;
+  legal_name: string;
+  brand_names: string;
+  website: string;
+  product_categories_en: string;
+  certifications: string;
+  key_specs: string;
+  banned_claims: string;
+  contact_public: string;
+  approved_boilerplate_en: string;
+  status: string;
+  version: number;
+  approved_by: string;
+  approved_at: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export type ContentAsset = {
+  id: string;
+  fact_pack_id: string | null;
+  fact_pack_name: string;
+  asset_type: string;
+  title: string;
+  body_md: string;
+  locale: string;
+  keywords: string;
+  entities: string;
+  status: string;
+  ai_review_status: string;
+  ai_review: string;
+  human_review_note: string;
+  approved_by: string;
+  approved_at: string | null;
+  version: number;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export type ContentAssetReview = {
+  asset: ContentAsset;
+  findings: string[];
 };
 
 export type PlatformAccount = {

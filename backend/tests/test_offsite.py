@@ -79,3 +79,125 @@ def test_offsite_gap_and_outreach(client: TestClient, demo_user) -> None:
     assert checker["counts"]["valid"] >= 1
     assert "share_of_voice" not in checker
     assert "domain_rating" not in checker
+
+
+def test_fact_pack_content_asset_approval_and_distribution_gate(client: TestClient, demo_user) -> None:
+    headers = auth_header(client)
+    fact = client.post(
+        "/api/offsite/fact-packs",
+        headers=headers,
+        json={
+            "name": "Pump Exporter Facts",
+            "legal_name": "Example Pump Co., Ltd.",
+            "brand_names": "ExamplePump",
+            "website": "https://example.com",
+            "product_categories_en": "industrial pumps, centrifugal pumps",
+            "certifications": "ISO 9001",
+            "banned_claims": "world leader, FDA approved",
+            "approved_boilerplate_en": "ExamplePump manufactures industrial pump systems for export buyers.",
+        },
+    )
+    assert fact.status_code == 201, fact.text
+    fact_id = fact.json()["id"]
+
+    blocked_generate = client.post(
+        "/api/offsite/content-assets/generate",
+        headers=headers,
+        json={"fact_pack_id": fact_id, "asset_type": "company_blurb"},
+    )
+    assert blocked_generate.status_code == 400
+
+    approved_fact = client.post(
+        f"/api/offsite/fact-packs/{fact_id}/approve",
+        headers=headers,
+        json={"confirmed": True, "note": "客户确认"},
+    )
+    assert approved_fact.status_code == 200, approved_fact.text
+    assert approved_fact.json()["status"] == "approved"
+
+    draft = client.post(
+        "/api/offsite/content-assets/generate",
+        headers=headers,
+        json={"fact_pack_id": fact_id, "asset_type": "company_blurb", "title": "Directory company blurb"},
+    )
+    assert draft.status_code == 201, draft.text
+    asset_id = draft.json()["id"]
+    assert draft.json()["status"] == "draft"
+    assert "ExamplePump" in draft.json()["body_md"]
+
+    job_denied = client.post(
+        "/api/distribution/jobs",
+        headers=headers,
+        json={
+            "content_asset_id": asset_id,
+            "title": "Submit directory profile",
+            "target_url": "https://example.com",
+            "provider_key": "directory",
+        },
+    )
+    assert job_denied.status_code == 400
+
+    reviewed = client.post(f"/api/offsite/content-assets/{asset_id}/ai-review", headers=headers)
+    assert reviewed.status_code == 200, reviewed.text
+    assert reviewed.json()["asset"]["ai_review_status"] == "pass"
+
+    approved_asset = client.post(
+        f"/api/offsite/content-assets/{asset_id}/approve",
+        headers=headers,
+        json={"confirmed": True, "note": "人工终审通过"},
+    )
+    assert approved_asset.status_code == 200, approved_asset.text
+    assert approved_asset.json()["status"] == "human_approved"
+
+    job = client.post(
+        "/api/distribution/jobs",
+        headers=headers,
+        json={
+            "content_asset_id": asset_id,
+            "title": "Submit directory profile",
+            "target_url": "https://example.com",
+            "provider_key": "directory",
+        },
+    )
+    assert job.status_code == 201, job.text
+    assert job.json()["content_asset_id"] == asset_id
+    assert "ExamplePump" in job.json()["payload_summary"]
+
+
+def test_content_asset_review_blocks_need_input_and_banned_claim(client: TestClient, demo_user) -> None:
+    headers = auth_header(client)
+    fact = client.post(
+        "/api/offsite/fact-packs",
+        headers=headers,
+        json={
+            "legal_name": "Example Co.",
+            "brand_names": "ExampleBrand",
+            "website": "https://example.com",
+            "product_categories_en": "industrial sensors",
+            "banned_claims": "world leader",
+        },
+    ).json()
+    approved = client.post(f"/api/offsite/fact-packs/{fact['id']}/approve", headers=headers, json={"confirmed": True})
+    assert approved.status_code == 200, approved.text
+    asset = client.post(
+        "/api/offsite/content-assets",
+        headers=headers,
+        json={
+            "fact_pack_id": fact["id"],
+            "asset_type": "company_blurb",
+            "title": "Unsafe blurb",
+            "body_md": "ExampleBrand is the world leader in industrial sensors. [NEED_INPUT: certification]",
+        },
+    )
+    assert asset.status_code == 201, asset.text
+    reviewed = client.post(f"/api/offsite/content-assets/{asset.json()['id']}/ai-review", headers=headers)
+    assert reviewed.status_code == 200, reviewed.text
+    findings = "\n".join(reviewed.json()["findings"])
+    assert "NEED_INPUT" in findings
+    assert "world leader" in findings
+    denied = client.post(
+        f"/api/offsite/content-assets/{asset.json()['id']}/approve",
+        headers=headers,
+        json={"confirmed": True},
+    )
+    assert denied.status_code == 400
