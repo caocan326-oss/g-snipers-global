@@ -1,13 +1,8 @@
 "use client";
 
-import { Activity, Database, Download, FileText, Globe2, ShieldCheck, Wand2 } from "lucide-react";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import {
   api,
   type AiAssist,
@@ -25,55 +20,20 @@ import {
   type SeoPage,
 } from "@/lib/api";
 
-const obsLabel: Record<string, string> = {
-  untested: "未测",
-  mentioned: "出现",
-  not_mentioned: "未出现",
-  cited: "被引用",
-  verified: "引用已核验",
-};
-
-const obsTone: Record<string, "default" | "amber" | "green" | "red" | "blue"> = {
-  untested: "amber",
-  mentioned: "blue",
-  not_mentioned: "default",
-  cited: "green",
-  verified: "green",
-};
-
-const evidenceLabel: Record<string, string> = {
-  none: "无证据",
-  mentioned: "正文提及",
-  cited: "引用待核验",
-  verified: "引用已核验",
-};
-
-const diagnosisOptions = [
-  ["untested", "未测"],
-  ["absent", "未出现"],
-  ["mentioned", "被提及"],
-  ["competitor_dominated", "竞品主导"],
-  ["suspected_negative", "疑似负面"],
-] as const;
-
-const ticketStatus: Record<string, string> = {
-  open: "待办",
-  in_progress: "执行中",
-  verify: "待验收",
-  done: "已验收",
-  reopened: "已重开",
-};
-
-const providerRoleLabel: Record<string, string> = {
-  analysis: "分析建议",
-  search: "联网搜索",
-  grounded_answer: "联网答案",
-  citation: "引用来源",
-  crawler: "抓取证据",
-};
+import { AssetsPanel } from "./_components/AssetsPanel";
+import { EvidenceQualityCard, type ProviderQualityEntry } from "./_components/EvidenceQualityCard";
+import { HeroSection } from "./_components/HeroSection";
+import { MetricsGrid } from "./_components/MetricsGrid";
+import { ProviderStatusCard } from "./_components/ProviderStatusCard";
+import { SamplePromptsPanel } from "./_components/SamplePromptsPanel";
+import { SampleRunsCard } from "./_components/SampleRunsCard";
+import { TargetsCard } from "./_components/TargetsCard";
+import { TabNav } from "./_components/TabNav";
+import { TicketsPanel, type TicketForm } from "./_components/TicketsPanel";
+import { geoEvidenceVerdict, type Tab } from "./_helpers";
 
 export default function GeoPage() {
-  const [tab, setTab] = useState<"sample" | "tickets" | "assets">("sample");
+  const [tab, setTab] = useState<Tab>("sample");
   const [prompts, setPrompts] = useState<GeoPrompt[]>([]);
   const [summary, setSummary] = useState<GeoSummary | null>(null);
   const [targets, setTargets] = useState<ProjectTargets | null>(null);
@@ -86,7 +46,7 @@ export default function GeoPage() {
   const [items, setItems] = useState<GeoChecklistItem[]>([]);
   const [error, setError] = useState("");
   const [form, setForm] = useState({ prompt_text: "", locale: "en-US" });
-  const [ticketForm, setTicketForm] = useState({
+  const [ticketForm, setTicketForm] = useState<TicketForm>({
     prompt_id: "",
     title: "",
     diagnosis: "untested",
@@ -96,6 +56,7 @@ export default function GeoPage() {
   const [confirmNote, setConfirmNote] = useState("");
   const [note, setNote] = useState("");
   const [busyAction, setBusyAction] = useState("");
+  const [sampleProvider, setSampleProvider] = useState("deepseek");
 
   function loadPrompts() {
     Promise.all([api<GeoPrompt[]>("/api/geo/prompts"), api<GeoSummary>("/api/geo/summary")])
@@ -124,6 +85,17 @@ export default function GeoPage() {
     api<ProjectTargets>("/api/project-targets").then(setTargets).catch(() => undefined);
     api<GeoProviderStatusList>("/api/geo/providers/status").then(setProviders).catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    const rows = providers?.providers ?? [];
+    if (!rows.length) return;
+    if (rows.some((provider) => provider.key === sampleProvider)) return;
+    const preferred = rows.find((provider) => provider.configured && provider.role === "grounded_answer")
+      ?? rows.find((provider) => provider.configured && provider.web_grounded)
+      ?? rows.find((provider) => provider.configured)
+      ?? rows[0];
+    setSampleProvider(preferred.key);
+  }, [providers, sampleProvider]);
 
   async function aiPrompt(id: string) {
     setError("");
@@ -239,19 +211,20 @@ export default function GeoPage() {
     setError("");
     setNote("");
     setBusyAction("auto-sample");
+    const selected = (providers?.providers ?? []).find((provider) => provider.key === sampleProvider);
     try {
       const run = await api<GeoSampleRun>("/api/geo/sample-runs/auto", {
         method: "POST",
         body: JSON.stringify({
-          engine: "llm",
-          provider: "deepseek",
+          engine: sampleProvider,
+          provider: sampleProvider,
           trials: 1,
           limit: 8,
-          web_grounded: "false",
-          region_hint: "API",
+          web_grounded: selected?.web_grounded ? "true" : "false",
+          region_hint: selected?.label ?? "API",
         }),
       });
-      setNote(`DeepSeek 采样完成：run ${run.id}，证据 ${run.results_count} 条。该结果用于判断品牌是否被提及，不计入真实联网引用率。`);
+      setNote(`${selected?.label ?? sampleProvider} 采样完成：run ${run.id}，证据 ${run.results_count} 条。${selected?.web_grounded ? "返回引用来源时可计入联网引用证据。" : "该结果用于分析和品牌提及判断，不计入真实联网引用率。"}`);
       loadRuns();
       loadPrompts();
     } catch (e) {
@@ -327,543 +300,107 @@ export default function GeoPage() {
 
   const llms = assets.find((a) => a.kind === "llms_txt");
   const cite = assets.find((a) => a.kind === "cite_checklist");
-
-  function slotGroup(p: GeoPrompt, region: string, title: string) {
-    const rows = p.observations.filter((o) => (o.region || "") === region);
-    return (
-      <div>
-        <div className="mb-2 text-xs font-medium text-slate-500">{title}</div>
-        <div className="flex flex-wrap gap-3">
-          {rows.map((o) => (
-            <div key={o.id} className="w-full rounded-md border p-3 lg:w-[calc(50%-0.375rem)]">
-              <div className="mb-2 flex items-center justify-between gap-3">
-                <div className="text-xs font-medium text-slate-500">{o.engine_label || o.engine}</div>
-                <Badge tone={obsTone[o.status]}>{obsLabel[o.status] ?? o.status}</Badge>
-              </div>
-              <div className="mb-2 flex flex-wrap gap-2 text-[11px] text-slate-500">
-                <span>{o.surface || "manual_ai_answer"}</span>
-                <span>{o.sample_type || "manual"}</span>
-                <span>{o.evidence_label || evidenceLabel[o.evidence_tier || "none"]}</span>
-                {o.observed_at ? <span>{new Date(o.observed_at).toLocaleString("zh-CN")}</span> : null}
-              </div>
-              <div className="mt-2 flex flex-wrap gap-1">
-                {["untested", "not_mentioned", "mentioned", "cited", "verified"].map((s) => (
-                  <Button key={s} size="sm" variant="ghost" onClick={() => setObs(o.id, s)}>
-                    {obsLabel[s]}
-                  </Button>
-                ))}
-              </div>
-              <div className="mt-3 grid gap-2">
-                <Textarea
-                  className="min-h-[72px]"
-                  placeholder="回答摘录：粘贴 AI 答案里提到客户、竞品或引用来源的片段"
-                  defaultValue={o.response_excerpt || ""}
-                  onBlur={(e) => setObs(o.id, o.status, { response_excerpt: e.target.value })}
-                />
-                <Input
-                  placeholder="引用 URL，一行或逗号分隔"
-                  defaultValue={o.citation_urls || ""}
-                  onBlur={(e) => setObs(o.id, o.status, { citation_urls: e.target.value })}
-                />
-                <div className="grid gap-2 md:grid-cols-2">
-                  <Input
-                    placeholder="品牌/产品提及"
-                    defaultValue={o.brand_mentions || ""}
-                    onBlur={(e) => setObs(o.id, o.status, { brand_mentions: e.target.value })}
-                  />
-                  <Input
-                    placeholder="竞品提及"
-                    defaultValue={o.competitor_mentions || ""}
-                    onBlur={(e) => setObs(o.id, o.status, { competitor_mentions: e.target.value })}
-                  />
-                </div>
-                <Input
-                  placeholder="备注：说明这条证据来自人工记录、AI 回答、搜索结果或其他来源"
-                  defaultValue={o.interpretation_note || o.notes || ""}
-                  onBlur={(e) => setObs(o.id, o.status, { interpretation_note: e.target.value, notes: e.target.value })}
-                />
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
+  const selectedProvider = useMemo(
+    () => (providers?.providers ?? []).find((provider) => provider.key === sampleProvider),
+    [providers?.providers, sampleProvider]
+  );
+  const evidenceVerdict = useMemo(() => geoEvidenceVerdict(summary, runs), [runs, summary]);
+  const providerQuality: ProviderQualityEntry[] = useMemo(() => {
+    return (providers?.providers ?? []).map((provider) => {
+      const providerRuns = runs.filter((run) => run.engines.includes(provider.key));
+      const providerResults = providerRuns.flatMap((run) => run.results);
+      const verified = providerResults.filter((result) => result.verification_status === "passed").length;
+      const citations = providerResults.filter((result) => result.citations.length > 0).length;
+      const status = !provider.configured
+        ? "未配置"
+        : providerResults.length === 0
+          ? "待采样"
+          : verified > 0
+            ? "有核验证据"
+            : citations > 0
+              ? "有来源待核验"
+              : provider.web_grounded
+                ? "无来源"
+                : "分析参考";
+      return { provider, providerRuns, providerResults, verified, citations, status };
+    });
+  }, [providers?.providers, runs]);
 
   return (
     <div className="space-y-6">
-      <section className="rounded-md border border-slate-200 bg-white px-5 py-4 shadow-sm">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge tone="brand">GEO 可见度诊断</Badge>
-              <Badge tone={summary?.recorded ? "green" : "amber"}>{summary?.recorded ? "已有观测" : "待采样"}</Badge>
-              <Badge tone="blue">geo-test-protocol-v1</Badge>
-            </div>
-            <h1 className="mt-3 text-2xl font-semibold text-slate-950">GEO 可见度与引用证据</h1>
-            <p className="mt-1 max-w-4xl text-sm leading-6 text-slate-500">
-              用买家真实会问的问题测试 AI 是否提到客户、是否引用客户官网、是否被竞品压制。非联网 AI 结果只作为分析参考，不计入真实引用率。
-            </p>
-          </div>
-          <div className="grid w-full gap-2 text-sm md:grid-cols-3 xl:w-[560px]">
-            <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
-              <div className="flex items-center gap-2 text-xs text-slate-500"><Activity className="h-4 w-4" />最近采样</div>
-              <div className="mt-1 truncate font-mono text-xs font-medium text-slate-900">{summary?.latest_run_id ?? "暂无"}</div>
-            </div>
-            <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
-              <div className="flex items-center gap-2 text-xs text-slate-500"><Database className="h-4 w-4" />证据条目</div>
-              <div className="mt-1 font-medium text-slate-900">{summary?.evidence_results ?? 0}</div>
-            </div>
-            <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
-              <div className="flex items-center gap-2 text-xs text-slate-500"><ShieldCheck className="h-4 w-4" />核验引用</div>
-              <div className="mt-1 font-medium text-slate-900">{summary?.verified_citation_rate ?? "未测"}</div>
-            </div>
-          </div>
-        </div>
-        <div className="mt-4 flex flex-wrap gap-2">
-          <Button size="sm" onClick={seedPromptPanel} disabled={busyAction === "seed-prompts"}>
-            <Wand2 className="mr-2 h-4 w-4" />
-            {busyAction === "seed-prompts" ? "生成中…" : "生成买家问题"}
-          </Button>
-          <Button size="sm" variant="outline" onClick={createEvidenceRun} disabled={busyAction === "evidence-run"}>
-            {busyAction === "evidence-run" ? "整理中…" : "固化当前证据"}
-          </Button>
-          <Button size="sm" variant="outline" onClick={draftTicketsFromEvidence} disabled={busyAction === "draft-tickets"}>
-            {busyAction === "draft-tickets" ? "生成中…" : "生成整改项"}
-          </Button>
-          <Button size="sm" onClick={runAutoSample} disabled={busyAction === "auto-sample"}>
-            <Globe2 className="mr-2 h-4 w-4" />
-            {busyAction === "auto-sample" ? "采样中…" : "DeepSeek 采样"}
-          </Button>
-          <Button size="sm" variant="outline" onClick={downloadGeoReport}>
-            <FileText className="mr-2 h-4 w-4" />
-            导出 GEO 报告
-          </Button>
-          <Button size="sm" variant="outline" onClick={downloadGeoTable}>
-            <Download className="mr-2 h-4 w-4" />
-            导出证据表格
-          </Button>
-        </div>
-        {note ? <p className="mt-3 text-sm text-emerald-700">{note}</p> : null}
-        {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
-      </section>
+      <HeroSection
+        summary={summary}
+        busyAction={busyAction}
+        seedPromptPanel={seedPromptPanel}
+        createEvidenceRun={createEvidenceRun}
+        draftTicketsFromEvidence={draftTicketsFromEvidence}
+        providers={providers}
+        sampleProvider={sampleProvider}
+        setSampleProvider={setSampleProvider}
+        selectedProvider={selectedProvider}
+        runAutoSample={runAutoSample}
+        downloadGeoReport={downloadGeoReport}
+        downloadGeoTable={downloadGeoTable}
+        note={note}
+        error={error}
+      />
 
-      <Card className="rounded-md">
-        <CardHeader>
-          <CardTitle>AI 数据源与可信边界</CardTitle>
-          <p className="mt-1 text-sm text-slate-500">
-            DeepSeek 负责分析和建议；只有联网搜索类数据源返回引用来源时，才计入“真实引用”。
-          </p>
-        </CardHeader>
-        <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-          {(providers?.providers ?? []).map((provider) => (
-            <div key={provider.key} className="rounded-md border border-slate-200 p-3">
-              <div className="flex items-center justify-between gap-2">
-                <div className="truncate text-sm font-medium text-slate-800">{provider.label}</div>
-                <Badge tone={provider.configured ? "green" : "amber"}>
-                  {provider.configured ? "已配置" : "未配置"}
-                </Badge>
-              </div>
-              <div className="mt-2 flex flex-wrap gap-2">
-                <Badge tone={provider.web_grounded ? "blue" : "default"}>
-                  {provider.web_grounded ? "可产生联网引用" : "分析参考"}
-                </Badge>
-                <Badge tone={provider.role === "analysis" ? "brand" : "default"}>{providerRoleLabel[provider.role] ?? provider.role}</Badge>
-              </div>
-              <p className="mt-2 line-clamp-3 text-xs text-slate-500">{provider.note}</p>
-              <p className="mt-2 text-[11px] text-slate-400">配置项：{provider.env_var}</p>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
+      <ProviderStatusCard providers={providers} />
 
-      <Card className="rounded-md">
-        <CardHeader>
-          <CardTitle>GEO 观测目标</CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-3 lg:grid-cols-3">
-          <div className="rounded-md border border-slate-200 p-3">
-            <div className="text-xs font-medium text-slate-500">目标国家</div>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {(targets?.markets ?? []).slice(0, 6).map((market) => (
-                <Badge key={market.id} tone={market.status === "priority" ? "brand" : "default"}>
-                  {market.name} · {market.primary_locale}
-                </Badge>
-              ))}
-              {targets?.markets.length ? null : <span className="text-sm text-slate-500">未设置</span>}
-            </div>
-          </div>
-          <div className="rounded-md border border-slate-200 p-3">
-            <div className="text-xs font-medium text-slate-500">问题来源搜索词</div>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {(targets?.markets.flatMap((market) => market.demand_signals) ?? []).slice(0, 8).map((signal) => (
-                <Badge key={signal.id} tone="blue">{signal.theme}</Badge>
-              ))}
-              {targets?.keyword_count ? null : <span className="text-sm text-slate-500">未设置</span>}
-            </div>
-          </div>
-          <div className="rounded-md border border-slate-200 p-3">
-            <div className="text-xs font-medium text-slate-500">竞品对照</div>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {(targets?.markets.flatMap((market) => market.competitors) ?? []).slice(0, 8).map((competitor) => (
-                <Badge key={competitor.id}>{competitor.name}</Badge>
-              ))}
-              {targets?.competitor_count ? null : <span className="text-sm text-slate-500">未设置</span>}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <EvidenceQualityCard
+        evidenceVerdict={evidenceVerdict}
+        runs={runs}
+        summary={summary}
+        providerQuality={providerQuality}
+      />
 
-      <div className="grid gap-3 md:grid-cols-5">
-        <Card className="rounded-md">
-          <CardContent className="py-4">
-            <div className="text-2xl font-semibold">{summary?.prompts ?? 0}</div>
-            <div className="text-xs text-slate-500">采样问句</div>
-          </CardContent>
-        </Card>
-        <Card className="rounded-md">
-          <CardContent className="py-4">
-            <div className="text-2xl font-semibold">{summary?.recorded ?? 0}</div>
-            <div className="text-xs text-slate-500">已记录槽位</div>
-          </CardContent>
-        </Card>
-        <Card className="rounded-md">
-          <CardContent className="py-4">
-            <div className="text-2xl font-semibold">{summary?.mention_rate ?? "未测"}</div>
-            <div className="text-xs text-slate-500">品牌提及率</div>
-          </CardContent>
-        </Card>
-        <Card className="rounded-md">
-          <CardContent className="py-4">
-            <div className="text-2xl font-semibold">{summary?.cite_rate ?? "未测"}</div>
-            <div className="text-xs text-slate-500">官网引用率</div>
-          </CardContent>
-        </Card>
-        <Card className="rounded-md">
-          <CardContent className="py-4">
-            <div className="text-2xl font-semibold">{summary?.verified_citation_rate ?? "未测"}</div>
-            <div className="text-xs text-slate-500">核验引用率</div>
-          </CardContent>
-        </Card>
-      </div>
-      <div className="grid gap-3 md:grid-cols-2">
-        <Card className="rounded-md">
-          <CardContent className="flex items-center justify-between py-4 text-sm">
-            <span className="text-slate-500">竞品提及率</span>
-            <span className="font-semibold text-slate-900">{summary?.competitor_rate ?? "未测"}</span>
-          </CardContent>
-        </Card>
-        <Card className="rounded-md">
-          <CardContent className="flex items-center justify-between py-4 text-sm">
-            <span className="text-slate-500">竞品提及槽位</span>
-            <span className="font-semibold text-slate-900">{summary?.competitor_mentions ?? 0}</span>
-          </CardContent>
-        </Card>
-      </div>
-      <div className="grid gap-3 md:grid-cols-3">
-        <Card className="rounded-md">
-          <CardContent className="flex items-center justify-between py-4 text-sm">
-            <span className="text-slate-500">采样批次</span>
-            <span className="font-semibold text-slate-900">{summary?.sample_runs ?? 0}</span>
-          </CardContent>
-        </Card>
-        <Card className="rounded-md">
-          <CardContent className="flex items-center justify-between py-4 text-sm">
-            <span className="text-slate-500">证据记录</span>
-            <span className="font-semibold text-slate-900">{summary?.evidence_results ?? 0}</span>
-          </CardContent>
-        </Card>
-        <Card className="rounded-md">
-          <CardContent className="py-4 text-sm">
-            <div className="text-slate-500">最近 run</div>
-            <div className="mt-1 truncate font-mono text-xs text-slate-900">{summary?.latest_run_id ?? "暂无"}</div>
-          </CardContent>
-        </Card>
-      </div>
+      <TargetsCard targets={targets} />
 
-      <Card className="rounded-md">
-        <CardHeader>
-          <CardTitle>采样批次记录</CardTitle>
-          <p className="text-sm text-slate-500">正式报告里的引用结论必须能追溯到采样批次、证据编号、配置 hash 和核验状态。</p>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {runs.length ? runs.map((run) => (
-            <div key={run.id} className="rounded-md border border-slate-200 p-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <div className="font-mono text-xs text-slate-500">{run.id}</div>
-                  <div className="mt-1 text-sm font-medium">
-                    {run.protocol_version} · {run.prompt_set_id} · {run.results_count} 条证据
-                  </div>
-                </div>
-                <Badge tone={run.status === "done" ? "green" : "amber"}>{run.status}</Badge>
-              </div>
-              <div className="mt-3 grid gap-2 text-xs text-slate-600 md:grid-cols-4">
-                <div>配置指纹：<span className="font-mono">{run.config_hash}</span></div>
-                <div>提及：{run.mention_rate}</div>
-                <div>自有引用：{run.cite_rate}</div>
-                <div>核验引用：{run.verified_citation_rate}</div>
-              </div>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {run.results.slice(0, 6).map((result) => (
-                  <Badge key={result.id} tone={result.verification_status === "passed" ? "green" : "default"}>
-                    {result.evidence_id} · {result.engine_label ?? result.engine}
-                  </Badge>
-                ))}
-              </div>
-            </div>
-          )) : <p className="text-sm text-slate-500">暂无采样批次。记录一条观测后，可以点击“固化当前证据”。</p>}
-        </CardContent>
-      </Card>
+      <MetricsGrid summary={summary} />
 
-      <div className="flex gap-2">
-        <Button size="sm" variant={tab === "sample" ? "default" : "outline"} onClick={() => setTab("sample")}>
-          问句采样
-        </Button>
-        <Button size="sm" variant={tab === "tickets" ? "default" : "outline"} onClick={() => setTab("tickets")}>
-          整改验收
-        </Button>
-        <Button size="sm" variant={tab === "assets" ? "default" : "outline"} onClick={() => setTab("assets")}>
-          可引用资产
-        </Button>
-      </div>
+      <SampleRunsCard runs={runs} />
+
+      <TabNav tab={tab} setTab={setTab} />
 
       {tab === "sample" ? (
-        <div className="space-y-4">
-          {prompts.map((p) => (
-            <Card key={p.id}>
-              <CardHeader>
-                <CardTitle className="text-base">{p.prompt_text}</CardTitle>
-                <p className="text-xs text-slate-500">
-                  来源 {p.prompt_key || "自定义"} · 类型 {p.prompt_type || "自定义"} · 问题组 {p.prompt_pack_id || "自定义"} · {p.locale} · 提及 {p.mention_rate ?? "未测"} · 引用 {p.cite_rate ?? "未测"} · 核验 {p.verified_citation_rate ?? "未测"} · 竞品 {p.competitor_rate ?? "未测"}
-                </p>
-                {p.evidence ? <pre className="mt-2 whitespace-pre-wrap text-xs text-slate-500">{p.evidence}</pre> : null}
-                <div className="mt-2 flex items-center gap-2">
-                  <Button size="sm" onClick={() => aiPrompt(p.id)}>
-                    AI 诊断
-                  </Button>
-                  <span className="text-xs text-slate-500">诊断</span>
-                  <select
-                    className="h-8 rounded-md border border-slate-200 px-2 text-sm"
-                    value={p.diagnosis}
-                    onChange={(e) => setDiagnosis(p.id, e.target.value)}
-                  >
-                    {diagnosisOptions.map(([k, v]) => (
-                      <option key={k} value={k}>
-                        {v}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {slotGroup(p, "western", "海外 AI / 搜索引擎")}
-                {slotGroup(p, "china", "中国 AI / 搜索引擎（可手工记录）")}
-              </CardContent>
-            </Card>
-          ))}
-          <Card>
-            <CardHeader>
-              <CardTitle>新增买家问题</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <form className="grid gap-3 md:grid-cols-3" onSubmit={addPrompt}>
-                <Input
-                  className="md:col-span-2"
-                  placeholder="例如：Which supplier is reliable for industrial pumps in the US?"
-                  value={form.prompt_text}
-                  onChange={(e) => setForm({ ...form, prompt_text: e.target.value })}
-                  required
-                />
-                <div className="flex gap-2">
-                  <Input value={form.locale} onChange={(e) => setForm({ ...form, locale: e.target.value })} />
-                  <Button type="submit">添加</Button>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
-        </div>
+        <SamplePromptsPanel
+          prompts={prompts}
+          form={form}
+          setForm={setForm}
+          addPrompt={addPrompt}
+          aiPrompt={aiPrompt}
+          setDiagnosis={setDiagnosis}
+          setObs={setObs}
+        />
       ) : null}
 
       {tab === "tickets" ? (
-        <div className="space-y-4">
-          {tickets.map((t) => (
-            <Card key={t.id}>
-              <CardHeader className="flex flex-row items-start justify-between">
-                <div>
-                  <CardTitle className="text-base">{t.title}</CardTitle>
-                  <p className="mt-1 text-xs text-slate-500">
-                    诊断 {t.diagnosis_label} · {ticketStatus[t.status] ?? t.status}
-                  </p>
-                </div>
-                <Badge tone={t.status === "done" ? "green" : t.status === "reopened" ? "red" : "amber"}>
-                  {ticketStatus[t.status] ?? t.status}
-                </Badge>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <p className="text-sm text-slate-600">理由：{t.rationale}</p>
-                <p className="text-sm text-slate-600">验收：{t.acceptance_criteria}</p>
-                {t.verified_note ? <p className="text-xs text-slate-500">备注：{t.verified_note}</p> : null}
-                {t.evidence ? <pre className="whitespace-pre-wrap text-xs text-slate-500">{t.evidence}</pre> : null}
-                {t.ai_review ? <p className="text-sm text-slate-600">初审：{t.ai_review}</p> : null}
-                <div className="flex flex-wrap gap-2">
-                  <Button size="sm" onClick={() => aiTicket(t.id)}>
-                    AI 初审
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => verifyTicket(t.id, false)}>
-                    未确认
-                  </Button>
-                  <Button size="sm" onClick={() => verifyTicket(t.id, true)}>
-                    确认验收
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => reopenTicket(t.id)}>
-                    复测后重开
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-          <Card>
-            <CardHeader>
-              <CardTitle>从问题生成整改项</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <form className="space-y-3" onSubmit={addTicket}>
-                <select
-                  className="h-9 w-full rounded-md border border-slate-200 px-2 text-sm"
-                  value={ticketForm.prompt_id}
-                  onChange={(e) => setTicketForm({ ...ticketForm, prompt_id: e.target.value })}
-                  required
-                >
-                  <option value="">选择买家问题</option>
-                  {prompts.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.prompt_text}
-                    </option>
-                  ))}
-                </select>
-                <Input
-                  placeholder="整改任务标题"
-                  value={ticketForm.title}
-                  onChange={(e) => setTicketForm({ ...ticketForm, title: e.target.value })}
-                  required
-                />
-                <select
-                  className="h-9 w-full rounded-md border border-slate-200 px-2 text-sm"
-                  value={ticketForm.diagnosis}
-                  onChange={(e) => setTicketForm({ ...ticketForm, diagnosis: e.target.value })}
-                >
-                  {diagnosisOptions.map(([k, v]) => (
-                    <option key={k} value={k}>
-                      {v}
-                    </option>
-                  ))}
-                </select>
-                <Textarea
-                  placeholder="为什么需要整改"
-                  value={ticketForm.rationale}
-                  onChange={(e) => setTicketForm({ ...ticketForm, rationale: e.target.value })}
-                />
-                <Textarea
-                  placeholder="验收标准，例如：页面已补充可引用信息，并完成复测"
-                  value={ticketForm.acceptance_criteria}
-                  onChange={(e) => setTicketForm({ ...ticketForm, acceptance_criteria: e.target.value })}
-                />
-                <Button type="submit">创建整改项</Button>
-              </form>
-            </CardContent>
-          </Card>
-        </div>
+        <TicketsPanel
+          tickets={tickets}
+          prompts={prompts}
+          ticketForm={ticketForm}
+          setTicketForm={setTicketForm}
+          addTicket={addTicket}
+          aiTicket={aiTicket}
+          verifyTicket={verifyTicket}
+          reopenTicket={reopenTicket}
+        />
       ) : null}
 
       {tab === "assets" ? (
-        <div className="space-y-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle>llms.txt 草稿</CardTitle>
-                <p className="mt-1 text-sm text-slate-500">这是给 AI 理解网站用的可引用资产草稿，不会自动发布到客户域名。</p>
-              </div>
-              <Button variant="outline" onClick={generateLlms}>
-                按选题生成
-              </Button>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {llms ? (
-                <>
-                  <Badge>{llms.status === "ready" ? "可交付" : "草稿"}</Badge>
-                  <Textarea
-                    className="min-h-[220px] font-mono"
-                    defaultValue={llms.body}
-                    key={llms.updated_at ?? llms.id}
-                    onBlur={(e) => saveAsset(llms.id, e.target.value)}
-                  />
-                  <Button variant="outline" onClick={() => aiAsset(llms.id)}>
-                    AI 优化草稿
-                  </Button>
-                  <Button onClick={() => readyAsset(llms.id)}>我已确认，标记可交付</Button>
-                </>
-              ) : (
-                <p className="text-sm text-slate-500">还没有草稿。</p>
-              )}
-            </CardContent>
-          </Card>
-          {cite ? (
-            <Card>
-              <CardHeader>
-                <CardTitle>可引用性清单（资产）</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Textarea
-                  className="min-h-[160px]"
-                  defaultValue={cite.body}
-                  key={cite.updated_at ?? cite.id}
-                  onBlur={(e) => saveAsset(cite.id, e.target.value)}
-                />
-              </CardContent>
-            </Card>
-          ) : null}
-          <Card>
-            <CardHeader>
-              <CardTitle>内容可引用性检查</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <select
-                className="h-9 w-full rounded-md border border-slate-200 px-2 text-sm"
-                value={pageId}
-                onChange={(e) => loadChecklist(e.target.value)}
-              >
-                <option value="">选择一篇选题</option>
-                {pages.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.title}
-                  </option>
-                ))}
-              </select>
-              {items.map((i) => (
-                <div key={i.id} className="flex items-center justify-between rounded-md border p-3">
-                  <div>
-                    <div className="font-medium">{i.label}</div>
-                    <Badge tone={i.status === "untested" ? "amber" : i.status === "pass" ? "green" : "red"}>
-                      {i.status === "untested" ? "未测" : i.status === "pass" ? "通过" : "未通过"}
-                    </Badge>
-                  </div>
-                  <div className="flex gap-1">
-                    <Button size="sm" variant="outline" onClick={() => setCheck(i.id, "untested")}>
-                      未测
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={() => setCheck(i.id, "pass")}>
-                      通过
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={() => setCheck(i.id, "fail")}>
-                      未通过
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        </div>
+        <AssetsPanel
+          llms={llms}
+          cite={cite}
+          pages={pages}
+          pageId={pageId}
+          items={items}
+          generateLlms={generateLlms}
+          saveAsset={saveAsset}
+          aiAsset={aiAsset}
+          readyAsset={readyAsset}
+          loadChecklist={loadChecklist}
+          setCheck={setCheck}
+        />
       ) : null}
 
       <Input placeholder="确认 / 验收备注" value={confirmNote} onChange={(e) => setConfirmNote(e.target.value)} />
