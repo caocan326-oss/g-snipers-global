@@ -462,11 +462,19 @@ def _ticket_out(row: GeoTicket) -> GeoTicketOut:
         diagnosis_label=DIAGNOSES.get(row.diagnosis, row.diagnosis),
         rationale=row.rationale,
         acceptance_criteria=row.acceptance_criteria,
+        priority=row.priority or "P2",
+        owner_hint=row.owner_hint or "内容运营 / 客户经理",
+        recommended_action=row.recommended_action or "补齐实体说明、第三方可信源或官网可引用内容，并复测买家问题。",
+        retest_method=row.retest_method or "重新运行 GEO 采样，检查品牌提及、官网引用和第三方引用是否改善。",
+        retest_result=row.retest_result or "",
+        blocked_reason=row.blocked_reason or "",
         status=row.status,
         verified_note=row.verified_note,
         ai_status=row.ai_status or "untested",
         ai_review=row.ai_review or "",
         evidence=row.evidence or "",
+        last_checked_at=row.last_checked_at,
+        closed_at=row.closed_at,
         created_at=row.created_at,
         updated_at=row.updated_at,
     )
@@ -1418,6 +1426,10 @@ def create_ticket(
         diagnosis=body.diagnosis,
         rationale=body.rationale,
         acceptance_criteria=body.acceptance_criteria,
+        priority=body.priority,
+        owner_hint=body.owner_hint,
+        recommended_action=body.recommended_action,
+        retest_method=body.retest_method,
         status="open",
     )
     db.add(row)
@@ -1441,6 +1453,8 @@ def verify_ticket(
         raise HTTPException(status_code=404, detail="整改项不存在")
     row.status = "done"
     row.verified_note = body.note or "客户经理已按验收标准人工复核。"
+    row.closed_at = datetime.now(timezone.utc)
+    row.last_checked_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(row)
     return _ticket_out(row)
@@ -1459,6 +1473,7 @@ def reopen_ticket(
     if row.status not in TICKET_STATUSES:
         raise HTTPException(status_code=400, detail="无效整改项状态")
     row.status = "reopened"
+    row.closed_at = None
     if body.note:
         row.verified_note = body.note
     db.commit()

@@ -611,11 +611,19 @@ export type GeoTicket = {
   diagnosis_label: string;
   rationale: string;
   acceptance_criteria: string;
+  priority: string;
+  owner_hint: string;
+  recommended_action: string;
+  retest_method: string;
+  retest_result: string;
+  blocked_reason: string;
   status: string;
   verified_note: string | null;
   ai_status?: string;
   ai_review?: string;
   evidence?: string;
+  last_checked_at?: string | null;
+  closed_at?: string | null;
 };
 
 export type GeoAsset = {
@@ -724,6 +732,7 @@ export type OnsiteIssue = {
   proposed_change: string;
   severity: string;
   risk: string;
+  priority?: string;
   status: string;
   metric_status: string;
   ai_status?: string;
@@ -732,10 +741,16 @@ export type OnsiteIssue = {
   ai_review_verdict?: string;
   evidence?: string;
   impact?: string;
+  acceptance_criteria?: string;
   recommended_action?: string;
   review_required?: boolean;
   retest_method?: string;
+  retest_result?: string;
+  result_url?: string;
+  blocked_reason?: string;
   owner_hint?: string;
+  last_checked_at?: string | null;
+  closed_at?: string | null;
 };
 
 export type OnsiteBoard = {
@@ -842,6 +857,8 @@ export type DistProvider = {
 export type DistJob = {
   id: string;
   gap_id: string | null;
+  platform_id: string | null;
+  account_id: string | null;
   title: string;
   target_url: string;
   provider_key: string;
@@ -856,6 +873,82 @@ export type DistJob = {
   last_detail: string | null;
   due_at: string | null;
   last_checked_at: string | null;
+};
+
+export type ExecutionItem = {
+  id: string;
+  source_module: string;
+  title: string;
+  subtitle: string;
+  href: string;
+  status: string;
+  priority: string;
+  owner_hint: string;
+  acceptance_criteria: string;
+  evidence: string;
+  recommended_action: string;
+  retest_method: string;
+  retest_result: string;
+  result_url: string;
+  blocked_reason: string;
+  updated_at: string | null;
+};
+
+export type ExecutionBoard = {
+  total_open: number;
+  blocked: number;
+  needs_retest: number;
+  items: ExecutionItem[];
+};
+
+export type SourcePlatform = {
+  id: string;
+  platform_key: string;
+  name: string;
+  domain: string;
+  source_type: string;
+  regions: string;
+  industry_tags: string;
+  base_url: string;
+  listing_model: string;
+  submission_mode: string;
+  has_official_api: boolean;
+  risk_level: string;
+  status: string;
+  notes: string;
+  accounts_count: number;
+  connectors_count: number;
+};
+
+export type PlatformAccount = {
+  id: string;
+  platform_id: string;
+  platform_name: string;
+  label: string;
+  login_identifier: string;
+  auth_method: string;
+  vault_ref: string;
+  owner_hint: string;
+  scope: string;
+  status: string;
+  risk_level: string;
+  regions_allowed: string;
+  notes: string;
+  last_verified_at: string | null;
+  last_used_at: string | null;
+};
+
+export type PlatformConnector = {
+  id: string;
+  platform_id: string;
+  platform_name: string;
+  provider_key: string;
+  auth_mode: string;
+  capabilities: string;
+  status: string;
+  env_var: string;
+  notes: string;
+  last_verified_at: string | null;
 };
 
 export type GeoChecklistItem = {

@@ -17,7 +17,16 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { api, type AiAssist, type BacklinkGap, type DistJob, type DistProvider } from "@/lib/api";
+import {
+  api,
+  type AiAssist,
+  type BacklinkGap,
+  type DistJob,
+  type DistProvider,
+  type PlatformAccount,
+  type PlatformConnector,
+  type SourcePlatform,
+} from "@/lib/api";
 
 const verifyLabel: Record<string, string> = {
   unverified: "待核验",
@@ -80,7 +89,7 @@ const taskTypeLabel: Record<string, string> = {
   monitor_only: "只监控",
 };
 
-type Tab = "opportunities" | "distribution" | "placements";
+type Tab = "opportunities" | "distribution" | "placements" | "platforms";
 
 function StatTile({ label, value, helper }: { label: string; value: string | number; helper: string }) {
   return (
@@ -121,6 +130,9 @@ export default function OffsitePage() {
   const [gaps, setGaps] = useState<BacklinkGap[]>([]);
   const [providers, setProviders] = useState<DistProvider[]>([]);
   const [jobs, setJobs] = useState<DistJob[]>([]);
+  const [platforms, setPlatforms] = useState<SourcePlatform[]>([]);
+  const [accounts, setAccounts] = useState<PlatformAccount[]>([]);
+  const [connectors, setConnectors] = useState<PlatformConnector[]>([]);
   const [error, setError] = useState("");
   const [note, setNote] = useState("");
   const [form, setForm] = useState({
@@ -140,6 +152,8 @@ export default function OffsitePage() {
   const [contact, setContact] = useState("");
   const [distForm, setDistForm] = useState({
     gap_id: "",
+    platform_id: "",
+    account_id: "",
     title: "",
     target_url: "/",
     provider_key: "directory",
@@ -147,6 +161,43 @@ export default function OffsitePage() {
     payload_summary: "",
     owner_hint: "",
     result_url: "",
+  });
+  const [platformForm, setPlatformForm] = useState({
+    platform_key: "",
+    name: "",
+    domain: "",
+    source_type: "directory",
+    regions: "US",
+    industry_tags: "",
+    base_url: "",
+    listing_model: "directory_profile",
+    submission_mode: "manual_login",
+    has_official_api: false,
+    risk_level: "medium",
+    status: "active",
+    notes: "",
+  });
+  const [accountForm, setAccountForm] = useState({
+    platform_id: "",
+    label: "",
+    login_identifier: "",
+    auth_method: "manual_only",
+    vault_ref: "",
+    owner_hint: "",
+    scope: "shared",
+    status: "active",
+    risk_level: "medium",
+    regions_allowed: "",
+    notes: "",
+  });
+  const [connectorForm, setConnectorForm] = useState({
+    platform_id: "",
+    provider_key: "",
+    auth_mode: "manual",
+    capabilities: "draft_only",
+    status: "manual_only",
+    env_var: "",
+    notes: "",
   });
   const [resultForms, setResultForms] = useState<Record<string, string>>({});
 
@@ -174,11 +225,30 @@ export default function OffsitePage() {
       .catch((e) => setError(e.message));
   }
 
+  function loadPlatforms() {
+    Promise.all([
+      api<SourcePlatform[]>("/api/offsite/platforms"),
+      api<PlatformAccount[]>("/api/offsite/accounts"),
+      api<PlatformConnector[]>("/api/offsite/connectors"),
+    ])
+      .then(([p, a, c]) => {
+        setPlatforms(p);
+        setAccounts(a);
+        setConnectors(c);
+        if (p.length) {
+          setAccountForm((current) => ({ ...current, platform_id: current.platform_id || p[0].id }));
+          setConnectorForm((current) => ({ ...current, platform_id: current.platform_id || p[0].id }));
+        }
+      })
+      .catch((e) => setError(e.message));
+  }
+
   useEffect(() => {
     const queryTab = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("tab") : "";
     if (queryTab === "dist") setTab("distribution");
     loadGaps();
     loadDist();
+    loadPlatforms();
   }, []);
 
   async function addGap(e: FormEvent) {
@@ -208,6 +278,8 @@ export default function OffsitePage() {
     setDistForm({
       gap_id: gap.id,
       title: gap.title || `${gap.referring_domain} 站外曝光执行`,
+      platform_id: platforms.find((p) => p.domain && gap.referring_domain.includes(p.domain))?.id || "",
+      account_id: "",
       target_url: gap.result_url || gap.link_url || "/",
       provider_key: providers[0]?.key || "directory",
       task_type: gap.issue_type === "unlinked_mention" ? "link_claim" : gap.kind === "inbound" ? "monitor_only" : "profile_create",
@@ -264,10 +336,40 @@ export default function OffsitePage() {
     setError("");
     setNote("");
     await api("/api/distribution/jobs", { method: "POST", body: JSON.stringify(distForm) });
-    setDistForm({ ...distForm, gap_id: "", title: "", payload_summary: "", result_url: "" });
+    setDistForm({ ...distForm, gap_id: "", platform_id: "", account_id: "", title: "", payload_summary: "", result_url: "" });
     setNote("分发任务已创建，等待人工确认执行。");
     loadGaps();
     loadDist();
+  }
+
+  async function createPlatform(e: FormEvent) {
+    e.preventDefault();
+    setError("");
+    setNote("");
+    await api("/api/offsite/platforms", { method: "POST", body: JSON.stringify(platformForm) });
+    setPlatformForm({ ...platformForm, platform_key: "", name: "", domain: "", base_url: "", industry_tags: "", notes: "" });
+    setNote("平台已加入资源库。");
+    loadPlatforms();
+  }
+
+  async function createAccount(e: FormEvent) {
+    e.preventDefault();
+    setError("");
+    setNote("");
+    await api("/api/offsite/accounts", { method: "POST", body: JSON.stringify(accountForm) });
+    setAccountForm({ ...accountForm, label: "", login_identifier: "", vault_ref: "", notes: "" });
+    setNote("平台账号已保存。系统只保存 vault_ref，不保存明文密码。");
+    loadPlatforms();
+  }
+
+  async function createConnector(e: FormEvent) {
+    e.preventDefault();
+    setError("");
+    setNote("");
+    await api("/api/offsite/connectors", { method: "POST", body: JSON.stringify(connectorForm) });
+    setConnectorForm({ ...connectorForm, provider_key: "", env_var: "", notes: "" });
+    setNote("Connector 已登记。后续真实 API/OAuth 会接到这里。");
+    loadPlatforms();
   }
 
   async function submitResult(job: DistJob) {
@@ -341,7 +443,7 @@ export default function OffsitePage() {
         <WorkflowStep icon={ClipboardList} title="Opportunity" value={stats.activeOpportunities} helper="可跟进的曝光机会，先判断价值再行动" />
         <WorkflowStep icon={Send} title="Distribution Task" value={stats.openJobs} helper="待人工确认的内容分发或投稿任务" />
         <WorkflowStep icon={Link2} title="Placement" value={stats.validPlacements} helper="真实存在、可被客户复核的站外证据" />
-        <WorkflowStep icon={RefreshCw} title="Retest" value={stats.needsReview} helper="待复测或待核验的站外记录" />
+        <WorkflowStep icon={RefreshCw} title="Platform / Account" value={platforms.length} helper="平台资源、账号和可接入 Connector" />
       </section>
 
       <div className="flex flex-wrap gap-2">
@@ -353,6 +455,9 @@ export default function OffsitePage() {
         </Button>
         <Button size="sm" variant={tab === "placements" ? "default" : "outline"} onClick={() => setTab("placements")}>
           Placement 核验
+        </Button>
+        <Button size="sm" variant={tab === "platforms" ? "default" : "outline"} onClick={() => setTab("platforms")}>
+          平台与账号
         </Button>
       </div>
 
@@ -640,6 +745,32 @@ export default function OffsitePage() {
                     </option>
                   ))}
                 </select>
+                <select
+                  className="h-10 w-full rounded-md border border-slate-200 px-3 text-sm"
+                  value={distForm.platform_id}
+                  onChange={(e) => setDistForm({ ...distForm, platform_id: e.target.value, account_id: "" })}
+                >
+                  <option value="">不绑定平台</option>
+                  {platforms.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name} · {p.submission_mode}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  className="h-10 w-full rounded-md border border-slate-200 px-3 text-sm"
+                  value={distForm.account_id}
+                  onChange={(e) => setDistForm({ ...distForm, account_id: e.target.value })}
+                >
+                  <option value="">不绑定账号</option>
+                  {accounts
+                    .filter((a) => !distForm.platform_id || a.platform_id === distForm.platform_id)
+                    .map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.label} · {a.status}
+                      </option>
+                    ))}
+                </select>
                 <Input
                   placeholder="任务标题，例如：提交到行业目录"
                   value={distForm.title}
@@ -736,6 +867,151 @@ export default function OffsitePage() {
                 </div>
               </div>
             ))}
+          </div>
+        </section>
+      ) : null}
+
+      {tab === "platforms" ? (
+        <section className="grid gap-5 xl:grid-cols-[1fr_420px]">
+          <div className="space-y-4">
+            <div className="grid gap-3 lg:grid-cols-2">
+              {platforms.map((p) => (
+                <Card key={p.id} className="rounded-md">
+                  <CardContent className="p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="font-semibold text-slate-950">{p.name}</div>
+                        <p className="mt-1 text-xs text-slate-500">{p.domain || p.base_url || p.platform_key}</p>
+                      </div>
+                      <Badge tone={p.status === "active" ? "green" : "default"}>{p.status}</Badge>
+                    </div>
+                    <div className="mt-3 grid gap-2 text-xs text-slate-500 sm:grid-cols-2">
+                      <span>类型：{p.source_type}</span>
+                      <span>提交：{p.submission_mode}</span>
+                      <span>账号：{p.accounts_count}</span>
+                      <span>Connector：{p.connectors_count}</span>
+                      <span>区域：{p.regions || "未填"}</span>
+                      <span>风险：{p.risk_level}</span>
+                    </div>
+                    {p.notes ? <p className="mt-3 text-sm leading-6 text-slate-600">{p.notes}</p> : null}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+
+            <Card className="rounded-md">
+              <CardHeader><CardTitle>平台账号</CardTitle></CardHeader>
+              <CardContent className="space-y-2">
+                {accounts.length ? accounts.map((a) => (
+                  <div key={a.id} className="rounded-md border border-slate-200 p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="font-medium text-slate-900">{a.label}</div>
+                      <Badge tone={a.status === "active" ? "green" : "amber"}>{a.status}</Badge>
+                    </div>
+                    <p className="mt-1 text-xs text-slate-500">{a.platform_name} · {a.scope} · {a.auth_method}</p>
+                    <p className="mt-1 text-xs text-slate-500">vault_ref：{a.vault_ref || "未填，业务库不存明文密码"}</p>
+                  </div>
+                )) : <p className="text-sm text-slate-500">还没有平台账号。</p>}
+              </CardContent>
+            </Card>
+
+            <Card className="rounded-md">
+              <CardHeader><CardTitle>Connector 能力</CardTitle></CardHeader>
+              <CardContent className="space-y-2">
+                {connectors.length ? connectors.map((c) => (
+                  <div key={c.id} className="rounded-md border border-slate-200 p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="font-medium text-slate-900">{c.provider_key}</div>
+                      <Badge tone={c.status === "configured" ? "green" : "amber"}>{c.status}</Badge>
+                    </div>
+                    <p className="mt-1 text-xs text-slate-500">{c.platform_name} · {c.auth_mode} · {c.capabilities}</p>
+                    <p className="mt-1 text-xs text-slate-500">env：{c.env_var || "无"}</p>
+                  </div>
+                )) : <p className="text-sm text-slate-500">还没有 Connector。没有官方 API 的平台保持 manual_only。</p>}
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="space-y-4">
+            <Card className="rounded-md">
+              <CardHeader><CardTitle>新增平台</CardTitle></CardHeader>
+              <CardContent>
+                <form className="space-y-3" onSubmit={createPlatform}>
+                  <Input placeholder="平台 key，例如 thomasnet" value={platformForm.platform_key} onChange={(e) => setPlatformForm({ ...platformForm, platform_key: e.target.value })} required />
+                  <Input placeholder="平台名称" value={platformForm.name} onChange={(e) => setPlatformForm({ ...platformForm, name: e.target.value })} required />
+                  <Input placeholder="域名" value={platformForm.domain} onChange={(e) => setPlatformForm({ ...platformForm, domain: e.target.value })} />
+                  <Input placeholder="Base URL" value={platformForm.base_url} onChange={(e) => setPlatformForm({ ...platformForm, base_url: e.target.value })} />
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <select className="h-10 rounded-md border border-slate-200 px-3 text-sm" value={platformForm.source_type} onChange={(e) => setPlatformForm({ ...platformForm, source_type: e.target.value })}>
+                      <option value="directory">行业目录</option>
+                      <option value="marketplace">B2B 平台</option>
+                      <option value="media">媒体</option>
+                      <option value="association">协会</option>
+                      <option value="listicle">榜单/测评</option>
+                      <option value="distributor">分销商</option>
+                    </select>
+                    <select className="h-10 rounded-md border border-slate-200 px-3 text-sm" value={platformForm.submission_mode} onChange={(e) => setPlatformForm({ ...platformForm, submission_mode: e.target.value })}>
+                      <option value="manual_login">人工登录</option>
+                      <option value="form_public">公开表单</option>
+                      <option value="email_outreach">邮件联系</option>
+                      <option value="paid_placement">付费位</option>
+                      <option value="api_none">仅监控</option>
+                    </select>
+                  </div>
+                  <Input placeholder="国家/区域，例如 US, EU" value={platformForm.regions} onChange={(e) => setPlatformForm({ ...platformForm, regions: e.target.value })} />
+                  <Input placeholder="行业标签" value={platformForm.industry_tags} onChange={(e) => setPlatformForm({ ...platformForm, industry_tags: e.target.value })} />
+                  <Input placeholder="备注/提交规则" value={platformForm.notes} onChange={(e) => setPlatformForm({ ...platformForm, notes: e.target.value })} />
+                  <Button type="submit" className="w-full">保存平台</Button>
+                </form>
+              </CardContent>
+            </Card>
+
+            <Card className="rounded-md">
+              <CardHeader><CardTitle>新增账号</CardTitle></CardHeader>
+              <CardContent>
+                <form className="space-y-3" onSubmit={createAccount}>
+                  <select className="h-10 w-full rounded-md border border-slate-200 px-3 text-sm" value={accountForm.platform_id} onChange={(e) => setAccountForm({ ...accountForm, platform_id: e.target.value })} required>
+                    <option value="">选择平台</option>
+                    {platforms.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                  <Input placeholder="账号标签" value={accountForm.label} onChange={(e) => setAccountForm({ ...accountForm, label: e.target.value })} required />
+                  <Input placeholder="登录名/邮箱（非密码）" value={accountForm.login_identifier} onChange={(e) => setAccountForm({ ...accountForm, login_identifier: e.target.value })} />
+                  <Input placeholder="vault_ref，不填密码明文" value={accountForm.vault_ref} onChange={(e) => setAccountForm({ ...accountForm, vault_ref: e.target.value })} />
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <select className="h-10 rounded-md border border-slate-200 px-3 text-sm" value={accountForm.auth_method} onChange={(e) => setAccountForm({ ...accountForm, auth_method: e.target.value })}>
+                      <option value="manual_only">人工登录</option>
+                      <option value="password_vault">密码库</option>
+                      <option value="oauth">OAuth</option>
+                      <option value="api_key_vault">API Key 引用</option>
+                      <option value="sso">SSO</option>
+                    </select>
+                    <select className="h-10 rounded-md border border-slate-200 px-3 text-sm" value={accountForm.scope} onChange={(e) => setAccountForm({ ...accountForm, scope: e.target.value })}>
+                      <option value="shared">团队共用</option>
+                      <option value="customer_exclusive">客户专属</option>
+                    </select>
+                  </div>
+                  <Input placeholder="负责人" value={accountForm.owner_hint} onChange={(e) => setAccountForm({ ...accountForm, owner_hint: e.target.value })} />
+                  <Button type="submit" className="w-full">保存账号</Button>
+                </form>
+              </CardContent>
+            </Card>
+
+            <Card className="rounded-md">
+              <CardHeader><CardTitle>新增 Connector</CardTitle></CardHeader>
+              <CardContent>
+                <form className="space-y-3" onSubmit={createConnector}>
+                  <select className="h-10 w-full rounded-md border border-slate-200 px-3 text-sm" value={connectorForm.platform_id} onChange={(e) => setConnectorForm({ ...connectorForm, platform_id: e.target.value })} required>
+                    <option value="">选择平台</option>
+                    {platforms.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                  <Input placeholder="provider_key，例如 wordpress / gmail / manual_browser" value={connectorForm.provider_key} onChange={(e) => setConnectorForm({ ...connectorForm, provider_key: e.target.value })} required />
+                  <Input placeholder="能力，例如 draft_only,publish,sync_status" value={connectorForm.capabilities} onChange={(e) => setConnectorForm({ ...connectorForm, capabilities: e.target.value })} />
+                  <Input placeholder="环境变量名（可选）" value={connectorForm.env_var} onChange={(e) => setConnectorForm({ ...connectorForm, env_var: e.target.value })} />
+                  <Input placeholder="备注" value={connectorForm.notes} onChange={(e) => setConnectorForm({ ...connectorForm, notes: e.target.value })} />
+                  <Button type="submit" className="w-full">保存 Connector</Button>
+                </form>
+              </CardContent>
+            </Card>
           </div>
         </section>
       ) : null}

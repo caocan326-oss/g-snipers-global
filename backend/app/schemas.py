@@ -422,6 +422,10 @@ class GeoTicketCreate(BaseModel):
     diagnosis: str = "untested"
     rationale: str = ""
     acceptance_criteria: str = ""
+    priority: str = "P2"
+    owner_hint: str = ""
+    recommended_action: str = ""
+    retest_method: str = ""
 
 
 class GeoTicketOut(BaseModel):
@@ -432,11 +436,19 @@ class GeoTicketOut(BaseModel):
     diagnosis_label: str = "未测"
     rationale: str
     acceptance_criteria: str
+    priority: str = "P2"
+    owner_hint: str = ""
+    recommended_action: str = ""
+    retest_method: str = ""
+    retest_result: str = ""
+    blocked_reason: str = ""
     status: str
     verified_note: str | None
     ai_status: str = "untested"
     ai_review: str = ""
     evidence: str = ""
+    last_checked_at: datetime | None = None
+    closed_at: datetime | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
@@ -653,6 +665,7 @@ class OnsiteIssueOut(BaseModel):
     proposed_change: str
     severity: str = "low"
     risk: str
+    priority: str = "P2"
     status: str
     metric_status: str
     ai_status: str = "untested"
@@ -661,10 +674,16 @@ class OnsiteIssueOut(BaseModel):
     ai_review_verdict: str = "untested"
     evidence: str = ""
     impact: str = ""
+    acceptance_criteria: str = ""
     recommended_action: str = ""
     review_required: bool = False
     retest_method: str = ""
+    retest_result: str = ""
+    result_url: str = ""
+    blocked_reason: str = ""
     owner_hint: str = ""
+    last_checked_at: datetime | None = None
+    closed_at: datetime | None = None
 
 
 class OnsiteIssueCreate(BaseModel):
@@ -674,6 +693,11 @@ class OnsiteIssueCreate(BaseModel):
     proposed_change: str = ""
     severity: str | None = None
     risk: str | None = None
+    priority: str = "P2"
+    owner_hint: str = ""
+    acceptance_criteria: str = ""
+    recommended_action: str = ""
+    retest_method: str = ""
 
 
 class OnsiteDraftIn(BaseModel):
@@ -1221,6 +1245,8 @@ class DistributionJobCreate(BaseModel):
     target_url: str
     provider_key: str
     gap_id: str | None = None
+    platform_id: str | None = None
+    account_id: str | None = None
     task_type: str = "profile_create"
     payload_summary: str = ""
     owner_hint: str = ""
@@ -1231,6 +1257,8 @@ class DistributionJobCreate(BaseModel):
 class DistributionJobOut(BaseModel):
     id: str
     gap_id: str | None = None
+    platform_id: str | None = None
+    account_id: str | None = None
     title: str
     target_url: str
     provider_key: str
@@ -1249,6 +1277,8 @@ class DistributionJobOut(BaseModel):
 
 class DistributionJobUpdate(BaseModel):
     status: str | None = None
+    platform_id: str | None = None
+    account_id: str | None = None
     owner_hint: str | None = None
     result_url: str | None = None
     verify_status: str | None = None
@@ -1260,6 +1290,91 @@ class DistributionSubmitResultIn(BaseModel):
     result_url: str
     evidence: str = ""
     verify_status: str = "pending"
+
+
+class ExecutionItemOut(BaseModel):
+    id: str
+    source_module: str
+    title: str
+    subtitle: str = ""
+    href: str
+    status: str
+    priority: str = "P2"
+    owner_hint: str = ""
+    acceptance_criteria: str = ""
+    evidence: str = ""
+    recommended_action: str = ""
+    retest_method: str = ""
+    retest_result: str = ""
+    result_url: str = ""
+    blocked_reason: str = ""
+    updated_at: datetime | None = None
+
+
+class ExecutionBoardOut(BaseModel):
+    total_open: int
+    blocked: int
+    needs_retest: int
+    items: list[ExecutionItemOut] = []
+
+
+class SourcePlatformCreate(BaseModel):
+    platform_key: str
+    name: str
+    domain: str = ""
+    source_type: str = "directory"
+    regions: str = ""
+    industry_tags: str = ""
+    base_url: str = ""
+    listing_model: str = "directory_profile"
+    submission_mode: str = "manual_login"
+    has_official_api: bool = False
+    risk_level: str = "medium"
+    status: str = "active"
+    notes: str = ""
+
+
+class SourcePlatformOut(SourcePlatformCreate):
+    id: str
+    accounts_count: int = 0
+    connectors_count: int = 0
+
+
+class PlatformAccountCreate(BaseModel):
+    platform_id: str
+    label: str
+    login_identifier: str = ""
+    auth_method: str = "manual_only"
+    vault_ref: str = ""
+    owner_hint: str = ""
+    scope: str = "shared"
+    status: str = "active"
+    risk_level: str = "medium"
+    regions_allowed: str = ""
+    notes: str = ""
+
+
+class PlatformAccountOut(PlatformAccountCreate):
+    id: str
+    platform_name: str = ""
+    last_verified_at: datetime | None = None
+    last_used_at: datetime | None = None
+
+
+class PlatformConnectorCreate(BaseModel):
+    platform_id: str
+    provider_key: str
+    auth_mode: str = "manual"
+    capabilities: str = "draft_only"
+    status: str = "manual_only"
+    env_var: str = ""
+    notes: str = ""
+
+
+class PlatformConnectorOut(PlatformConnectorCreate):
+    id: str
+    platform_name: str = ""
+    last_verified_at: datetime | None = None
 
 
 class ProviderOut(BaseModel):

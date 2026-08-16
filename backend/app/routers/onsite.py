@@ -322,6 +322,7 @@ def _issue_out(row: OnsiteIssue, page: SitePage | None = None) -> OnsiteIssueOut
         proposed_change=row.proposed_change,
         severity=row.severity or "low",
         risk=row.risk,
+        priority=row.priority or {"critical": "P0", "high": "P1", "low": "P2"}.get(row.severity or "low", "P2"),
         status=row.status,
         metric_status=row.metric_status,
         ai_status=row.ai_status or "untested",
@@ -330,10 +331,16 @@ def _issue_out(row: OnsiteIssue, page: SitePage | None = None) -> OnsiteIssueOut
         ai_review_verdict=row.ai_review_verdict or "untested",
         evidence=row.evidence or "",
         impact=guidance["impact"],
-        recommended_action=guidance["action"],
+        acceptance_criteria=row.acceptance_criteria or "按处理方案上线后，重新抓取页面并确认该问题不再出现。",
+        recommended_action=row.recommended_action or guidance["action"],
         review_required=review_required,
-        retest_method=guidance["retest"],
-        owner_hint=guidance["owner"] if review_required else "内容运营 / 客户经理",
+        retest_method=row.retest_method or guidance["retest"],
+        retest_result=row.retest_result or "",
+        result_url=row.result_url or "",
+        blocked_reason=row.blocked_reason or "",
+        owner_hint=row.owner_hint or (guidance["owner"] if review_required else "内容运营 / 客户经理"),
+        last_checked_at=row.last_checked_at,
+        closed_at=row.closed_at,
     )
 
 
@@ -2682,6 +2689,11 @@ def create_issue(
         proposed_change=body.proposed_change,
         severity=severity,
         risk=risk,
+        priority=body.priority,
+        owner_hint=body.owner_hint,
+        acceptance_criteria=body.acceptance_criteria,
+        recommended_action=body.recommended_action,
+        retest_method=body.retest_method,
         status="open",
         metric_status="untested",
     )
@@ -2776,6 +2788,7 @@ def mark_executed(
     note = (body.note or "").strip()
     if note:
         row.evidence = ((row.evidence or "").rstrip() + f"\n人工执行记录：{note}").strip()
+    row.last_checked_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(row)
     return _issue_out(row, page)
@@ -2799,6 +2812,8 @@ def retest_issue(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     db.flush()
     db.refresh(row)
+    row.last_checked_at = datetime.now(timezone.utc)
+    row.retest_result = "已重新抓取页面并刷新诊断状态。"
     db.commit()
     db.refresh(row)
     return _issue_out(row, page)
@@ -2816,6 +2831,7 @@ def wont_fix_issue(
     if page is None or page.tenant_id != user.tenant_id:
         raise HTTPException(status_code=404, detail="页面不存在")
     row.status = "wont_fix"
+    row.closed_at = datetime.now(timezone.utc)
     note = (body.note or "").strip()
     if note:
         row.evidence = ((row.evidence or "").rstrip() + f"\n忽略原因：{note}").strip()
@@ -2835,6 +2851,7 @@ def reopen_issue(
     if page is None or page.tenant_id != user.tenant_id:
         raise HTTPException(status_code=404, detail="页面不存在")
     row.status = "drafted" if (row.proposed_change or "").strip() else "open"
+    row.closed_at = None
     db.commit()
     db.refresh(row)
     return _issue_out(row, page)

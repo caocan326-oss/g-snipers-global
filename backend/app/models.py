@@ -342,11 +342,19 @@ class GeoTicket(Base):
     diagnosis: Mapped[str] = mapped_column(String(40), default="untested")
     rationale: Mapped[str] = mapped_column(Text, default="")
     acceptance_criteria: Mapped[str] = mapped_column(Text, default="")
+    priority: Mapped[str] = mapped_column(String(10), default="P2")
+    owner_hint: Mapped[str] = mapped_column(String(120), default="")
+    recommended_action: Mapped[str] = mapped_column(Text, default="")
+    retest_method: Mapped[str] = mapped_column(Text, default="")
+    retest_result: Mapped[str] = mapped_column(Text, default="")
+    blocked_reason: Mapped[str] = mapped_column(Text, default="")
     status: Mapped[str] = mapped_column(String(20), default="open", index=True)
     verified_note: Mapped[str | None] = mapped_column(Text)
     ai_status: Mapped[str] = mapped_column(String(20), default="untested")
     ai_review: Mapped[str] = mapped_column(Text, default="")
     evidence: Mapped[str] = mapped_column(Text, default="")
+    last_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -601,6 +609,14 @@ class OnsiteIssue(Base):
     proposed_change: Mapped[str] = mapped_column(Text, default="")
     severity: Mapped[str] = mapped_column(String(10), default="low")
     risk: Mapped[str] = mapped_column(String(10), default="low")
+    priority: Mapped[str] = mapped_column(String(10), default="P2")
+    owner_hint: Mapped[str] = mapped_column(String(120), default="")
+    acceptance_criteria: Mapped[str] = mapped_column(Text, default="")
+    recommended_action: Mapped[str] = mapped_column(Text, default="")
+    retest_method: Mapped[str] = mapped_column(Text, default="")
+    retest_result: Mapped[str] = mapped_column(Text, default="")
+    result_url: Mapped[str] = mapped_column(String(500), default="")
+    blocked_reason: Mapped[str] = mapped_column(Text, default="")
     status: Mapped[str] = mapped_column(String(30), default="open", index=True)
     metric_status: Mapped[str] = mapped_column(String(20), default="untested")
     ai_status: Mapped[str] = mapped_column(String(20), default="untested")
@@ -608,6 +624,8 @@ class OnsiteIssue(Base):
     ai_review: Mapped[str] = mapped_column(Text, default="")
     ai_review_verdict: Mapped[str] = mapped_column(String(20), default="untested")
     evidence: Mapped[str] = mapped_column(Text, default="")
+    last_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     page: Mapped[SitePage] = relationship(back_populates="issues")
@@ -652,6 +670,80 @@ class BacklinkGap(Base):
     distribution_jobs: Mapped[list["DistributionJob"]] = relationship(back_populates="gap")
 
 
+class SourcePlatform(Base):
+    __tablename__ = "source_platforms"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
+    platform_key: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    domain: Mapped[str] = mapped_column(String(300), default="")
+    source_type: Mapped[str] = mapped_column(String(40), default="directory")
+    regions: Mapped[str] = mapped_column(Text, default="")
+    industry_tags: Mapped[str] = mapped_column(Text, default="")
+    base_url: Mapped[str] = mapped_column(String(500), default="")
+    listing_model: Mapped[str] = mapped_column(String(40), default="directory_profile")
+    submission_mode: Mapped[str] = mapped_column(String(40), default="manual_login")
+    has_official_api: Mapped[bool] = mapped_column(Boolean, default=False)
+    risk_level: Mapped[str] = mapped_column(String(20), default="medium")
+    status: Mapped[str] = mapped_column(String(20), default="active", index=True)
+    notes: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    accounts: Mapped[list["PlatformAccount"]] = relationship(back_populates="platform", cascade="all, delete-orphan")
+    connectors: Mapped[list["PlatformConnector"]] = relationship(back_populates="platform", cascade="all, delete-orphan")
+
+
+class PlatformAccount(Base):
+    __tablename__ = "platform_accounts"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
+    platform_id: Mapped[str] = mapped_column(ForeignKey("source_platforms.id"), nullable=False, index=True)
+    label: Mapped[str] = mapped_column(String(200), nullable=False)
+    login_identifier: Mapped[str] = mapped_column(String(300), default="")
+    auth_method: Mapped[str] = mapped_column(String(40), default="manual_only")
+    vault_ref: Mapped[str] = mapped_column(String(500), default="")
+    owner_hint: Mapped[str] = mapped_column(String(120), default="")
+    scope: Mapped[str] = mapped_column(String(40), default="shared")
+    status: Mapped[str] = mapped_column(String(30), default="active", index=True)
+    risk_level: Mapped[str] = mapped_column(String(20), default="medium")
+    regions_allowed: Mapped[str] = mapped_column(Text, default="")
+    notes: Mapped[str] = mapped_column(Text, default="")
+    last_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    platform: Mapped[SourcePlatform] = relationship(back_populates="accounts")
+
+
+class PlatformConnector(Base):
+    __tablename__ = "platform_connectors"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
+    platform_id: Mapped[str] = mapped_column(ForeignKey("source_platforms.id"), nullable=False, index=True)
+    provider_key: Mapped[str] = mapped_column(String(80), nullable=False)
+    auth_mode: Mapped[str] = mapped_column(String(40), default="manual")
+    capabilities: Mapped[str] = mapped_column(Text, default="draft_only")
+    status: Mapped[str] = mapped_column(String(30), default="manual_only", index=True)
+    env_var: Mapped[str] = mapped_column(String(120), default="")
+    notes: Mapped[str] = mapped_column(Text, default="")
+    last_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    platform: Mapped[SourcePlatform] = relationship(back_populates="connectors")
+
+
 class OutreachItem(Base):
     __tablename__ = "outreach_items"
 
@@ -673,6 +765,8 @@ class DistributionJob(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
     gap_id: Mapped[str | None] = mapped_column(ForeignKey("backlink_gaps.id"), index=True)
+    platform_id: Mapped[str | None] = mapped_column(ForeignKey("source_platforms.id"), index=True)
+    account_id: Mapped[str | None] = mapped_column(ForeignKey("platform_accounts.id"), index=True)
     title: Mapped[str] = mapped_column(String(300), nullable=False)
     target_url: Mapped[str] = mapped_column(String(500), nullable=False)
     provider_key: Mapped[str] = mapped_column(String(40), nullable=False)

@@ -123,3 +123,78 @@ def test_distribution_task_writes_back_to_offsite_issue(client: TestClient, demo
     assert row["verify_status"] == "valid"
     assert row["result_url"] == "https://www.thomasnet.com/profile/example"
     assert "页面已上线" in row["evidence"]
+
+
+def test_platform_account_connector_and_manual_login_block(client: TestClient, demo_user) -> None:
+    headers = auth_header(client)
+    platform = client.post(
+        "/api/offsite/platforms",
+        headers=headers,
+        json={
+            "platform_key": "thomasnet",
+            "name": "ThomasNet",
+            "domain": "thomasnet.com",
+            "submission_mode": "manual_login",
+        },
+    )
+    assert platform.status_code == 201, platform.text
+    platform_id = platform.json()["id"]
+
+    connector = client.post(
+        "/api/offsite/connectors",
+        headers=headers,
+        json={
+            "platform_id": platform_id,
+            "provider_key": "manual_browser",
+            "auth_mode": "manual",
+            "capabilities": "draft_only,check_placement",
+            "status": "manual_only",
+        },
+    )
+    assert connector.status_code == 201
+
+    blocked = client.post(
+        "/api/distribution/jobs",
+        headers=headers,
+        json={
+            "platform_id": platform_id,
+            "title": "提交 ThomasNet",
+            "target_url": "https://example.com",
+            "provider_key": "directory",
+        },
+    )
+    assert blocked.status_code == 201
+    assert blocked.json()["status"] == "blocked"
+    assert "needs_account" in blocked.json()["blocked_reason"]
+
+    account = client.post(
+        "/api/offsite/accounts",
+        headers=headers,
+        json={
+            "platform_id": platform_id,
+            "label": "ThomasNet 主账号",
+            "auth_method": "password_vault",
+            "vault_ref": "vault://thomasnet/main",
+            "owner_hint": "站外执行",
+        },
+    )
+    assert account.status_code == 201, account.text
+    account_id = account.json()["id"]
+
+    ready = client.post(
+        "/api/distribution/jobs",
+        headers=headers,
+        json={
+            "platform_id": platform_id,
+            "account_id": account_id,
+            "title": "提交 ThomasNet with account",
+            "target_url": "https://example.com",
+            "provider_key": "directory",
+        },
+    )
+    assert ready.status_code == 201
+    assert ready.json()["status"] == "draft"
+
+    platforms = client.get("/api/offsite/platforms", headers=headers).json()
+    assert platforms[0]["accounts_count"] == 1
+    assert platforms[0]["connectors_count"] == 1

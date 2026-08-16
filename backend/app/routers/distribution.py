@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
 from app.database import get_db
-from app.models import BacklinkGap, DistributionAttempt, DistributionJob, User
+from app.models import BacklinkGap, DistributionAttempt, DistributionJob, PlatformAccount, SourcePlatform, User
 from app.providers import all_providers, get_provider
 from app.risk import require_confirm
 from app.schemas import (
@@ -78,12 +78,31 @@ def create_job(
         gap = db.get(BacklinkGap, body.gap_id)
         if gap is None or gap.tenant_id != user.tenant_id:
             raise HTTPException(status_code=404, detail="站外机会不存在")
+    platform = None
+    account = None
+    if body.platform_id:
+        platform = db.get(SourcePlatform, body.platform_id)
+        if platform is None or platform.tenant_id != user.tenant_id:
+            raise HTTPException(status_code=404, detail="平台不存在")
+    if body.account_id:
+        account = db.get(PlatformAccount, body.account_id)
+        if account is None or account.tenant_id != user.tenant_id:
+            raise HTTPException(status_code=404, detail="账号不存在")
+        if body.platform_id and account.platform_id != body.platform_id:
+            raise HTTPException(status_code=400, detail="账号不属于所选平台")
+        if account.status != "active":
+            raise HTTPException(status_code=400, detail="账号不可用，不能进入执行")
     row = DistributionJob(
         tenant_id=user.tenant_id,
         status="draft",
         last_result="未发送",
         **body.model_dump(),
     )
+    if platform and platform.submission_mode == "manual_login" and account is None:
+        row.status = "blocked"
+        row.blocked_reason = "needs_account：该平台需要人工登录账号，请先绑定可用账号。"
+        row.last_result = "缺账号"
+        row.last_detail = row.blocked_reason
     db.add(row)
     if gap:
         gap.status = "converted_to_task"
@@ -91,6 +110,7 @@ def create_job(
             gap.owner_hint = body.owner_hint
         if not gap.recommended_action:
             gap.recommended_action = f"按 {body.task_type} 创建分发任务：{body.title}"
+        _sync_gap_from_job(gap, row)
     db.commit()
     db.refresh(row)
     return row
@@ -111,6 +131,26 @@ def update_job(
         if payload["status"] not in JOB_STATUSES:
             raise HTTPException(status_code=400, detail="无效任务状态")
         job.status = payload["status"]
+    if "platform_id" in payload:
+        if payload["platform_id"]:
+            platform = db.get(SourcePlatform, payload["platform_id"])
+            if platform is None or platform.tenant_id != user.tenant_id:
+                raise HTTPException(status_code=404, detail="平台不存在")
+            job.platform_id = platform.id
+        else:
+            job.platform_id = None
+    if "account_id" in payload:
+        if payload["account_id"]:
+            account = db.get(PlatformAccount, payload["account_id"])
+            if account is None or account.tenant_id != user.tenant_id:
+                raise HTTPException(status_code=404, detail="账号不存在")
+            if job.platform_id and account.platform_id != job.platform_id:
+                raise HTTPException(status_code=400, detail="账号不属于所选平台")
+            if account.status != "active":
+                raise HTTPException(status_code=400, detail="账号不可用，不能进入执行")
+            job.account_id = account.id
+        else:
+            job.account_id = None
     if "verify_status" in payload and payload["verify_status"]:
         if payload["verify_status"] not in VERIFY_STATUSES:
             raise HTTPException(status_code=400, detail="无效核验状态")
@@ -118,6 +158,11 @@ def update_job(
     for field in ("owner_hint", "result_url", "blocked_reason", "payload_summary"):
         if field in payload:
             setattr(job, field, payload[field] or "")
+    if job.platform_id:
+        platform = db.get(SourcePlatform, job.platform_id)
+        if platform and platform.submission_mode == "manual_login" and not job.account_id and job.status in {"ready", "in_progress"}:
+            job.status = "blocked"
+            job.blocked_reason = "needs_account：该平台需要人工登录账号，请先绑定可用账号。"
     if job.gap_id:
         gap = db.get(BacklinkGap, job.gap_id)
         if gap and gap.tenant_id == user.tenant_id:
