@@ -1,4 +1,5 @@
 import csv
+import hashlib
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
 from io import StringIO
@@ -16,6 +17,7 @@ from app.ai_engine import assist_onsite_issue
 from app.llm import UNCONFIGURED, configured
 from app.models import (
     CrawlSession,
+    Competitor,
     DemandSignal,
     DataSyncRun,
     GscConnection,
@@ -27,6 +29,8 @@ from app.models import (
     SeoPage,
     SeoPerformanceImport,
     SeoPerformanceRow,
+    SerpResult,
+    SerpRun,
     SitePage,
     Tenant,
     User,
@@ -84,6 +88,11 @@ from app.schemas import (
     SeoPerformanceImportIn,
     SeoPerformanceImportOut,
     SeoPerformanceSummaryOut,
+    SerpResultOut,
+    SerpRunBatchOut,
+    SerpRunIn,
+    SerpRunOut,
+    SerpSummaryOut,
     SiteOriginIn,
     SitePageCreate,
     SitePageDetailOut,
@@ -140,6 +149,7 @@ GSC_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
 GSC_SEARCH_ANALYTICS_ENDPOINT = "https://searchconsole.googleapis.com/webmasters/v3/sites/{site_url}/searchAnalytics/query"
 GSC_SCOPE = "https://www.googleapis.com/auth/webmasters.readonly"
 INDEXNOW_ENDPOINT = "https://api.indexnow.org/indexnow"
+BRIGHTDATA_SERP_INPUT_URL = "https://www.google.com/"
 
 CSV_ALIASES = {
     "query": {"query", "queries", "查询", "搜索查询", "关键词", "关键字"},
@@ -352,6 +362,10 @@ def _page_out(db: Session, page: SitePage) -> SitePageOut:
         html_bytes=page.html_bytes or 0,
         body_hash=page.body_hash or "",
         needs_js=bool(page.needs_js),
+        fetch_mode=page.fetch_mode or "http",
+        render_status=page.render_status or "not_needed",
+        render_final_url=page.render_final_url or "",
+        render_word_count=page.render_word_count or 0,
         html_lang=page.html_lang or "",
         hreflang=page.hreflang or "",
         viewport=page.viewport or "",
@@ -753,7 +767,278 @@ def _performance_summary(db: Session, user: User) -> SeoPerformanceSummaryOut:
         by_page=_top_buckets(rows, "page_url"),
         speed_latest=[PageSpeedAuditOut(**audit.__dict__) for audit in speed],
         imports=[SeoPerformanceImportOut(**item.__dict__) for item in imports],
+        serp=_serp_summary(db, user),
     )
+
+
+def _serp_configured() -> bool:
+    return bool(settings.brightdata_dataset_api_key and settings.brightdata_serp_dataset_id)
+
+
+def _domain(url: str) -> str:
+    host = (urlparse(url if "://" in url else f"https://{url}").hostname or "").lower()
+    return host[4:] if host.startswith("www.") else host
+
+
+def _same_or_subdomain(domain: str, root: str) -> bool:
+    d = _domain(domain)
+    r = _domain(root)
+    return bool(d and r and (d == r or d.endswith("." + r)))
+
+
+def _competitor_domains(db: Session, tenant_id: str) -> set[str]:
+    rows = db.query(Competitor).filter(Competitor.tenant_id == tenant_id).all()
+    domains = {_domain(row.website or "") for row in rows if row.website}
+    return {item for item in domains if item}
+
+
+def _ownership(url: str, own_domain: str, competitors: set[str]) -> str:
+    domain = _domain(url)
+    if own_domain and _same_or_subdomain(domain, own_domain):
+        return "owned"
+    if any(_same_or_subdomain(domain, comp) for comp in competitors):
+        return "competitor"
+    return "third_party"
+
+
+def _extract_organic_results(data: object, limit: int) -> list[dict[str, str | int]]:
+    rows: list[dict[str, str | int]] = []
+
+    def candidates_from(node: object) -> list[object]:
+        if isinstance(node, list):
+            return node
+        if not isinstance(node, dict):
+            return []
+        candidates = (
+            node.get("organic")
+            or node.get("organic_results")
+            or node.get("organic_results_100")
+            or node.get("results")
+            or node.get("items")
+            or []
+        )
+        if isinstance(candidates, dict):
+            candidates = candidates.get("items") or candidates.get("results") or []
+        return candidates if isinstance(candidates, list) else []
+
+    top_level = data if isinstance(data, list) else [data]
+    candidates: list[object] = []
+    for item in top_level:
+        if isinstance(item, dict):
+            candidates.extend(candidates_from(item))
+            if isinstance(item.get("result"), (dict, list)):
+                candidates.extend(candidates_from(item.get("result")))
+            if isinstance(item.get("data"), (dict, list)):
+                candidates.extend(candidates_from(item.get("data")))
+        else:
+            candidates.extend(candidates_from(item))
+
+    if not isinstance(candidates, list):
+        return rows
+    for idx, item in enumerate(candidates, start=1):
+        if not isinstance(item, dict):
+            continue
+        url = str(item.get("link") or item.get("url") or item.get("href") or item.get("displayed_link") or "").strip()
+        if not url:
+            continue
+        position_raw = item.get("position") or item.get("rank") or idx
+        try:
+            position = int(position_raw)
+        except (TypeError, ValueError):
+            position = idx
+        rows.append(
+            {
+                "position": position,
+                "title": str(item.get("title") or "").strip(),
+                "url": url,
+                "snippet": str(item.get("snippet") or item.get("description") or item.get("text") or "").strip(),
+                "result_type": str(item.get("type") or "organic").strip() or "organic",
+            }
+        )
+        if len(rows) >= limit:
+            break
+    return rows
+
+
+def _fetch_brightdata_serp(keyword: str, *, country: str, locale: str, device: str, limit: int) -> list[dict[str, str | int]]:
+    language = locale.split("-", 1)[0].lower() if locale else ""
+    payload = {
+        "input": [
+            {
+                "url": BRIGHTDATA_SERP_INPUT_URL,
+                "keyword": keyword,
+                "language": language,
+                "uule": "",
+                "brd_mobile": "1" if device == "mobile" else "",
+                "tbs": "",
+                "tbm": "",
+                "nfpr": "",
+                "index": "",
+            }
+        ],
+        "limit_per_input": limit,
+    }
+    params = {
+        "dataset_id": settings.brightdata_serp_dataset_id,
+        "notify": "false",
+        "include_errors": "true",
+    }
+    headers = {
+        "Authorization": f"Bearer {settings.brightdata_dataset_api_key}",
+        "Content-Type": "application/json",
+    }
+    endpoint = settings.brightdata_serp_endpoint or "https://api.brightdata.com/datasets/v3/scrape"
+    with httpx.Client(timeout=90, headers=headers) as client:
+        response = client.post(endpoint, params=params, json=payload)
+        response.raise_for_status()
+        data = response.json()
+    return _extract_organic_results(data, limit)
+
+
+def _serp_run_out(run: SerpRun, results: list[SerpResult] | None = None) -> SerpRunOut:
+    return SerpRunOut(
+        id=run.id,
+        provider=run.provider,
+        keyword=run.keyword,
+        country=run.country,
+        locale=run.locale,
+        device=run.device,
+        status=run.status,
+        own_domain=run.own_domain,
+        own_best_position=run.own_best_position,
+        competitor_best_position=run.competitor_best_position,
+        result_count=run.result_count,
+        third_party_count=run.third_party_count,
+        error=run.error,
+        created_at=run.created_at,
+        results=[SerpResultOut(**item.__dict__) for item in (results or [])],
+    )
+
+
+def _serp_summary(db: Session, user: User) -> SerpSummaryOut:
+    runs = (
+        db.query(SerpRun)
+        .filter(SerpRun.tenant_id == user.tenant_id)
+        .order_by(SerpRun.created_at.desc())
+        .limit(20)
+        .all()
+    )
+    latest = runs[:6]
+    ok_runs = [row for row in runs if row.status == "ok"]
+    own_positions = [row.own_best_position for row in ok_runs if row.own_best_position is not None]
+    third_party_rows = (
+        db.query(SerpResult.domain, func.count(SerpResult.id))
+        .filter(SerpResult.tenant_id == user.tenant_id, SerpResult.ownership == "third_party")
+        .group_by(SerpResult.domain)
+        .order_by(func.count(SerpResult.id).desc())
+        .limit(8)
+        .all()
+    )
+    return SerpSummaryOut(
+        configured=_serp_configured(),
+        status="已配置" if _serp_configured() else "未配置",
+        total_runs=len(runs),
+        own_visible_runs=sum(1 for row in ok_runs if row.own_best_position is not None),
+        competitor_visible_runs=sum(1 for row in ok_runs if row.competitor_best_position is not None),
+        avg_own_position=round(sum(own_positions) / len(own_positions), 2) if own_positions else None,
+        latest_runs=[_serp_run_out(row) for row in latest],
+        top_third_party_domains=[{"domain": domain or "未知域名", "count": int(count)} for domain, count in third_party_rows],
+    )
+
+
+def _target_serp_keywords(db: Session, user: User, requested: list[str], limit: int) -> list[str]:
+    seen: set[str] = set()
+    out: list[str] = []
+    for raw in requested:
+        text = raw.strip()
+        if text and text.lower() not in seen:
+            seen.add(text.lower())
+            out.append(text)
+    if not out:
+        signals = (
+            db.query(DemandSignal)
+            .filter(DemandSignal.tenant_id == user.tenant_id)
+            .order_by(DemandSignal.intensity.desc(), DemandSignal.created_at.desc())
+            .limit(limit)
+            .all()
+        )
+        for row in signals:
+            text = (row.theme or "").strip()
+            if text and text.lower() not in seen:
+                seen.add(text.lower())
+                out.append(text)
+    if not out:
+        seo_pages = (
+            db.query(SeoPage)
+            .filter(SeoPage.tenant_id == user.tenant_id)
+            .order_by(SeoPage.updated_at.desc())
+            .limit(limit)
+            .all()
+        )
+        for row in seo_pages:
+            text = (row.target_keyword or "").strip()
+            if text and text.lower() not in seen:
+                seen.add(text.lower())
+                out.append(text)
+    return out[:limit]
+
+
+def _run_one_serp(db: Session, user: User, keyword: str, *, country: str, locale: str, device: str, limit: int) -> SerpRun:
+    tenant = _tenant(db, user)
+    own_domain = _domain(tenant.site_origin or "")
+    competitors = _competitor_domains(db, user.tenant_id)
+    config_hash = hashlib.sha256(f"brightdata|{keyword}|{country}|{locale}|{device}|{limit}|{own_domain}|{','.join(sorted(competitors))}".encode()).hexdigest()
+    run = SerpRun(
+        tenant_id=user.tenant_id,
+        provider="brightdata",
+        keyword=keyword,
+        country=country,
+        locale=locale,
+        device=device,
+        status="running",
+        own_domain=own_domain,
+        config_hash=config_hash,
+        created_by=user.id,
+    )
+    db.add(run)
+    db.flush()
+    try:
+        rows = _fetch_brightdata_serp(keyword, country=country, locale=locale, device=device, limit=limit)
+        own_positions: list[int] = []
+        competitor_positions: list[int] = []
+        third_party_count = 0
+        for item in rows:
+            url = str(item["url"])
+            ownership = _ownership(url, own_domain, competitors)
+            position = int(item["position"])
+            if ownership == "owned":
+                own_positions.append(position)
+            elif ownership == "competitor":
+                competitor_positions.append(position)
+            else:
+                third_party_count += 1
+            db.add(
+                SerpResult(
+                    tenant_id=user.tenant_id,
+                    run_id=run.id,
+                    position=position,
+                    title=str(item["title"])[:500],
+                    url=url[:1000],
+                    domain=_domain(url)[:255],
+                    snippet=str(item["snippet"]),
+                    result_type=str(item["result_type"])[:40],
+                    ownership=ownership,
+                )
+            )
+        run.status = "ok"
+        run.result_count = len(rows)
+        run.third_party_count = third_party_count
+        run.own_best_position = min(own_positions) if own_positions else None
+        run.competitor_best_position = min(competitor_positions) if competitor_positions else None
+    except Exception as exc:
+        run.status = "error"
+        run.error = f"Bright Data SERP 查询失败：{exc}"[:1000]
+    return run
 
 
 def _page_performance(rows: list[SeoPerformanceRow], page: SitePage | None) -> SeoPerformanceBucketOut | None:
@@ -1084,6 +1369,52 @@ def seo_performance(user: User = Depends(get_current_user), db: Session = Depend
     return _performance_summary(db, user)
 
 
+@router.get("/serp/status", response_model=SerpSummaryOut)
+def serp_status(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> SerpSummaryOut:
+    return _serp_summary(db, user)
+
+
+@router.post("/serp/run", response_model=SerpRunBatchOut)
+def run_serp(
+    body: SerpRunIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> SerpRunBatchOut:
+    if not _serp_configured():
+        return SerpRunBatchOut(
+            status="未配置",
+            configured=False,
+            note="服务器未配置 Bright Data Dataset SERP API。请配置 BRIGHTDATA_DATASET_API_KEY / BRIGHTDATA_SERP_DATASET_ID。",
+        )
+    keywords = _target_serp_keywords(db, user, body.keywords, limit=min(5, body.limit))
+    if not keywords:
+        raise HTTPException(status_code=400, detail="没有可查询的关键词。请先在首页配置客户 SEO 目标关键词。")
+    runs: list[SerpRun] = []
+    for keyword in keywords:
+        runs.append(_run_one_serp(db, user, keyword, country=body.country, locale=body.locale, device=body.device, limit=body.limit))
+    failed = sum(1 for row in runs if row.status == "error")
+    _finish_data_sync(
+        db,
+        user,
+        source="serp",
+        mode="manual",
+        status="error" if failed == len(runs) else "ok",
+        rows_imported=sum(row.result_count for row in runs),
+        note=f"Bright Data SERP 查询 {len(runs)} 个关键词，失败 {failed} 个。",
+    )
+    db.commit()
+    for row in runs:
+        db.refresh(row)
+    return SerpRunBatchOut(
+        status="ok" if failed == 0 else "partial",
+        configured=True,
+        ran=len(runs),
+        failed=failed,
+        note=f"SERP 查询完成：关键词 {len(runs)} 个，失败 {failed} 个。",
+        runs=[_serp_run_out(row) for row in runs],
+    )
+
+
 @router.get("/gsc/status", response_model=GscStatusOut)
 def gsc_status(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> GscStatusOut:
     return _gsc_status(db, user)
@@ -1366,6 +1697,7 @@ def seo_report(user: User = Depends(get_current_user), db: Session = Depends(get
     tenant = _tenant(db, user)
     targets = _diagnosis_targets(db, user)
     performance = _performance_summary(db, user)
+    serp = performance.serp
     target_markets = targets["markets"]
     target_keywords = targets["keywords"]
     market_by_id = targets["market_by_id"]
@@ -1415,6 +1747,7 @@ def seo_report(user: User = Depends(get_current_user), db: Session = Depends(get
         f"- sitemap 覆盖：{len(sitemap_pages)} 个页面",
         f"- 产品/方案类页面：{len(product_pages)} 个",
         f"- GSC 状态：{performance.gsc_status}。Bing 状态：{performance.bing_status}。",
+        f"- SERP 市场表现：{serp.status if serp else '未配置'}，已查询 {serp.total_runs if serp else 0} 轮。",
         f"- 测速状态：PageSpeed Insights {performance.pagespeed_status}。",
         "",
         "## 诊断目标",
@@ -1465,6 +1798,26 @@ def seo_report(user: User = Depends(get_current_user), db: Session = Depends(get
             "- 当前收录相关结论仍按“需授权核验”处理，不能直接判定已收录或未收录。",
             "",
         ]
+    lines += ["### SERP 竞争表现", ""]
+    if serp and serp.latest_runs:
+        lines += [
+            f"- Bright Data SERP 状态：{serp.status}。已记录 {serp.total_runs} 轮关键词查询。",
+            f"- 我方可见：{serp.own_visible_runs} 轮；竞品可见：{serp.competitor_visible_runs} 轮；我方平均最佳排名：{serp.avg_own_position if serp.avg_own_position is not None else '未出现'}。",
+            "",
+        ]
+        for run in serp.latest_runs[:8]:
+            own = run.own_best_position if run.own_best_position is not None else "未出现"
+            comp = run.competitor_best_position if run.competitor_best_position is not None else "未出现"
+            lines.append(f"- {run.keyword}（{run.country}/{run.device}）：我方 {own}，竞品 {comp}，前 {run.result_count} 条第三方 {run.third_party_count} 个。")
+        if serp.top_third_party_domains:
+            lines.append("- 高频第三方域名：" + "；".join(f"{item['domain']}({item['count']})" for item in serp.top_third_party_domains[:6]))
+        lines.append("")
+    else:
+        lines += [
+            "- 暂未运行 SERP 查询。建议用目标国家和核心关键词查询 Google 前 10/20，判断我方、竞品和第三方平台占位。",
+            "- SERP 查询结果是市场可见度证据，不等同 GSC 点击/曝光，也不等同真实外链权重。",
+            "",
+        ]
     if performance.speed_latest:
         lines += ["### 速度体验", ""]
         for audit in performance.speed_latest[:6]:
@@ -1498,6 +1851,7 @@ def seo_report(user: User = Depends(get_current_user), db: Session = Depends(get
         f"3. 结构与规范风险：{sum(1 for i in active if i.category in {'canonical', 'schema', 'heading'})} 个问题影响搜索引擎和 AI 对页面的理解。",
         f"4. B2B 获客风险：{len(b2b_issues)} 个问题影响海外买家判断供应商能力和发起询盘。",
         f"5. JS 渲染风险：{len(needs_js)} 个页面疑似需要浏览器渲染，普通 HTML 抓取可能读不到完整内容。",
+        f"6. SERP 可见度风险：{(serp.total_runs - serp.own_visible_runs) if serp else '未测'} 个关键词查询轮次未观察到我方自然结果。",
         "",
         "## 问题汇总",
         "",
@@ -1557,6 +1911,7 @@ def seo_report_table(user: User = Depends(get_current_user), db: Session = Depen
     market_by_id = targets["market_by_id"]
     seo_by_id = {p.id: p for p in targets["seo_pages"]}
     performance_rows = db.query(SeoPerformanceRow).filter(SeoPerformanceRow.tenant_id == user.tenant_id).all()
+    serp = _serp_summary(db, user)
     issues = (
         db.query(OnsiteIssue)
         .options(selectinload(OnsiteIssue.page))
@@ -1591,6 +1946,11 @@ def seo_report_table(user: User = Depends(get_current_user), db: Session = Depen
         "正文规模",
         "图片Alt缺失",
         "测速状态",
+        "页面抓取方式",
+        "JS渲染状态",
+        "SERP我方可见轮次",
+        "SERP竞品可见轮次",
+        "SERP第三方高频域名",
         "曝光",
         "点击",
         "CTR",
@@ -1617,6 +1977,10 @@ def seo_report_table(user: User = Depends(get_current_user), db: Session = Depen
                 evidence_bits.append(f"跳转={page.redirect_count}次")
             if page.body_hash:
                 evidence_bits.append(f"内容指纹={page.body_hash[:12]}")
+            if page.fetch_mode:
+                evidence_bits.append(f"抓取方式={page.fetch_mode}")
+            if page.render_status and page.render_status != "not_needed":
+                evidence_bits.append(f"渲染={page.render_status}")
             evidence_bits.append(f"sitemap={_sitemap_label(page.is_in_sitemap)}")
             evidence_bits.append(f"URL深度={_url_depth(page.path)}")
             if word_count:
@@ -1647,6 +2011,11 @@ def seo_report_table(user: User = Depends(get_current_user), db: Session = Depen
             f"约 {word_count or 0} 词",
             f"{missing_alt or 0}/{image_count or 0}",
             "见 PageSpeed 汇总" if has_speed else "未测速",
+            page.fetch_mode if page else "",
+            page.render_status if page else "",
+            serp.own_visible_runs if serp else "未测",
+            serp.competitor_visible_runs if serp else "未测",
+            "；".join(f"{item['domain']}({item['count']})" for item in (serp.top_third_party_domains if serp else [])[:5]) or "未测",
             page_perf.impressions if page_perf else "未导入",
             page_perf.clicks if page_perf else "未导入",
             f"{page_perf.ctr}%" if page_perf and page_perf.ctr is not None else "未导入",
@@ -1862,6 +2231,8 @@ def fetch_one_page(
                 http_status=snap.http_status,
                 final_url=snap.final_url,
                 needs_js=snap.needs_js,
+                fetch_mode=snap.fetch_mode,
+                render_status=snap.render_status,
                 error=snap.error,
                 verified=verified,
                 created=created,
@@ -2073,6 +2444,8 @@ def _ingest_snapshots(
                 http_status=snap.http_status,
                 final_url=snap.final_url,
                 needs_js=snap.needs_js,
+                fetch_mode=snap.fetch_mode,
+                render_status=snap.render_status,
                 error=snap.error,
                 verified=page_verified,
                 created=page_created,

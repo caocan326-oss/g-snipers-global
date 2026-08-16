@@ -46,6 +46,7 @@ import {
   type SeoReportTable,
   type SeoPerformanceSummary,
   type SeoPage,
+  type SerpRunBatch,
   type SitePage,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -372,6 +373,29 @@ export default function OnsiteBoardPage() {
       load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "PageSpeed 测速失败");
+    } finally {
+      setBusyId("");
+    }
+  }
+
+  async function runSerp() {
+    setError("");
+    setBusyId("serp");
+    try {
+      const country = targetMarkets[0]?.country_code || "US";
+      const locale = targetMarkets[0]?.primary_locale || "en-US";
+      const res = await api<SerpRunBatch>("/api/onsite/serp/run", {
+        method: "POST",
+        body: JSON.stringify({ keywords: [], country, locale, device: "desktop", limit: 10 }),
+      });
+      if (!res.configured) {
+        setError(res.note || "Bright Data SERP 未配置。");
+      } else {
+        setNote(res.note || `SERP 查询完成：${res.ran} 个关键词。`);
+      }
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "SERP 查询失败");
     } finally {
       setBusyId("");
     }
@@ -775,7 +799,7 @@ export default function OnsiteBoardPage() {
           <CardTitle>SEO 表现数据源</CardTitle>
           <p className="mt-1 text-sm text-slate-500">免费数据优先：GSC/Bing CSV 用于真实搜索表现，PageSpeed 用于速度体验。</p>
         </CardHeader>
-        <CardContent className="grid gap-4 xl:grid-cols-4">
+        <CardContent className="grid gap-4 xl:grid-cols-5">
           <div className="rounded-md border border-slate-200 p-3">
             <div className="flex items-center gap-2 text-sm font-medium text-slate-800">
               <Search className="h-4 w-4" />
@@ -854,6 +878,33 @@ export default function OnsiteBoardPage() {
           </div>
           <div className="rounded-md border border-slate-200 p-3">
             <div className="flex items-center gap-2 text-sm font-medium text-slate-800">
+              <Search className="h-4 w-4" />
+              Bright Data SERP
+            </div>
+            <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+              <div className="rounded-md bg-slate-50 p-2">
+                <div className="text-lg font-semibold">{performance?.serp?.total_runs ?? 0}</div>
+                <div className="text-[11px] text-slate-500">查询轮次</div>
+              </div>
+              <div className="rounded-md bg-slate-50 p-2">
+                <div className="text-lg font-semibold">{performance?.serp?.own_visible_runs ?? 0}</div>
+                <div className="text-[11px] text-slate-500">我方出现</div>
+              </div>
+              <div className="rounded-md bg-slate-50 p-2">
+                <div className="text-lg font-semibold">{performance?.serp?.competitor_visible_runs ?? 0}</div>
+                <div className="text-[11px] text-slate-500">竞品出现</div>
+              </div>
+            </div>
+            <Button type="button" onClick={runSerp} disabled={busyId === "serp"} className="mt-3 w-full">
+              <Search className="mr-2 h-4 w-4" />
+              {busyId === "serp" ? "查询中…" : "按 SEO 目标查询"}
+            </Button>
+            <p className="mt-2 text-xs text-slate-500">
+              {performance?.serp?.configured ? "用目标国家和关键词查询 Google 前 10。" : "服务器未配置 Bright Data SERP。"}
+            </p>
+          </div>
+          <div className="rounded-md border border-slate-200 p-3">
+            <div className="flex items-center gap-2 text-sm font-medium text-slate-800">
               <BarChart3 className="h-4 w-4" />
               搜索表现摘要
             </div>
@@ -882,6 +933,30 @@ export default function OnsiteBoardPage() {
             </div>
           </div>
         </CardContent>
+        {performance?.serp?.latest_runs?.length ? (
+          <CardContent className="border-t border-slate-100 pt-4">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div className="text-sm font-medium text-slate-800">最近 SERP 查询</div>
+              <Badge tone="blue">市场可见度证据</Badge>
+            </div>
+            <div className="grid gap-2 lg:grid-cols-2">
+              {performance.serp.latest_runs.slice(0, 4).map((run) => (
+                <div key={run.id} className="rounded-md border border-slate-200 p-3 text-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="truncate font-medium text-slate-800">{run.keyword}</span>
+                    <Badge tone={run.status === "ok" ? "green" : "red"}>{run.status}</Badge>
+                  </div>
+                  <div className="mt-2 grid grid-cols-3 gap-2 text-xs text-slate-600">
+                    <span>{run.country}/{run.device}</span>
+                    <span>我方 {run.own_best_position ?? "未出现"}</span>
+                    <span>竞品 {run.competitor_best_position ?? "未出现"}</span>
+                  </div>
+                  {run.error ? <p className="mt-2 text-xs text-red-600">{run.error}</p> : null}
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        ) : null}
         <CardContent className="grid gap-4 border-t border-slate-100 pt-4 lg:grid-cols-3">
           <div className="rounded-md border border-slate-200 p-3">
             <div className="text-sm font-medium text-slate-800">Bing Webmaster</div>

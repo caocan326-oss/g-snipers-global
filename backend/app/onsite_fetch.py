@@ -39,6 +39,7 @@ except ImportError:  # pragma: no cover - optional production enhancement
     trafilatura = None  # type: ignore[assignment]
 
 from app.models import SitePage
+from app.config import settings
 
 USER_AGENT = "G-Snipers-Overseas/0.1 (+onsite-fetch; read-only)"
 FETCH_TIMEOUT = 15.0
@@ -46,6 +47,7 @@ MAX_REDIRECTS = 5
 MAX_BODY = 1_500_000
 SHELL_TEXT_LIMIT = 80
 DEFAULT_SITEMAP_PATHS = ("/sitemap.xml", "/sitemap_index.xml")
+RENDER_WORD_GAIN_MIN = 40
 # Tests may assign a MockTransport. Production stays None.
 TEST_TRANSPORT: httpx.BaseTransport | None = None
 
@@ -152,6 +154,10 @@ class PageSnapshot:
     images_missing_alt: int = 0
     external_link_count: int = 0
     needs_js: bool = False
+    fetch_mode: str = "http"
+    render_status: str = "not_needed"
+    render_final_url: str = ""
+    render_word_count: int = 0
     error: str = ""
     extracted: bool = False
     redirects: list[str] = field(default_factory=list)
@@ -513,6 +519,105 @@ def _status_for_http(code: int, needs_js: bool) -> str:
     return CRAWL_OK
 
 
+def browser_render_available() -> bool:
+    return bool(settings.onsite_render_js_enabled and settings.brightdata_browser_ws.strip())
+
+
+def _render_html_with_browser(url: str) -> tuple[str, str]:
+    """Render one URL through a configured remote Chromium endpoint."""
+    try:
+        from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+        from playwright.sync_api import sync_playwright
+    except ImportError as exc:  # pragma: no cover - depends on optional production package
+        raise RuntimeError("playwright 未安装，无法启用浏览器渲染") from exc
+
+    endpoint = settings.brightdata_browser_ws.strip()
+    timeout_ms = max(5000, int(settings.onsite_render_timeout_ms or 30000))
+    with sync_playwright() as pw:
+        browser = pw.chromium.connect_over_cdp(endpoint, timeout=timeout_ms)
+        page = browser.new_page(user_agent=USER_AGENT)
+        try:
+            page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
+            try:
+                page.wait_for_load_state("networkidle", timeout=min(timeout_ms, 8000))
+            except PlaywrightTimeoutError:
+                pass
+            final_url = page.url
+            html = page.content()
+            return html or "", final_url or url
+        finally:
+            page.close()
+            browser.close()
+
+
+def _maybe_render_js_snapshot(snap: PageSnapshot, *, allowed_hosts: set[str]) -> None:
+    if not snap.needs_js or not browser_render_available():
+        return
+    snap.render_status = "attempted"
+    target = snap.final_url or snap.requested_url
+    if not host_allowed(target, allowed_hosts):
+        snap.render_status = "skipped"
+        return
+    started = time.perf_counter()
+    try:
+        rendered_html, final_url = _render_html_with_browser(target)
+    except Exception as exc:
+        snap.render_status = "error"
+        snap.error = f"{snap.error}；浏览器渲染失败：{exc}" if snap.error else f"浏览器渲染失败：{exc}"
+        return
+    if not rendered_html:
+        snap.render_status = "error"
+        snap.error = f"{snap.error}；浏览器渲染返回空内容" if snap.error else "浏览器渲染返回空内容"
+        return
+    if not host_allowed(final_url, allowed_hosts):
+        snap.render_status = "host_rejected"
+        snap.crawl_status = CRAWL_HOST
+        snap.final_url = final_url
+        snap.error = f"浏览器渲染终态主机名不在允许列表：{urlparse(final_url).hostname}"
+        return
+
+    rendered = extract_html(rendered_html[:MAX_BODY], base_url=final_url, allowed_hosts=allowed_hosts)
+    old_word_count = snap.word_count
+    rendered_needs_js = bool(rendered["needs_js"])
+    rendered_word_count = int(rendered["word_count"])
+    if rendered_needs_js and rendered_word_count < old_word_count + RENDER_WORD_GAIN_MIN:
+        snap.render_status = "insufficient"
+        snap.render_final_url = final_url
+        snap.render_word_count = rendered_word_count
+        snap.error = f"{snap.error}；浏览器渲染后正文仍不足" if snap.error else "浏览器渲染后正文仍不足"
+        return
+
+    raw_body = rendered_html.encode("utf-8", errors="replace")
+    snap.fetch_mode = "browser"
+    snap.render_status = "ok" if not rendered_needs_js else "still_needs_js"
+    snap.render_final_url = final_url
+    snap.render_word_count = rendered_word_count
+    snap.final_url = final_url
+    snap.ttfb_ms = int(round((time.perf_counter() - started) * 1000))
+    snap.content_type = "text/html"
+    snap.html_bytes = len(raw_body)
+    snap.body_hash = hashlib.sha256(raw_body[:MAX_BODY]).hexdigest()
+    snap.title = str(rendered["title"])
+    snap.meta_description = str(rendered["meta_description"])
+    snap.h1 = str(rendered["h1"])
+    snap.canonical = str(rendered["canonical"])
+    snap.hreflang = str(rendered["hreflang"])
+    snap.json_ld_types = str(rendered["json_ld_types"])
+    snap.structured_data = str(rendered["structured_data"])
+    snap.meta_robots = str(rendered["meta_robots"])
+    snap.viewport = str(rendered["viewport"])
+    snap.html_lang = str(rendered["html_lang"])
+    snap.internal_links = str(rendered["internal_links"])
+    snap.word_count = rendered_word_count
+    snap.image_count = int(rendered["image_count"])
+    snap.images_missing_alt = int(rendered["images_missing_alt"])
+    snap.external_link_count = int(rendered["external_link_count"])
+    snap.needs_js = rendered_needs_js
+    snap.extracted = True
+    snap.crawl_status = _status_for_http(snap.http_status or 200, snap.needs_js)
+    snap.error = "已通过浏览器渲染复查" if not snap.needs_js else "浏览器渲染后仍疑似 JS 空壳"
+
+
 def fetch_url(
     url: str,
     allowed_hosts: set[str],
@@ -626,7 +731,8 @@ def fetch_url(
     if snap.crawl_status in {CRAWL_4XX, CRAWL_5XX}:
         snap.error = f"HTTP {response.status_code}"
     elif snap.needs_js:
-        snap.error = "正文几乎是空壳，需要 JS 渲染。本期不启动无头浏览器。"
+        snap.error = "正文几乎是空壳，需要 JS 渲染。"
+        _maybe_render_js_snapshot(snap, allowed_hosts=allowed_hosts)
     return snap
 
 
@@ -741,6 +847,10 @@ def apply_observation(page: SitePage, snap: PageSnapshot) -> None:
     page.html_bytes = snap.html_bytes
     page.body_hash = snap.body_hash[:64]
     page.needs_js = snap.needs_js
+    page.fetch_mode = snap.fetch_mode[:40]
+    page.render_status = snap.render_status[:40]
+    page.render_final_url = snap.render_final_url[:700]
+    page.render_word_count = snap.render_word_count
     page.crawl_error = snap.error or ""
     page.x_robots_tag = snap.x_robots_tag[:300]
     if not snap.extracted:

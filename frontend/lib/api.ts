@@ -121,6 +121,11 @@ export type WorkbenchSeoPerformance = {
   authority_status: string;
   pagespeed_status: string;
   latest_speed_score: number | null;
+  serp_status: string;
+  serp_runs: number;
+  serp_own_visible_runs: number;
+  serp_competitor_visible_runs: number;
+  serp_avg_own_position: number | null;
   top_countries: WorkbenchSeoBucket[];
   top_keywords: WorkbenchSeoBucket[];
   top_pages: WorkbenchSeoBucket[];
@@ -207,6 +212,55 @@ export type SeoPerformanceSummary = {
     note: string;
     imported_at: string | null;
   }[];
+  serp: SerpSummary | null;
+};
+
+export type SerpResult = {
+  position: number;
+  title: string;
+  url: string;
+  domain: string;
+  snippet: string;
+  result_type: string;
+  ownership: string;
+};
+
+export type SerpRun = {
+  id: string;
+  provider: string;
+  keyword: string;
+  country: string;
+  locale: string;
+  device: string;
+  status: string;
+  own_domain: string;
+  own_best_position: number | null;
+  competitor_best_position: number | null;
+  result_count: number;
+  third_party_count: number;
+  error: string;
+  created_at: string | null;
+  results: SerpResult[];
+};
+
+export type SerpSummary = {
+  configured: boolean;
+  status: string;
+  total_runs: number;
+  own_visible_runs: number;
+  competitor_visible_runs: number;
+  avg_own_position: number | null;
+  latest_runs: SerpRun[];
+  top_third_party_domains: { domain: string; count: number }[];
+};
+
+export type SerpRunBatch = {
+  status: string;
+  configured: boolean;
+  ran: number;
+  failed: number;
+  note: string;
+  runs: SerpRun[];
 };
 
 export type GscStatus = {
@@ -564,6 +618,10 @@ export type SitePage = {
   html_bytes?: number;
   body_hash?: string;
   needs_js?: boolean;
+  fetch_mode?: string;
+  render_status?: string;
+  render_final_url?: string;
+  render_word_count?: number;
   html_lang?: string;
   hreflang?: string;
   viewport?: string;
@@ -602,6 +660,8 @@ export type FetchRegistered = {
     http_status: number | null;
     final_url: string;
     needs_js: boolean;
+    fetch_mode: string;
+    render_status: string;
     error: string;
     verified: number;
     created: number;

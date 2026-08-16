@@ -12,7 +12,7 @@
 
 骨架对齐公开站内审计工具（清单 → 按严重级别分组 → 改稿 → 确认），**不是** Semrush 克隆，也不是一张裸 URL 表。
 
-1. **抓这一站**（`POST /api/onsite/fetch-registered`）：只对已登记 URL（站点根 + `SitePage.path`）做 HTTP GET。认 robots.txt，跟随同主机跳转，抽出 TDK / H1 / canonical / hreflang / JSON-LD 到**观察层**。不爬全站，不启无头浏览器（空壳标「需要 JS」）。
+1. **抓这一站**（`POST /api/onsite/fetch-registered`）：只对已登记 URL（站点根 + `SitePage.path`）做 HTTP GET。认 robots.txt，跟随同主机跳转，抽出 TDK / H1 / canonical / hreflang / JSON-LD 到**观察层**。疑似 JS 空壳页会标「需要 JS」；若配置 Bright Data Browser API，则只对这类页面做浏览器渲染复查。
 2. **分析**：按当前观察出 critical / high / low（TDK、标题、内链、schema、收录 / Canonical）。观察已满足的工单标 **已验收**。分析不改改稿，也不改线上。
 3. **改稿草稿**：另一步，写在工单 `proposed_change`。**不准**写进 title / canonical / description 观察字段。
 4. **确认上线**：人确认后回抓该页做验收。系统不向客户站 POST/PUT。
@@ -43,7 +43,7 @@
 
 ## 明确延期
 
-- **SEM / Google Ads / MCC / OAuth / GSC：** 不接（负责人暂无广告/GSC 测试账号）。需要这些源的指标显示 **未测**。
+- **SEM / Google Ads / MCC：** 延后。不用广告账户数据补齐看板。
 - **Ahrefs / Semrush 外链指数：** 不做。
 - **真实分发 HTTP：** 适配器已在，Key 后补。未配置时确认也不会发。
 - **生产客户库：** 本期 Postgres + Alembic + 演示 seed。
@@ -65,7 +65,11 @@ docker compose up --build
 
 必填：`DATABASE_URL`、`SECRET_KEY`、演示账号。
 
-可选（留空 = 未配置）：`LLM_API_KEY`（及 `LLM_BASE_URL` / `LLM_MODEL`）、`DISTRIBUTION_*_API_KEY`。
+可选（留空 = 未配置）：`LLM_API_KEY`（及 `LLM_BASE_URL` / `LLM_MODEL`）、`GSC_OAUTH_CLIENT_ID` / `GSC_OAUTH_CLIENT_SECRET` / `GSC_OAUTH_REDIRECT_URI`、`PAGESPEED_API_KEY`、`BING_WEBMASTER_API_KEY`、`INDEXNOW_KEY`、`DISTRIBUTION_*_API_KEY`。
+
+Bright Data Browser API 用于 JS 空壳页的二次渲染复查，可选配置：`BRIGHTDATA_BROWSER_WS`、`ONSITE_RENDER_JS_ENABLED`、`ONSITE_RENDER_TIMEOUT_MS`。
+
+Bright Data Dataset SERP API 用于目标国家/关键词下的 Google 搜索结果观察，使用「Google SERP - 100 Results - collect by URL」端点。可选配置：`BRIGHTDATA_DATASET_API_KEY`、`BRIGHTDATA_SERP_DATASET_ID`、`BRIGHTDATA_SERP_ENDPOINT`。Browser API 和 Dataset SERP API 是两条通道，不要混填。不要把真实连接串、Bearer Key 或密码提交进仓库。
 
 不要配置 `GOOGLE_ADS_*`。
 

@@ -17,6 +17,7 @@ from app.onsite_fetch import (
     make_client,
     normalize_origin,
 )
+from app.config import settings
 from tests.conftest import auth_header
 
 ORIGIN = "https://www.snipers.com.cn"
@@ -163,6 +164,45 @@ def test_robots_and_4xx_and_empty_shell() -> None:
     assert missing.title == "Not found"
     assert shell.crawl_status == CRAWL_JS
     assert shell.needs_js is True
+
+
+def test_js_shell_can_be_rechecked_by_configured_browser(monkeypatch) -> None:
+    shell_html = '<html><body><div id="app"></div></body></html>'
+    rendered_html = """<!doctype html>
+<html lang="en"><head>
+  <title>Rendered Product Page</title>
+  <meta name="description" content="Rendered description for B2B buyers.">
+  <link rel="canonical" href="https://www.snipers.com.cn/rendered">
+</head><body>
+  <h1>Rendered Product Page</h1>
+  <p>Industrial buyers can read the rendered product overview, application scenarios, specifications,
+  certifications, export delivery details, service process, warranty policy, installation notes, FAQ,
+  after-sales support, distributor cooperation, and procurement guidance after JavaScript has loaded.</p>
+  <a href="/contact">Contact</a>
+</body></html>"""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, text=shell_html, headers={"content-type": "text/html"})
+
+    def fake_render(url: str) -> tuple[str, str]:
+        assert url == f"{ORIGIN}/app"
+        return rendered_html, f"{ORIGIN}/rendered"
+
+    monkeypatch.setattr(settings, "brightdata_browser_ws", "wss://example.invalid/browser")
+    monkeypatch.setattr(settings, "onsite_render_js_enabled", True)
+    import app.onsite_fetch as onsite_fetch
+
+    monkeypatch.setattr(onsite_fetch, "_render_html_with_browser", fake_render)
+    with make_client(transport=httpx.MockTransport(handler)) as client:
+        snap = fetch_url(f"{ORIGIN}/app", {"www.snipers.com.cn"}, client=client)
+
+    assert snap.crawl_status == CRAWL_OK
+    assert snap.needs_js is False
+    assert snap.final_url == f"{ORIGIN}/rendered"
+    assert snap.title == "Rendered Product Page"
+    assert snap.h1 == "Rendered Product Page"
+    assert "/contact" in snap.internal_links
+    assert snap.error == "已通过浏览器渲染复查"
 
 
 def test_confirm_apply_long_draft_does_not_pollute(client: TestClient, demo_user) -> None:

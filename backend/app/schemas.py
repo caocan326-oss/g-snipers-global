@@ -93,6 +93,11 @@ class WorkbenchSeoPerformance(BaseModel):
     authority_status: str = "未接入"
     pagespeed_status: str = "未测速"
     latest_speed_score: int | None = None
+    serp_status: str = "未配置"
+    serp_runs: int = 0
+    serp_own_visible_runs: int = 0
+    serp_competitor_visible_runs: int = 0
+    serp_avg_own_position: float | None = None
     top_countries: list[WorkbenchSeoBucket] = []
     top_keywords: list[WorkbenchSeoBucket] = []
     top_pages: list[WorkbenchSeoBucket] = []
@@ -705,6 +710,8 @@ class FetchPageResultOut(BaseModel):
     http_status: int | None = None
     final_url: str = ""
     needs_js: bool = False
+    fetch_mode: str = "http"
+    render_status: str = "not_needed"
     error: str = ""
     verified: int = 0
     created: int = 0
@@ -781,6 +788,62 @@ class SeoPerformanceBucketOut(BaseModel):
     position: float | None = None
 
 
+class SerpRunIn(BaseModel):
+    keywords: list[str] = []
+    country: str = "US"
+    locale: str = "en-US"
+    device: str = Field(default="desktop", pattern="^(desktop|mobile)$")
+    limit: int = Field(default=10, ge=1, le=20)
+
+
+class SerpResultOut(BaseModel):
+    position: int
+    title: str
+    url: str
+    domain: str
+    snippet: str = ""
+    result_type: str = "organic"
+    ownership: str = "third_party"
+
+
+class SerpRunOut(BaseModel):
+    id: str
+    provider: str
+    keyword: str
+    country: str
+    locale: str
+    device: str
+    status: str
+    own_domain: str = ""
+    own_best_position: int | None = None
+    competitor_best_position: int | None = None
+    result_count: int = 0
+    third_party_count: int = 0
+    error: str = ""
+    created_at: datetime | None = None
+    results: list[SerpResultOut] = []
+
+
+class SerpRunBatchOut(BaseModel):
+    status: str
+    configured: bool
+    ran: int = 0
+    failed: int = 0
+    note: str = ""
+    runs: list[SerpRunOut] = []
+
+
+class SerpSummaryOut(BaseModel):
+    configured: bool
+    status: str
+    total_runs: int = 0
+    own_visible_runs: int = 0
+    competitor_visible_runs: int = 0
+    avg_own_position: float | None = None
+    latest_runs: list[SerpRunOut] = []
+    top_third_party_domains: list[dict[str, int | str]] = []
+
+
 class PageSpeedRunIn(BaseModel):
     urls: list[str] = []
     strategies: list[str] = ["mobile", "desktop"]
@@ -816,6 +879,7 @@ class SeoPerformanceSummaryOut(BaseModel):
     by_page: list[SeoPerformanceBucketOut] = []
     speed_latest: list[PageSpeedAuditOut] = []
     imports: list[SeoPerformanceImportOut] = []
+    serp: SerpSummaryOut | None = None
 
 
 class GscStatusOut(BaseModel):
@@ -974,6 +1038,10 @@ class SitePageOut(BaseModel):
     html_bytes: int = 0
     body_hash: str = ""
     needs_js: bool = False
+    fetch_mode: str = "http"
+    render_status: str = "not_needed"
+    render_final_url: str = ""
+    render_word_count: int = 0
     html_lang: str = ""
     hreflang: str = ""
     viewport: str = ""

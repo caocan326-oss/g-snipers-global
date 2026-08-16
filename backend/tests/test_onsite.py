@@ -1,3 +1,5 @@
+import json
+
 from fastapi.testclient import TestClient
 
 from tests.conftest import auth_header
@@ -533,3 +535,111 @@ def test_bing_status_and_indexnow_submission(client: TestClient, demo_user, monk
     runs = client.get("/api/onsite/data-sync/status", headers=headers).json()["runs"]
     assert runs[0]["source"] == "indexnow"
     assert runs[0]["submitted"] == 1
+
+
+def test_brightdata_serp_run_classifies_owned_competitor_and_third_party(client: TestClient, demo_user, monkeypatch) -> None:
+    import app.routers.onsite as onsite_router
+    from app.config import settings
+
+    headers = auth_header(client)
+    client.patch("/api/onsite/settings", headers=headers, json={"site_origin": "https://example.com"})
+    market = client.post(
+        "/api/markets",
+        headers=headers,
+        json={"name": "United States", "region": "North America", "country_code": "US", "primary_locale": "en-US", "status": "priority"},
+    ).json()
+    client.post(
+        f"/api/markets/{market['id']}/demand-signals",
+        headers=headers,
+        json={"theme": "industrial pump supplier", "locale": "en-US", "intent": "commercial", "intensity": 5},
+    )
+    client.post(
+        f"/api/markets/{market['id']}/competitors",
+        headers=headers,
+        json={"name": "Competitor", "website": "https://competitor.com"},
+    )
+
+    monkeypatch.setattr(settings, "brightdata_dataset_api_key", "dataset-key")
+    monkeypatch.setattr(settings, "brightdata_serp_dataset_id", "gd_mfz5x93lmsjjjylob")
+
+    def fake_serp(keyword: str, *, country: str, locale: str, device: str, limit: int):
+        assert keyword == "industrial pump supplier"
+        assert country == "US"
+        return [
+            {"position": 1, "title": "Directory", "url": "https://industry-directory.example/list", "snippet": "Directory", "result_type": "organic"},
+            {"position": 2, "title": "Competitor", "url": "https://competitor.com/pumps", "snippet": "Competitor", "result_type": "organic"},
+            {"position": 3, "title": "Our page", "url": "https://example.com/pumps", "snippet": "Our page", "result_type": "organic"},
+        ]
+
+    monkeypatch.setattr(onsite_router, "_fetch_brightdata_serp", fake_serp)
+    ran = client.post(
+        "/api/onsite/serp/run",
+        headers=headers,
+        json={"keywords": [], "country": "US", "locale": "en-US", "device": "desktop", "limit": 10},
+    )
+    assert ran.status_code == 200, ran.text
+    body = ran.json()
+    assert body["configured"] is True
+    assert body["ran"] == 1
+    assert body["runs"][0]["own_best_position"] == 3
+    assert body["runs"][0]["competitor_best_position"] == 2
+    assert body["runs"][0]["third_party_count"] == 1
+
+    summary = client.get("/api/onsite/performance", headers=headers).json()["serp"]
+    assert summary["own_visible_runs"] == 1
+    assert summary["competitor_visible_runs"] == 1
+    assert summary["top_third_party_domains"][0]["domain"] == "industry-directory.example"
+
+
+def test_brightdata_dataset_serp_request_shape(monkeypatch) -> None:
+    import httpx
+
+    import app.routers.onsite as onsite_router
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "brightdata_dataset_api_key", "dataset-key")
+    monkeypatch.setattr(settings, "brightdata_serp_dataset_id", "gd_mfz5x93lmsjjjylob")
+    monkeypatch.setattr(settings, "brightdata_serp_endpoint", "https://api.brightdata.com/datasets/v3/scrape")
+    real_client = httpx.Client
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.method == "POST"
+        assert request.url.params["dataset_id"] == "gd_mfz5x93lmsjjjylob"
+        assert request.url.params["notify"] == "false"
+        assert request.headers["Authorization"] == "Bearer dataset-key"
+        body = json.loads(request.content.decode())
+        assert body["input"][0]["url"] == "https://www.google.com/"
+        assert body["input"][0]["keyword"] == "industrial pump supplier"
+        assert body["input"][0]["language"] == "en"
+        assert body["input"][0]["brd_mobile"] == ""
+        return httpx.Response(
+            200,
+            json=[
+                {
+                    "organic_results": [
+                        {"position": 1, "title": "Result", "url": "https://example.com/pumps", "description": "Result text"}
+                    ]
+                }
+            ],
+        )
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs) -> None:
+            self.client = real_client(transport=httpx.MockTransport(handler), headers=kwargs.get("headers"))
+
+        def __enter__(self):
+            return self.client
+
+        def __exit__(self, exc_type, exc, tb) -> None:
+            self.client.close()
+
+    monkeypatch.setattr(onsite_router.httpx, "Client", FakeClient)
+    rows = onsite_router._fetch_brightdata_serp(
+        "industrial pump supplier",
+        country="US",
+        locale="en-US",
+        device="desktop",
+        limit=10,
+    )
+    assert rows[0]["position"] == 1
+    assert rows[0]["url"] == "https://example.com/pumps"

@@ -368,6 +368,10 @@ class SitePage(Base):
     html_bytes: Mapped[int] = mapped_column(Integer, default=0)
     body_hash: Mapped[str] = mapped_column(String(64), default="")
     needs_js: Mapped[bool] = mapped_column(Boolean, default=False)
+    fetch_mode: Mapped[str] = mapped_column(String(40), default="http")
+    render_status: Mapped[str] = mapped_column(String(40), default="not_needed")
+    render_final_url: Mapped[str] = mapped_column(String(700), default="")
+    render_word_count: Mapped[int] = mapped_column(Integer, default=0)
     html_lang: Mapped[str] = mapped_column(String(32), default="")
     hreflang: Mapped[str] = mapped_column(Text, default="")
     viewport: Mapped[str] = mapped_column(String(300), default="")
@@ -462,6 +466,44 @@ class PageSpeedAudit(Base):
     cls: Mapped[float | None] = mapped_column(Float)
     detail: Mapped[str] = mapped_column(Text, default="")
     audited_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class SerpRun(Base):
+    __tablename__ = "serp_runs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
+    provider: Mapped[str] = mapped_column(String(40), default="brightdata", index=True)
+    keyword: Mapped[str] = mapped_column(String(500), nullable=False, index=True)
+    country: Mapped[str] = mapped_column(String(80), default="")
+    locale: Mapped[str] = mapped_column(String(40), default="")
+    device: Mapped[str] = mapped_column(String(40), default="desktop")
+    status: Mapped[str] = mapped_column(String(30), default="running", index=True)
+    own_domain: Mapped[str] = mapped_column(String(255), default="")
+    own_best_position: Mapped[int | None] = mapped_column(Integer)
+    competitor_best_position: Mapped[int | None] = mapped_column(Integer)
+    result_count: Mapped[int] = mapped_column(Integer, default=0)
+    third_party_count: Mapped[int] = mapped_column(Integer, default=0)
+    config_hash: Mapped[str] = mapped_column(String(64), default="")
+    error: Mapped[str] = mapped_column(Text, default="")
+    created_by: Mapped[str | None] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class SerpResult(Base):
+    __tablename__ = "serp_results"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
+    run_id: Mapped[str] = mapped_column(ForeignKey("serp_runs.id"), nullable=False, index=True)
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    title: Mapped[str] = mapped_column(String(500), default="")
+    url: Mapped[str] = mapped_column(String(1000), default="")
+    domain: Mapped[str] = mapped_column(String(255), default="", index=True)
+    snippet: Mapped[str] = mapped_column(Text, default="")
+    result_type: Mapped[str] = mapped_column(String(40), default="organic")
+    ownership: Mapped[str] = mapped_column(String(40), default="third_party", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class GscConnection(Base):

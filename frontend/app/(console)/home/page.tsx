@@ -149,7 +149,7 @@ export default function HomePage() {
 
   function parseKeywords(text: string) {
     return text
-      .split("\n")
+      .split(/[\n,，;；]+/)
       .map((line) => line.trim())
       .filter(Boolean)
       .map((theme) => ({ theme, locale: "en-US", intent: "commercial", intensity: 4 }));
@@ -170,16 +170,39 @@ export default function HomePage() {
     setError("");
     setNote("");
     try {
+      const parsedMarkets = parseMarkets(targetForm.markets);
+      const parsedKeywords = parseKeywords(targetForm.keywords);
+      const parsedCompetitors = parseCompetitors(targetForm.competitors);
+      if (!targetForm.site_origin.trim()) {
+        setError("请先填写客户官网。");
+        return;
+      }
+      if (!parsedMarkets.length) {
+        setError("请至少填写 1 个目标国家，例如：United States | North America | US | en-US");
+        return;
+      }
+      if (!parsedKeywords.length) {
+        setError("请至少填写 1 个核心关键词。多个关键词可以用换行、逗号或分号分隔。");
+        return;
+      }
       const saved = await api<ProjectTargets>("/api/project-targets", {
         method: "PUT",
         body: JSON.stringify({
           site_origin: targetForm.site_origin,
-          markets: parseMarkets(targetForm.markets),
-          keywords: parseKeywords(targetForm.keywords),
-          competitors: parseCompetitors(targetForm.competitors),
+          markets: parsedMarkets,
+          keywords: parsedKeywords,
+          competitors: parsedCompetitors,
         }),
       });
       setTargets(saved);
+      setTargetForm({
+        site_origin: saved.site_origin || targetForm.site_origin,
+        markets: saved.markets
+          .map((m) => [m.name, m.region, m.country_code, m.primary_locale].filter(Boolean).join(" | "))
+          .join("\n"),
+        keywords: saved.markets.flatMap((m) => m.demand_signals.map((s) => s.theme)).join("\n"),
+        competitors: saved.markets.flatMap((m) => m.competitors.map((c) => [c.name, c.website].filter(Boolean).join(" | "))).join("\n"),
+      });
       setNote(saved.note || "测试目标已保存。");
       const refreshed = await api<Workbench>(`/api/dashboard/workbench?days=${days}`);
       setData(refreshed);
@@ -257,7 +280,7 @@ export default function HomePage() {
               className="min-h-[96px]"
               value={targetForm.markets}
               onChange={(e) => setTargetForm({ ...targetForm, markets: e.target.value })}
-              placeholder="United States | North America | US | en-US"
+              placeholder="每行一个：United States | North America | US | en-US"
             />
           </div>
           <div>
@@ -266,7 +289,7 @@ export default function HomePage() {
               className="min-h-[96px]"
               value={targetForm.keywords}
               onChange={(e) => setTargetForm({ ...targetForm, keywords: e.target.value })}
-              placeholder="industrial pump supplier"
+              placeholder="多个关键词可换行或用逗号分隔：industrial pump supplier, valve manufacturer"
             />
           </div>
           <div>
@@ -275,7 +298,7 @@ export default function HomePage() {
               className="min-h-[96px]"
               value={targetForm.competitors}
               onChange={(e) => setTargetForm({ ...targetForm, competitors: e.target.value })}
-              placeholder="Competitor | https://competitor.com"
+              placeholder="每行一个：Competitor | https://competitor.com"
             />
           </div>
         </div>
@@ -364,6 +387,11 @@ export default function HomePage() {
             <div className="mt-2 text-2xl font-semibold text-slate-950">{perf.latest_speed_score ?? "-"}</div>
           </div>
           <div className="rounded-md border border-slate-200 p-4">
+            <div className="text-xs text-slate-500">SERP 我方出现</div>
+            <div className="mt-2 text-2xl font-semibold text-slate-950">{perf.serp_own_visible_runs}</div>
+            <div className="text-xs text-slate-400">查询 {perf.serp_runs} 轮</div>
+          </div>
+          <div className="rounded-md border border-slate-200 p-4">
             <div className="flex items-center gap-2 text-xs text-slate-500">
               <Link2 className="h-4 w-4" />
               外链域名
@@ -421,6 +449,14 @@ export default function HomePage() {
               <div className="flex items-center justify-between gap-3">
                 <span>权重 / Authority</span>
                 <Badge tone="amber">{perf.authority_status}</Badge>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span>SERP 市场表现</span>
+                <Badge tone={perf.serp_runs ? "green" : "amber"}>{perf.serp_status}</Badge>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span>SERP 竞品出现</span>
+                <span className="font-medium text-slate-900">{perf.serp_competitor_visible_runs}</span>
               </div>
               <div className="flex items-center justify-between gap-3">
                 <span>外链未核验</span>

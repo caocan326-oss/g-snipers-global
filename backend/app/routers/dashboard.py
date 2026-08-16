@@ -22,6 +22,7 @@ from app.models import (
     PageSpeedAudit,
     SeoPage,
     SeoPerformanceRow,
+    SerpRun,
     SitePage,
     Tenant,
     User,
@@ -258,6 +259,15 @@ def _seo_performance_for(user: User, db: Session, days: int) -> WorkbenchSeoPerf
         .order_by(PageSpeedAudit.audited_at.desc())
         .first()
     )
+    serp_runs = (
+        db.query(SerpRun)
+        .filter(SerpRun.tenant_id == tid)
+        .order_by(SerpRun.created_at.desc())
+        .limit(50)
+        .all()
+    )
+    ok_serp = [row for row in serp_runs if row.status == "ok"]
+    own_positions = [row.own_best_position for row in ok_serp if row.own_best_position is not None]
     return WorkbenchSeoPerformance(
         days=days,
         data_status="已导入" if rows else "未导入",
@@ -272,6 +282,11 @@ def _seo_performance_for(user: User, db: Session, days: int) -> WorkbenchSeoPerf
         authority_status="未接入第三方权重",
         pagespeed_status="已测速" if latest_speed else "未测速",
         latest_speed_score=latest_speed.performance_score if latest_speed else None,
+        serp_status="已查询" if ok_serp else "未查询",
+        serp_runs=len(serp_runs),
+        serp_own_visible_runs=sum(1 for row in ok_serp if row.own_best_position is not None),
+        serp_competitor_visible_runs=sum(1 for row in ok_serp if row.competitor_best_position is not None),
+        serp_avg_own_position=round(sum(own_positions) / len(own_positions), 2) if own_positions else None,
         top_countries=_top_buckets(rows, "country"),
         top_keywords=_top_buckets(rows, "query"),
         top_pages=_top_buckets(rows, "page_url"),
