@@ -220,7 +220,7 @@ export default function MarketDetailPage() {
                     生成 SEO 任务
                   </Button>
                   <Button size="sm" variant="outline" onClick={() => feed(s.id, "open-geo-ticket")}>
-                    生成 GEO 工单
+                    生成 GEO 整改项
                   </Button>
                   <Button size="sm" variant="outline" onClick={() => feed(s.id, "open-link-followup")}>
                     生成站外跟进

@@ -38,7 +38,7 @@ export default function ReportDeliveryPage() {
       { label: "诊断目标", ok: Boolean(data.site_origin), detail: data.site_origin || "未登记客户官网" },
       { label: "SEO 风险", ok: data.summary.onsite_pages > 0, detail: `${highRisk} 个 P0/P1，${data.summary.onsite_pages} 个页面` },
       { label: "GEO 证据", ok: data.summary.geo_recorded > 0, detail: data.summary.geo_recorded > 0 ? `${data.summary.geo_recorded} 条记录` : `${data.summary.geo_untested} 个槽位未测` },
-      { label: "工单计划", ok: data.next_actions.length > 0, detail: `${data.next_actions.length} 个下一步动作` },
+      { label: "执行计划", ok: data.next_actions.length > 0, detail: `${data.next_actions.length} 个下一步动作` },
     ];
   }, [data]);
 
@@ -115,7 +115,7 @@ export default function ReportDeliveryPage() {
             </div>
             <h1 className="mt-3 text-2xl font-semibold text-slate-950">客户诊断报告</h1>
             <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-500">
-              把当前 SEO 技术风险、GEO 可见度、站外线索和本周期工单整理成客户可阅读的交付视图。报告数字必须能追溯到数据源、采样批次或问题证据。
+              把当前 SEO 技术风险、GEO 可见度、站外线索和本周期执行项整理成客户可阅读的交付视图。报告数字必须能追溯到数据源、采样批次或问题证据。
             </p>
           </div>
           <div className="grid gap-2 sm:grid-cols-2">

@@ -5,12 +5,12 @@ import {
   ArrowRight,
   BarChart3,
   CheckCircle2,
-  ClipboardCheck,
   Database,
   FileText,
   Gauge,
   Globe2,
   Link2,
+  ListChecks,
   SearchCheck,
   ShieldCheck,
   Target,
@@ -193,7 +193,7 @@ export default function HomePage() {
     },
     {
       label: "本周期动作",
-      text: reviewTotal > 0 ? `先推进 ${reviewTotal} 个待办：高风险整改、GEO 采样和工单验收。` : "本周期暂无阻塞待办，可进入报告交付或复测观察。",
+      text: reviewTotal > 0 ? `先推进 ${reviewTotal} 个执行项：高风险整改、GEO 采样、站外曝光和复测确认。` : "本周期暂无阻塞执行项，可进入报告交付或复测观察。",
       tone: workTone,
     },
   ];
@@ -344,13 +344,13 @@ export default function HomePage() {
         </PillarCard>
 
         <PillarCard
-          title="本周期交付"
+          title="站外曝光与执行"
           status={reviewTotal > 0 ? "待处理" : "清爽"}
           statusTone={workTone}
-          primary={`${reviewTotal} 个待办`}
-          helper={`${data.summary.geo_tickets_open} 个 GEO 工单，${data.summary.seo_pending_review} 个 SEO 待复核。`}
-          href="/work-orders"
-          icon={ClipboardCheck}
+          primary={`${reviewTotal} 个执行项`}
+          helper={`${data.summary.geo_tickets_open} 个 GEO 整改项，${data.summary.seo_pending_review} 个 SEO 待复核；站外机会进入曝光工作台跟进。`}
+          href="/offsite"
+          icon={ListChecks}
         >
           <div className="grid grid-cols-2 gap-2 text-sm">
             <div className="rounded-md bg-slate-50 p-3"><div className="text-xs text-slate-500">GEO</div><div className="mt-1 font-semibold">{data.summary.geo_tickets_open}</div></div>
@@ -456,7 +456,7 @@ export default function HomePage() {
         <Card className="rounded-md">
           <CardHeader><CardTitle>GEO 待验收</CardTitle></CardHeader>
           <CardContent className="space-y-3">
-            {data.geo_items.length ? data.geo_items.map((item) => <ActionRow key={item.id} item={item} />) : <EmptyState text="暂无打开的 GEO 工单；买家问题或采样证据不足时会保持未测。" />}
+            {data.geo_items.length ? data.geo_items.map((item) => <ActionRow key={item.id} item={item} />) : <EmptyState text="暂无打开的 GEO 整改项；买家问题或采样证据不足时会保持未测。" />}
           </CardContent>
         </Card>
       </section>
@@ -468,7 +468,7 @@ export default function HomePage() {
               <ShieldCheck className="h-5 w-5 text-brand-700" />
               <h2 className="text-lg font-semibold text-slate-950">交付边界</h2>
             </div>
-            <p className="mt-1 text-sm text-slate-500">客户看到可追溯的诊断结论，交付人员看到可执行的整改任务。SEM、社媒投放和自动分发仍处于延期阶段，不参与当前报告评分。</p>
+            <p className="mt-1 text-sm text-slate-500">客户看到可追溯的诊断结论，交付人员看到可执行的整改项、站外机会和复测结果。SEM、社媒投放和自动分发仍处于延期阶段，不参与当前报告评分。</p>
           </div>
           <div className="flex rounded-md border border-slate-200 bg-slate-50 p-1">
             {[7, 28, 90].map((item) => (

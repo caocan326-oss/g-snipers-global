@@ -228,7 +228,7 @@ export default function GeoPage() {
       setNote(`${res.note} 新增 ${res.created} 条，跳过 ${res.skipped} 条。`);
       loadTickets();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "生成工单失败");
+      setError(e instanceof Error ? e.message : "生成整改项失败");
     } finally {
       setBusyAction("");
     }
@@ -428,7 +428,7 @@ export default function GeoPage() {
             {busyAction === "evidence-run" ? "整理中…" : "固化当前证据"}
           </Button>
           <Button size="sm" variant="outline" onClick={draftTicketsFromEvidence} disabled={busyAction === "draft-tickets"}>
-            {busyAction === "draft-tickets" ? "生成中…" : "生成整改工单"}
+            {busyAction === "draft-tickets" ? "生成中…" : "生成整改项"}
           </Button>
           <Button size="sm" onClick={runAutoSample} disabled={busyAction === "auto-sample"}>
             <Globe2 className="mr-2 h-4 w-4" />
@@ -724,7 +724,7 @@ export default function GeoPage() {
           ))}
           <Card>
             <CardHeader>
-              <CardTitle>从问题生成整改工单</CardTitle>
+              <CardTitle>从问题生成整改项</CardTitle>
             </CardHeader>
             <CardContent>
               <form className="space-y-3" onSubmit={addTicket}>
@@ -768,7 +768,7 @@ export default function GeoPage() {
                   value={ticketForm.acceptance_criteria}
                   onChange={(e) => setTicketForm({ ...ticketForm, acceptance_criteria: e.target.value })}
                 />
-                <Button type="submit">创建整改工单</Button>
+                <Button type="submit">创建整改项</Button>
               </form>
             </CardContent>
           </Card>

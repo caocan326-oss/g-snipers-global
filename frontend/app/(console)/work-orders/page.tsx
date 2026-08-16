@@ -1,152 +1,26 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { api, type WorkOrder } from "@/lib/api";
 
-const typeLabel: Record<string, string> = {
-  insight: "市场线索",
-  seo_outline: "SEO 大纲",
-  seo_draft: "SEO 正文",
-  seo_meta: "SEO Meta",
-  geo_monitor: "GEO 监测",
-  geo_asset: "GEO 资产",
-  onsite: "SEO 整改",
-  offsite: "站外曝光",
-  distribution: "内容分发",
-  other: "其他",
-};
-
-const statusLabel: Record<string, string> = {
-  open: "待领取",
-  claimed: "已领取",
-  in_progress: "进行中",
-  done: "完成",
-  blocked: "受阻",
-};
-
-export default function WorkOrdersPage() {
-  const [orders, setOrders] = useState<WorkOrder[]>([]);
-  const [status, setStatus] = useState("");
-  const [error, setError] = useState("");
-  const [form, setForm] = useState({ title: "", type: "seo_outline", acceptance_criteria: "" });
-
-  function load() {
-    const q = status ? `?status=${status}` : "";
-    api<WorkOrder[]>(`/api/work-orders${q}`).then(setOrders).catch((e) => setError(e.message));
-  }
+export default function WorkOrdersRedirectPage() {
+  const router = useRouter();
 
   useEffect(() => {
-    load();
-  }, [status]);
-
-  async function create(e: FormEvent) {
-    e.preventDefault();
-    await api("/api/work-orders", { method: "POST", body: JSON.stringify(form) });
-    setForm({ title: "", type: "seo_outline", acceptance_criteria: "" });
-    load();
-  }
-
-  async function claim(id: string) {
-    await api(`/api/work-orders/${id}/claim`, { method: "POST" });
-    load();
-  }
-
-  async function setOrderStatus(id: string, next: string) {
-    await api(`/api/work-orders/${id}/status`, { method: "POST", body: JSON.stringify({ status: next }) });
-    load();
-  }
+    router.replace("/offsite");
+  }, [router]);
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">交付工单</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          把诊断结论拆成可领取、可执行、可验收的任务，覆盖 SEO 整改、GEO 可见度、内容资产和站外跟进。
-        </p>
-      </div>
-
-      <div className="flex flex-wrap gap-2">
-        {["", "open", "claimed", "in_progress", "done", "blocked"].map((s) => (
-          <Button key={s || "all"} size="sm" variant={status === s ? "default" : "outline"} onClick={() => setStatus(s)}>
-            {s ? statusLabel[s] : "全部"}
-          </Button>
-        ))}
-      </div>
-
-      <Card>
-        <CardContent className="space-y-3 p-5">
-          {orders.map((o) => (
-            <div key={o.id} className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3">
-              <div>
-                <div className="font-medium">{o.title}</div>
-                <div className="mt-1 flex gap-2 text-xs">
-                  <Badge>{typeLabel[o.type] ?? o.type}</Badge>
-                  <Badge tone="amber">{statusLabel[o.status] ?? o.status}</Badge>
-                </div>
-                {o.acceptance_criteria ? (
-                  <p className="mt-1 text-xs text-slate-500">验收：{o.acceptance_criteria}</p>
-                ) : null}
-              </div>
-              <div className="flex gap-2">
-                {o.status === "open" ? (
-                  <Button size="sm" onClick={() => claim(o.id)}>
-                    领取
-                  </Button>
-                ) : null}
-                {o.status === "claimed" ? (
-                  <Button size="sm" variant="outline" onClick={() => setOrderStatus(o.id, "in_progress")}>
-                    开始
-                  </Button>
-                ) : null}
-                {o.status === "in_progress" ? (
-                  <Button size="sm" variant="outline" onClick={() => setOrderStatus(o.id, "done")}>
-                    完成
-                  </Button>
-                ) : null}
-              </div>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>新建交付工单</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form className="grid gap-3 md:grid-cols-4" onSubmit={create}>
-            <Input
-              placeholder="任务标题"
-              value={form.title}
-              onChange={(e) => setForm({ ...form, title: e.target.value })}
-              required
-            />
-            <select
-              className="h-9 rounded-md border border-slate-200 px-2 text-sm"
-              value={form.type}
-              onChange={(e) => setForm({ ...form, type: e.target.value })}
-            >
-              {Object.entries(typeLabel).map(([k, v]) => (
-                <option key={k} value={k}>
-                  {v}
-                </option>
-              ))}
-            </select>
-            <Input
-              placeholder="验收标准，例如：已上线并完成复测"
-              value={form.acceptance_criteria}
-              onChange={(e) => setForm({ ...form, acceptance_criteria: e.target.value })}
-            />
-            <Button type="submit">创建工单</Button>
-          </form>
-          {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
-        </CardContent>
-      </Card>
+    <div className="rounded-md border border-slate-200 bg-white p-6 shadow-sm">
+      <h1 className="text-xl font-semibold text-slate-950">执行项已并入业务工作台</h1>
+      <p className="mt-2 text-sm leading-6 text-slate-500">
+        独立任务入口已下线。SEO 整改、GEO 复测和站外曝光会在各自模块内完成创建、跟进和核验。
+      </p>
+      <Button className="mt-4" onClick={() => router.replace("/offsite")}>
+        打开站外曝光工作台
+      </Button>
     </div>
   );
 }

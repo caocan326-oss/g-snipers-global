@@ -122,9 +122,9 @@ export default function SeoEditorPage() {
           acceptance_criteria: "大纲、正文、Meta 齐全后提交审核，由客户经理确认可交付。",
         }),
       });
-      setOrderMsg(`已创建交付工单，可在工单列表领取（${order.id.slice(0, 8)}…）`);
+      setOrderMsg(`已加入执行清单，可在对应诊断模块继续跟进（${order.id.slice(0, 8)}…）`);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "开单失败");
+      setError(e instanceof Error ? e.message : "创建执行项失败");
     } finally {
       setBusy(false);
     }
@@ -156,7 +156,7 @@ export default function SeoEditorPage() {
         </p>
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <Button size="sm" variant="outline" disabled={busy} onClick={openWorkOrder}>
-            为当前步骤创建工单
+            加入执行清单
           </Button>
           <Link href="/geo" className="text-sm text-brand-700">
             查看 GEO 可见度 →

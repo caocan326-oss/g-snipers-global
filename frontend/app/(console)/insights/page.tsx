@@ -57,7 +57,7 @@ export default function InsightsPage() {
       <div>
         <h1 className="text-2xl font-semibold">市场机会入口</h1>
         <p className="mt-1 text-sm text-slate-500">
-          记录目标市场、买家需求和竞品线索，再转成 SEO 诊断任务、GEO 整改工单或站外跟进。
+          记录目标市场、买家需求和竞品线索，再转成 SEO 诊断任务、GEO 整改项或站外跟进。
         </p>
       </div>
 

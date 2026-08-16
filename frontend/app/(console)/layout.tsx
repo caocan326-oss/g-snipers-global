@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { ClipboardCheck, FileText, Globe2, LayoutDashboard, ListChecks, SearchCheck } from "lucide-react";
+import { FileText, Globe2, LayoutDashboard, ListChecks, SearchCheck } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { api, clearToken, getToken, type AiStatus, type User } from "@/lib/api";
@@ -14,8 +14,7 @@ const nav = [
   { href: "/home", label: "诊断总览", note: "表现 / 风险 / 下一步", icon: LayoutDashboard },
   { href: "/onsite", label: "SEO 诊断", note: "抓取 / 收录 / 整改", icon: SearchCheck },
   { href: "/geo", label: "GEO 可见度", note: "问句 / 提及 / 引用", icon: Globe2 },
-  { href: "/work-orders", label: "交付工单", note: "执行 / 验收 / 复测", icon: ClipboardCheck },
-  { href: "/offsite", label: "站外曝光", note: "外链 / 第三方 / 分发", icon: ListChecks },
+  { href: "/offsite", label: "站外曝光工作台", note: "机会 / 分发 / 核验", icon: ListChecks },
   { href: "/distribution", label: "报告交付", note: "导出 / 交付记录", icon: FileText },
 ];
 

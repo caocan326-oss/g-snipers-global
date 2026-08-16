@@ -416,12 +416,12 @@ def workbench(
         next_actions.append(
             WorkbenchItem(
                 id="geo-ticket",
-                title="复核 GEO 工单验收",
-                subtitle=f"{summary.geo_tickets_open} 个 GEO 工单未关闭。",
+                title="复核 GEO 整改项",
+                subtitle=f"{summary.geo_tickets_open} 个 GEO 整改项未关闭。",
                 href="/geo",
                 status="待验收",
                 tone="amber",
-                action_label="看工单",
+                action_label="去复核",
             )
         )
     if not next_actions:

@@ -1186,7 +1186,7 @@ def draft_tickets_from_evidence(
     db.commit()
     for ticket in made:
         db.refresh(ticket)
-    note = "已按 GEO 规则生成整改工单草稿。" if created else "没有新增工单；可能暂无观测，或相关工单已存在。"
+    note = "已按 GEO 规则生成整改项草稿。" if created else "没有新增整改项；可能暂无观测，或相关整改项已存在。"
     return GeoTicketDraftOut(created=created, skipped=skipped, note=note, tickets=[_ticket_out(t) for t in made])
 
 
@@ -1435,10 +1435,10 @@ def verify_ticket(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> GeoTicketOut:
-    require_confirm(body.confirmed, action="验收 GEO 工单")
+    require_confirm(body.confirmed, action="验收 GEO 整改项")
     row = db.get(GeoTicket, ticket_id)
     if row is None or row.tenant_id != user.tenant_id:
-        raise HTTPException(status_code=404, detail="工单不存在")
+        raise HTTPException(status_code=404, detail="整改项不存在")
     row.status = "done"
     row.verified_note = body.note or "客户经理已按验收标准人工复核。"
     db.commit()
@@ -1455,9 +1455,9 @@ def reopen_ticket(
 ) -> GeoTicketOut:
     row = db.get(GeoTicket, ticket_id)
     if row is None or row.tenant_id != user.tenant_id:
-        raise HTTPException(status_code=404, detail="工单不存在")
+        raise HTTPException(status_code=404, detail="整改项不存在")
     if row.status not in TICKET_STATUSES:
-        raise HTTPException(status_code=400, detail="无效工单状态")
+        raise HTTPException(status_code=400, detail="无效整改项状态")
     row.status = "reopened"
     if body.note:
         row.verified_note = body.note
@@ -1632,7 +1632,7 @@ def ai_ticket(
 ) -> AiAssistOut:
     row = db.get(GeoTicket, ticket_id)
     if row is None or row.tenant_id != user.tenant_id:
-        raise HTTPException(status_code=404, detail="工单不存在")
+        raise HTTPException(status_code=404, detail="整改项不存在")
     payload = assist_geo_ticket(db, row, step=body.step or "review")
     db.commit()
     return AiAssistOut(**payload)
