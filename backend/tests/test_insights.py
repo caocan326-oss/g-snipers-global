@@ -79,6 +79,51 @@ def test_demand_signal_creates_seo_page(client: TestClient, demo_user) -> None:
     assert page.json()["market_id"] == market["id"]
 
 
+def test_project_targets_partial_update_keeps_keywords_and_competitors(
+    client: TestClient, demo_user
+) -> None:
+    headers = auth_header(client)
+    first = client.put(
+        "/api/project-targets",
+        headers=headers,
+        json={
+            "markets": [
+                {
+                    "name": "美国",
+                    "country_code": "US",
+                    "primary_locale": "en-US",
+                    "status": "priority",
+                }
+            ],
+            "keywords": [{"theme": "smart lock for renters", "locale": "en-US"}],
+            "competitors": [{"name": "Acme Locks", "website": "https://acmelocks.com"}],
+        },
+    )
+    assert first.status_code == 200
+    assert first.json()["keyword_count"] == 1
+    assert first.json()["competitor_count"] == 1
+
+    # Submitting an update that only touches markets must not wipe the
+    # keywords/competitors that weren't part of this request.
+    second = client.put(
+        "/api/project-targets",
+        headers=headers,
+        json={
+            "markets": [
+                {
+                    "name": "美国",
+                    "country_code": "US",
+                    "primary_locale": "en-US",
+                    "status": "watching",
+                }
+            ],
+        },
+    )
+    assert second.status_code == 200
+    assert second.json()["keyword_count"] == 1
+    assert second.json()["competitor_count"] == 1
+
+
 def test_insight_feeds_three_chains(client: TestClient, demo_user) -> None:
     headers = auth_header(client)
     market = client.post(

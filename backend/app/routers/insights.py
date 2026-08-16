@@ -1,3 +1,5 @@
+import re
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -5,6 +7,8 @@ from sqlalchemy.orm import Session
 from app.auth import get_current_user
 from app.database import get_db
 from app.geo_helpers import ENGINES
+from app.onsite_fetch import normalize_origin, OriginError
+from app.site_context import archive_and_reset_if_site_changed
 from app.models import (
     BacklinkGap,
     Competitor,
@@ -51,6 +55,21 @@ def _owned_market(db: Session, user: User, market_id: str) -> Market:
 
 def _clean_text(value: str | None) -> str:
     return " ".join((value or "").strip().split())
+
+
+def _split_project_keyword(theme: str) -> list[str]:
+    text = _clean_text(theme)
+    if not text:
+        return []
+    parts = [part.strip() for part in re.split(r"[\n,，;；]+", text) if part.strip()]
+    out: list[str] = []
+    for part in parts:
+        has_cjk = bool(re.search(r"[\u4e00-\u9fff]", part))
+        if has_cjk:
+            out.extend(token.strip() for token in re.split(r"\s+", part) if token.strip())
+        else:
+            out.append(part)
+    return list(dict.fromkeys(out))
 
 
 def _market_key(name: str, country_code: str, locale: str) -> tuple[str, str, str]:
@@ -106,7 +125,11 @@ def _market_detail_out(db: Session, market: Market) -> MarketDetailOut:
     )
     demand_signals = (
         db.query(DemandSignal)
-        .filter(DemandSignal.tenant_id == market.tenant_id, DemandSignal.market_id == market.id)
+        .filter(
+            DemandSignal.tenant_id == market.tenant_id,
+            DemandSignal.market_id == market.id,
+            DemandSignal.source != "target_archived",
+        )
         .order_by(DemandSignal.intensity.desc(), DemandSignal.created_at.desc())
         .all()
     )
@@ -122,12 +145,22 @@ def _project_targets_out(db: Session, user: User, note: str = "") -> ProjectTarg
     tenant = db.get(Tenant, user.tenant_id)
     markets = (
         db.query(Market)
-        .filter(Market.tenant_id == user.tenant_id)
+        .filter(Market.tenant_id == user.tenant_id, Market.status != "paused")
         .order_by(Market.status.asc(), Market.opportunity_score.desc(), Market.name.asc())
         .all()
     )
     details = [_market_detail_out(db, market) for market in markets]
-    keyword_count = db.query(func.count(DemandSignal.id)).filter(DemandSignal.tenant_id == user.tenant_id).scalar() or 0
+    keyword_count = (
+        db.query(func.count(DemandSignal.id))
+        .join(Market, Market.id == DemandSignal.market_id)
+        .filter(
+            DemandSignal.tenant_id == user.tenant_id,
+            DemandSignal.source != "target_archived",
+            Market.status != "paused",
+        )
+        .scalar()
+        or 0
+    )
     competitor_count = db.query(func.count(Competitor.id)).filter(Competitor.tenant_id == user.tenant_id).scalar() or 0
     target_markets = [market for market in markets if market.status == "priority"]
     primary_market = (target_markets or markets or [None])[0]
@@ -198,8 +231,18 @@ def save_project_targets(
     db: Session = Depends(get_db),
 ) -> ProjectTargetsOut:
     tenant = db.get(Tenant, user.tenant_id)
-    if tenant and body.site_origin is not None:
-        tenant.site_origin = _clean_text(body.site_origin)
+    old_origin = tenant.site_origin if tenant else ""
+    requested_origin = None
+    if body.site_origin is not None:
+        try:
+            requested_origin = normalize_origin(body.site_origin) if body.site_origin.strip() else ""
+        except OriginError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+    site_changed = archive_and_reset_if_site_changed(
+        db, user, old_origin=old_origin, new_origin=requested_origin
+    )
+    if tenant and requested_origin is not None:
+        tenant.site_origin = requested_origin
 
     markets = db.query(Market).filter(Market.tenant_id == user.tenant_id).all()
     markets_by_id = {market.id: market for market in markets}
@@ -208,14 +251,21 @@ def save_project_targets(
         for market in markets
     }
     created_markets = updated_markets = created_keywords = created_competitors = 0
-    seen_keyword_keys = {
-        (row.market_id, row.locale.lower(), row.theme.lower())
-        for row in db.query(DemandSignal).filter(DemandSignal.tenant_id == user.tenant_id).all()
-    }
-    seen_competitor_keys = {
-        (row.market_id, _competitor_key(row))
-        for row in db.query(Competitor).filter(Competitor.tenant_id == user.tenant_id).all()
-    }
+    # Each field is gated independently: submitting only `markets` must not
+    # wipe keywords/competitors the caller never touched.
+    if site_changed or body.markets:
+        for market in markets:
+            market.status = "paused"
+    if site_changed or body.keywords:
+        db.query(DemandSignal).filter(
+            DemandSignal.tenant_id == user.tenant_id,
+            DemandSignal.source == "target_setup",
+        ).update({"source": "target_archived"}, synchronize_session=False)
+    if site_changed or body.competitors:
+        db.query(Competitor).filter(Competitor.tenant_id == user.tenant_id).delete(synchronize_session=False)
+    seen_keyword_keys: set[tuple[str, str, str]] = set()
+    seen_competitor_keys: set[tuple[str, str]] = set()
+    submitted_market_keys: set[tuple[str, str, str]] = set()
 
     for item in body.markets:
         if item.status not in MARKET_STATUSES:
@@ -224,6 +274,7 @@ def save_project_targets(
         country = _clean_text(item.country_code).upper()
         locale = _clean_text(item.primary_locale) or "en-US"
         key = _market_key(name, country, locale)
+        submitted_market_keys.add(key)
         market = markets_by_key.get(key)
         if market is None:
             market = Market(
@@ -247,51 +298,61 @@ def save_project_targets(
             updated_markets += 1
 
     for item in body.keywords:
-        theme = _clean_text(item.theme)
-        if not theme:
-            continue
-        market = _resolve_target_market(
-            db,
-            user,
-            markets_by_id,
-            market_id=item.market_id,
-            market_name=item.market_name,
-            country_code=item.country_code,
-            locale=item.locale,
-        )
-        if market is None:
-            continue
-        keyword_key = (market.id, item.locale.lower(), theme.lower())
-        if keyword_key in seen_keyword_keys:
-            continue
-        exists = (
-            db.query(DemandSignal)
-            .filter(
-                DemandSignal.tenant_id == user.tenant_id,
-                DemandSignal.market_id == market.id,
-                func.lower(DemandSignal.theme) == theme.lower(),
-                func.lower(DemandSignal.locale) == item.locale.lower(),
-            )
-            .first()
-        )
-        if exists:
-            exists.intent = item.intent
-            exists.intensity = item.intensity
-            exists.source = exists.source or "target_setup"
-            continue
-        seen_keyword_keys.add(keyword_key)
-        db.add(
-            DemandSignal(
-                tenant_id=user.tenant_id,
-                market_id=market.id,
-                theme=theme,
+        for theme in _split_project_keyword(item.theme):
+            market = _resolve_target_market(
+                db,
+                user,
+                markets_by_id,
+                market_id=item.market_id,
+                market_name=item.market_name,
+                country_code=item.country_code,
                 locale=item.locale,
-                intent=item.intent,
-                intensity=item.intensity,
-                source="target_setup",
             )
-        )
-        created_keywords += 1
+            if market is None:
+                continue
+            keyword_key = (market.id, item.locale.lower(), theme.lower())
+            if keyword_key in seen_keyword_keys:
+                continue
+            exists = (
+                db.query(DemandSignal)
+                .filter(
+                    DemandSignal.tenant_id == user.tenant_id,
+                    DemandSignal.market_id == market.id,
+                    func.lower(DemandSignal.theme) == theme.lower(),
+                    func.lower(DemandSignal.locale) == item.locale.lower(),
+                    DemandSignal.source.in_(["target_setup", "target_archived"]),
+                )
+                .first()
+            )
+            if exists:
+                exists.intent = item.intent
+                exists.intensity = item.intensity
+                exists.source = "target_setup"
+                seen_keyword_keys.add(keyword_key)
+                continue
+            seen_keyword_keys.add(keyword_key)
+            db.add(
+                DemandSignal(
+                    tenant_id=user.tenant_id,
+                    market_id=market.id,
+                    theme=theme,
+                    locale=item.locale,
+                    intent=item.intent,
+                    intensity=item.intensity,
+                    source="target_setup",
+                )
+            )
+            created_keywords += 1
+
+    if submitted_market_keys:
+        for market in markets_by_id.values():
+            if _market_key(market.name, market.country_code, market.primary_locale) not in submitted_market_keys and market.status == "priority":
+                market.status = "paused"
+
+    seen_competitor_keys = {
+        (row.market_id, _competitor_key(row))
+        for row in db.query(Competitor).filter(Competitor.tenant_id == user.tenant_id).all()
+    }
 
     for item in body.competitors:
         name = _clean_text(item.name)

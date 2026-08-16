@@ -12,6 +12,23 @@ from datetime import datetime, timezone
 
 from app.models import OnsiteIssue, SitePage
 from app.risk import CRITICAL, SEV_HIGH, SEV_LOW, default_severity, severity_to_risk
+from app.schemas import SeoRankDistributionOut
+
+
+def rank_distribution(positions: list[float | int | None]) -> SeoRankDistributionOut:
+    out = SeoRankDistributionOut(total=len(positions))
+    for position in positions:
+        if position is None:
+            out.unranked += 1
+        elif position <= 10:
+            out.top_10 += 1
+        elif position <= 30:
+            out.top_30 += 1
+        elif position <= 50:
+            out.top_50 += 1
+        else:
+            out.beyond_50 += 1
+    return out
 
 # Stable titles so re-analyze is idempotent per page + category + title.
 FINDINGS = {

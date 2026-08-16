@@ -29,7 +29,15 @@ from app.models import (
     WorkOrder,
 )
 from app.llm import status_label
-from app.schemas import DashboardSummary, WorkbenchChain, WorkbenchItem, WorkbenchOut, WorkbenchSeoBucket, WorkbenchSeoPerformance
+from app.onsite_analyzer import rank_distribution
+from app.schemas import (
+    DashboardSummary,
+    WorkbenchChain,
+    WorkbenchItem,
+    WorkbenchOut,
+    WorkbenchSeoBucket,
+    WorkbenchSeoPerformance,
+)
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
@@ -268,6 +276,7 @@ def _seo_performance_for(user: User, db: Session, days: int) -> WorkbenchSeoPerf
     )
     ok_serp = [row for row in serp_runs if row.status == "ok"]
     own_positions = [row.own_best_position for row in ok_serp if row.own_best_position is not None]
+    keyword_positions = [item.position for item in _top_buckets(rows, "query", limit=200)]
     return WorkbenchSeoPerformance(
         days=days,
         data_status="已导入" if rows else "未导入",
@@ -287,6 +296,8 @@ def _seo_performance_for(user: User, db: Session, days: int) -> WorkbenchSeoPerf
         serp_own_visible_runs=sum(1 for row in ok_serp if row.own_best_position is not None),
         serp_competitor_visible_runs=sum(1 for row in ok_serp if row.competitor_best_position is not None),
         serp_avg_own_position=round(sum(own_positions) / len(own_positions), 2) if own_positions else None,
+        keyword_rank_distribution=rank_distribution(keyword_positions),
+        serp_rank_distribution=rank_distribution([row.own_best_position for row in ok_serp]),
         top_countries=_top_buckets(rows, "country"),
         top_keywords=_top_buckets(rows, "query"),
         top_pages=_top_buckets(rows, "page_url"),
@@ -356,7 +367,11 @@ def workbench(
     signals = (
         db.query(DemandSignal)
         .join(Market, Market.id == DemandSignal.market_id)
-        .filter(DemandSignal.tenant_id == user.tenant_id)
+        .filter(
+            DemandSignal.tenant_id == user.tenant_id,
+            DemandSignal.source != "target_archived",
+            Market.status != "paused",
+        )
         .order_by(DemandSignal.created_at.desc())
         .limit(4)
         .all()

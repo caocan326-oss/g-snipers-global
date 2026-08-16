@@ -1,0 +1,518 @@
+import hashlib
+import json
+import re
+from urllib.parse import urlparse
+
+from sqlalchemy import func
+from sqlalchemy.orm import Session, selectinload
+
+from app.geo_helpers import DIAGNOSES, ENGINE_LABELS, ENGINES, engine_region
+from app.models import (
+    Competitor,
+    GeoObservation,
+    GeoPrompt,
+    GeoSampleResult,
+    GeoSampleRun,
+    GeoTicket,
+    Market,
+    Tenant,
+    User,
+)
+from app.schemas import (
+    GeoObservationOut,
+    GeoPromptOut,
+    GeoSampleResultOut,
+    GeoSampleRunOut,
+    GeoTicketOut,
+)
+
+from .constants import EVIDENCE_LABELS, EXPORT_B2B_PACK_ID, EXPORT_B2B_PROMPTS, PROTOCOL_VERSION, RECORDED_OBS
+
+
+def _sha256(text: str) -> str:
+    return hashlib.sha256((text or "").encode("utf-8")).hexdigest()
+
+
+def _json_list(raw: str) -> list[str]:
+    try:
+        data = json.loads(raw or "[]")
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(data, list):
+        return []
+    return [str(item) for item in data if str(item).strip()]
+
+
+def _dump_list(items: list[str]) -> str:
+    return json.dumps(items, ensure_ascii=False)
+
+
+def _extract_urls(text: str) -> list[str]:
+    found = re.findall(r"https?://[^\s\)\]\>\"'，,；;]+", text or "")
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    for url in found:
+        value = url.rstrip(".,，。；;")
+        if value and value not in seen:
+            cleaned.append(value)
+            seen.add(value)
+    return cleaned
+
+
+def _split_urls(text: str) -> list[str]:
+    candidates = re.split(r"[\s,，;；]+", text or "")
+    return _extract_urls(" ".join(candidates))
+
+
+def _host(value: str) -> str:
+    host = urlparse(value if "://" in value else f"https://{value}").netloc.lower()
+    return host[4:] if host.startswith("www.") else host
+
+
+def _root_domain(domain: str) -> str:
+    parsed = _host(domain) if domain else ""
+    return parsed
+
+
+def _is_owned_url(url: str, root: str, aliases: list[str]) -> bool:
+    host = _host(url)
+    if not host or not root:
+        return False
+    normalized_aliases = {_root_domain(a) for a in aliases if a}
+    return host == root or host.endswith("." + root) or host in normalized_aliases
+
+
+def _tenant_brand_names(tenant: Tenant | None) -> list[str]:
+    names = []
+    if tenant and tenant.name:
+        names.append(tenant.name)
+    if tenant and tenant.site_origin:
+        root = _root_domain(tenant.site_origin)
+        if root:
+            names.append(root)
+            names.append(root.split(".")[0])
+    return list(dict.fromkeys([n for n in names if n]))
+
+
+def _locale_lang(locale: str) -> str:
+    return (locale or "en").split("-", 1)[0].lower()
+
+
+def _brand_short(brand: str) -> str:
+    cleaned = re.sub(r"[^A-Za-z0-9一-鿿 ]+", " ", brand or "").strip()
+    return cleaned.split()[0] if cleaned.split() else brand
+
+
+def _first_competitor(db: Session, tenant_id: str, market_id: str | None) -> str:
+    q = db.query(Competitor).filter(Competitor.tenant_id == tenant_id)
+    if market_id:
+        q = q.filter(Competitor.market_id == market_id)
+    row = q.order_by(Competitor.created_at.desc()).first()
+    return row.name if row else "a leading competitor"
+
+
+def _pack_fill(text: str, values: dict[str, str]) -> str:
+    out = text
+    for key, value in values.items():
+        out = out.replace("{" + key + "}", value or "")
+    return re.sub(r"\s+", " ", out).strip()
+
+
+def _prompt_pack_candidates(
+    db: Session,
+    user: User,
+    *,
+    tenant: Tenant | None,
+    market: Market | None,
+    keyword: str,
+    locale: str,
+    seo_page_id: str | None = None,
+    demand_signal_id: str | None = None,
+    limit_per_source: int = 12,
+) -> list[dict[str, str | None]]:
+    brand = (tenant.name if tenant else "") or _root_domain(tenant.site_origin if tenant else "") or "the brand"
+    product = keyword.strip() or "the product category"
+    values = {
+        "Brand": brand,
+        "BrandShort": _brand_short(brand),
+        "Competitor": _first_competitor(db, user.tenant_id, market.id if market else None),
+        "ProductCategory": product,
+        "ProductCategoryAlt": product,
+        "Application": "industrial procurement",
+        "Country": market.name if market else "the target market",
+        "Cert": "ISO 9001",
+    }
+    lang = _locale_lang(locale)
+    wanted_langs = {"en"}
+    if lang.startswith("zh"):
+        wanted_langs.add("zh")
+    out: list[dict[str, str | None]] = []
+    for key, ptype, prompt_lang, template in EXPORT_B2B_PROMPTS:
+        if prompt_lang not in wanted_langs:
+            continue
+        out.append(
+            {
+                "prompt_text": _pack_fill(template, values),
+                "locale": locale,
+                "market_id": market.id if market else None,
+                "seo_page_id": seo_page_id,
+                "demand_signal_id": demand_signal_id,
+                "prompt_pack_id": EXPORT_B2B_PACK_ID,
+                "prompt_key": key,
+                "prompt_type": ptype,
+            }
+        )
+        if len(out) >= limit_per_source:
+            break
+    return out
+
+
+def _evidence_tier(o: GeoObservation) -> str:
+    if o.status == "verified":
+        return "verified"
+    if o.status == "cited" or (o.citation_urls or "").strip():
+        return "cited"
+    if o.status == "mentioned" or (o.brand_mentions or "").strip():
+        return "mentioned"
+    return "none"
+
+
+def _obs_out(o: GeoObservation) -> GeoObservationOut:
+    return GeoObservationOut(
+        id=o.id,
+        prompt_id=o.prompt_id,
+        engine=o.engine,
+        engine_label=ENGINE_LABELS.get(o.engine, o.engine),
+        region=engine_region(o.engine),
+        surface=o.surface or "manual_ai_answer",
+        sample_type=o.sample_type or "manual",
+        status=o.status,
+        evidence_tier=_evidence_tier(o),
+        evidence_label=EVIDENCE_LABELS.get(_evidence_tier(o), "无证据"),
+        response_excerpt=o.response_excerpt or "",
+        citation_urls=o.citation_urls or "",
+        brand_mentions=o.brand_mentions or "",
+        competitor_mentions=o.competitor_mentions or "",
+        interpretation_note=o.interpretation_note or "",
+        notes=o.notes,
+        observed_at=o.observed_at,
+    )
+
+
+def _result_out(row: GeoSampleResult) -> GeoSampleResultOut:
+    return GeoSampleResultOut(
+        id=row.id,
+        run_id=row.run_id,
+        prompt_id=row.prompt_id,
+        observation_id=row.observation_id,
+        evidence_id=row.evidence_id,
+        trial_index=row.trial_index,
+        prompt_type=row.prompt_type or "custom",
+        engine=row.engine,
+        engine_label=ENGINE_LABELS.get(row.engine, row.engine),
+        model=row.model,
+        web_grounded=row.web_grounded,
+        surface=row.surface,
+        prompt_text_hash=row.prompt_text_hash,
+        answer_text_hash=row.answer_text_hash,
+        answer_excerpt=row.answer_excerpt or "",
+        mentioned=row.mentioned,
+        citations=_json_list(row.citations_json),
+        owned_citations=_json_list(row.owned_citations_json),
+        third_party_citations=_json_list(row.third_party_citations_json),
+        brand_hits=row.brand_hits or "",
+        competitor_hits=row.competitor_hits or "",
+        verification_status=row.verification_status,
+        verification_note=row.verification_note or "",
+        sampled_at=row.sampled_at,
+    )
+
+
+def _sample_aggregate(row: GeoSampleRun) -> dict:
+    grouped: dict[tuple[str, str], list[GeoSampleResult]] = {}
+    for result in row.results or []:
+        grouped.setdefault((result.engine, result.prompt_id), []).append(result)
+    by_prompt = []
+    for (engine, prompt_id), results in sorted(grouped.items()):
+        total = len(results)
+        third_party_domains: dict[str, int] = {}
+        for result in results:
+            for url in _grounded_json_list(result, "third_party_citations_json"):
+                host = _host(url)
+                if host:
+                    third_party_domains[host] = third_party_domains.get(host, 0) + 1
+        prompt = results[0].prompt
+        ptype = results[0].prompt_type or (prompt.prompt_type if prompt else "custom")
+        by_prompt.append(
+            {
+                "prompt_id": prompt.prompt_key if prompt and prompt.prompt_key else prompt_id,
+                "prompt_db_id": prompt_id,
+                "type": ptype,
+                "engine": engine,
+                "trials": total,
+                "mention_rate": round(sum(1 for r in results if r.mentioned) / total, 3) if total else 0,
+                "citation_rate": round(sum(1 for r in results if _grounded_json_list(r, "citations_json")) / total, 3) if total else 0,
+                "owned_citation_rate": round(sum(1 for r in results if _grounded_json_list(r, "owned_citations_json")) / total, 3) if total else 0,
+                "third_party_citation_rate": round(sum(1 for r in results if _grounded_json_list(r, "third_party_citations_json")) / total, 3) if total else 0,
+                "top_third_party_domains": [
+                    host for host, _count in sorted(third_party_domains.items(), key=lambda item: item[1], reverse=True)[:10]
+                ],
+            }
+        )
+    return {
+        "run_id": row.id,
+        "engine": ",".join(_json_list(row.engines)),
+        "prompt_pack_id": row.prompt_set_id,
+        "config_hash": row.config_hash,
+        "byPrompt": by_prompt,
+    }
+
+
+def _grounded_json_list(result: GeoSampleResult, field: str) -> list[str]:
+    if result.web_grounded == "false":
+        return []
+    return _json_list(getattr(result, field))
+
+
+def _run_rates(results: list[GeoSampleResult]) -> dict[str, str]:
+    total = len(results)
+    mentioned = [r for r in results if r.mentioned]
+    cited = [r for r in results if _grounded_json_list(r, "owned_citations_json")]
+    verified = [r for r in cited if r.verification_status == "passed"]
+    return {
+        "mention_rate": _rate(len(mentioned), total),
+        "cite_rate": _rate(len(cited), total),
+        "verified_citation_rate": _rate(len(verified), total),
+    }
+
+
+def _run_out(row: GeoSampleRun, include_results: bool = True) -> GeoSampleRunOut:
+    results = list(row.results or [])
+    rates = _run_rates(results)
+    aggregate = _sample_aggregate(row) if results else {}
+    return GeoSampleRunOut(
+        id=row.id,
+        protocol_version=row.protocol_version,
+        prompt_set_id=row.prompt_set_id,
+        config_hash=row.config_hash,
+        domain=row.domain,
+        brand_names=_json_list(row.brand_names),
+        engines=_json_list(row.engines),
+        trials_per_prompt=row.trials_per_prompt,
+        region_hint=row.region_hint or "",
+        language=row.language or "",
+        status=row.status,
+        note=row.note or "",
+        started_at=row.started_at,
+        finished_at=row.finished_at,
+        results_count=len(results),
+        mention_rate=rates["mention_rate"],
+        cite_rate=rates["cite_rate"],
+        verified_citation_rate=rates["verified_citation_rate"],
+        results=[_result_out(r) for r in results] if include_results else [],
+        aggregate=aggregate,
+    )
+
+
+def _rate(part: int, total: int) -> str:
+    if total <= 0:
+        return "未测"
+    return f"{round(part / total * 100, 1)}%"
+
+
+def _prompt_rates(observations: list[GeoObservation]) -> dict[str, str]:
+    recorded = [o for o in observations if o.status in RECORDED_OBS]
+    mentioned = [o for o in recorded if _evidence_tier(o) in {"mentioned", "cited", "verified"}]
+    cited = [o for o in recorded if _evidence_tier(o) in {"cited", "verified"}]
+    verified = [o for o in recorded if _evidence_tier(o) == "verified"]
+    competitor = [o for o in recorded if (o.competitor_mentions or "").strip()]
+    return {
+        "mention_rate": _rate(len(mentioned), len(recorded)),
+        "cite_rate": _rate(len(cited), len(recorded)),
+        "verified_citation_rate": _rate(len(verified), len(recorded)),
+        "competitor_rate": _rate(len(competitor), len(recorded)),
+        "absorption_rate": _rate(len(mentioned), len(recorded)),
+    }
+
+
+def _prompt_out(row: GeoPrompt) -> GeoPromptOut:
+    diagnosis = row.diagnosis or "untested"
+    rates = _prompt_rates(row.observations)
+    return GeoPromptOut(
+        id=row.id,
+        prompt_text=row.prompt_text,
+        locale=row.locale,
+        market_id=row.market_id,
+        seo_page_id=row.seo_page_id,
+        demand_signal_id=row.demand_signal_id,
+        prompt_pack_id=row.prompt_pack_id or "custom",
+        prompt_key=row.prompt_key or "",
+        prompt_type=row.prompt_type or "custom",
+        diagnosis=diagnosis,
+        diagnosis_label=DIAGNOSES.get(diagnosis, diagnosis),
+        created_at=row.created_at,
+        observations=[_obs_out(o) for o in row.observations],
+        mention_rate=rates["mention_rate"],
+        cite_rate=rates["cite_rate"],
+        verified_citation_rate=rates["verified_citation_rate"],
+        competitor_rate=rates["competitor_rate"],
+        absorption_rate=rates["absorption_rate"],
+        ai_status=row.ai_status or "untested",
+        evidence=row.evidence or "",
+    )
+
+
+def _ticket_out(row: GeoTicket) -> GeoTicketOut:
+    return GeoTicketOut(
+        id=row.id,
+        prompt_id=row.prompt_id,
+        title=row.title,
+        diagnosis=row.diagnosis,
+        diagnosis_label=DIAGNOSES.get(row.diagnosis, row.diagnosis),
+        rationale=row.rationale,
+        acceptance_criteria=row.acceptance_criteria,
+        priority=row.priority or "P2",
+        owner_hint=row.owner_hint or "内容运营 / 客户经理",
+        recommended_action=row.recommended_action or "补齐实体说明、第三方可信源或官网可引用内容，并复测买家问题。",
+        retest_method=row.retest_method or "重新运行 GEO 采样，检查品牌提及、官网引用和第三方引用是否改善。",
+        retest_result=row.retest_result or "",
+        blocked_reason=row.blocked_reason or "",
+        status=row.status,
+        verified_note=row.verified_note,
+        ai_status=row.ai_status or "untested",
+        ai_review=row.ai_review or "",
+        evidence=row.evidence or "",
+        last_checked_at=row.last_checked_at,
+        closed_at=row.closed_at,
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )
+
+
+def _create_untested_slots(db: Session, user: User, prompt: GeoPrompt) -> None:
+    for engine in ENGINES:
+        db.add(
+            GeoObservation(
+                tenant_id=user.tenant_id,
+                prompt_id=prompt.id,
+                engine=engine,
+                status="untested",
+            )
+        )
+
+
+def _load_prompt(db: Session, prompt_id: str) -> GeoPrompt:
+    return (
+        db.query(GeoPrompt)
+        .options(selectinload(GeoPrompt.observations))
+        .filter(GeoPrompt.id == prompt_id)
+        .one()
+    )
+
+
+def _prompt_key(text: str, locale: str) -> tuple[str, str]:
+    return (" ".join((text or "").lower().split()), locale)
+
+
+def _market_phrase(db: Session, market_id: str | None) -> str:
+    if not market_id:
+        return ""
+    market = db.get(Market, market_id)
+    if market is None:
+        return ""
+    return f" in {market.name}"
+
+
+def _buyer_intent_prompts(keyword: str, market_phrase: str) -> list[str]:
+    return [
+        f"What is the best supplier for {keyword}{market_phrase}?",
+        f"Which companies are recommended for {keyword}{market_phrase}?",
+        f"What should I check before buying {keyword}{market_phrase}?",
+        f"Compare leading {keyword} manufacturers{market_phrase}.",
+    ]
+
+
+def _brand_mentioned(text: str, brand_names: list[str]) -> tuple[bool, str]:
+    lower = (text or "").lower()
+    hits = [name for name in brand_names if name and name.lower() in lower]
+    return bool(hits), ", ".join(hits)
+
+
+def _ticket_exists(db: Session, tenant_id: str, prompt_id: str, title: str) -> bool:
+    return (
+        db.query(func.count(GeoTicket.id))
+        .filter(GeoTicket.tenant_id == tenant_id, GeoTicket.prompt_id == prompt_id, GeoTicket.title == title)
+        .scalar()
+        or 0
+    ) > 0
+
+
+def _aggregate_issue_specs(runs: list[GeoSampleRun]) -> list[dict]:
+    aggregates = [_sample_aggregate(run) for run in runs if run.results]
+    cat_rates: list[float] = []
+    branded_rates: list[float] = []
+    owned_rates: list[float] = []
+    third_party_domains: dict[str, int] = {}
+    run_ids: list[str] = []
+    for aggregate in aggregates:
+        if aggregate.get("run_id"):
+            run_ids.append(str(aggregate["run_id"]))
+        for row in aggregate.get("byPrompt") or []:
+            if int(row.get("trials") or 0) < 3:
+                continue
+            ptype = row.get("type")
+            if ptype == "category":
+                cat_rates.append(float(row.get("mention_rate") or 0))
+                owned_rates.append(float(row.get("owned_citation_rate") or 0))
+            elif ptype == "branded":
+                branded_rates.append(float(row.get("mention_rate") or 0))
+            if ptype in {"category", "competitor"}:
+                for host in row.get("top_third_party_domains") or []:
+                    third_party_domains[host] = third_party_domains.get(host, 0) + 1
+
+    specs: list[dict] = []
+    if cat_rates:
+        category_mean = sum(cat_rates) / len(cat_rates)
+        branded_mean = sum(branded_rates) / len(branded_rates) if branded_rates else None
+        if category_mean < 0.2:
+            specs.append(
+                {
+                    "title": "GEO-ENT-003 品类问题下品牌关联弱",
+                    "diagnosis": "absent",
+                    "rationale": (
+                        f"按 {PROTOCOL_VERSION} 聚合，category mention 均值 {category_mean:.3f}，"
+                        f"低于 0.2 阈值；run={', '.join(run_ids)}。"
+                    ),
+                    "acceptance": "补品类词与品牌共现、参数/认证/应用页，并以 category prompt trials>=3 复测。",
+                    "evidence": {
+                        "issue_id": "GEO-ENT-003",
+                        "category_mention_mean": round(category_mean, 3),
+                        "branded_mention_mean": None if branded_mean is None else round(branded_mean, 3),
+                        "threshold": 0.2,
+                        "run_ids": run_ids,
+                    },
+                }
+            )
+    if third_party_domains:
+        owned_mean = sum(owned_rates) / len(owned_rates) if owned_rates else 0.0
+        if owned_mean <= 0.15:
+            top_domains = sorted(third_party_domains.items(), key=lambda item: item[1], reverse=True)[:10]
+            specs.append(
+                {
+                    "title": "GEO-OFF-001 权威第三方源高频出现但自有引用弱",
+                    "diagnosis": "competitor_dominated",
+                    "rationale": (
+                        f"category/competitor 采样中外域高频出现，自有引用均值 {owned_mean:.3f}；"
+                        f"代表域：{', '.join(host for host, _ in top_domains)}。"
+                    ),
+                    "acceptance": "按源类型完善档案、认证、品类标签和官网规格页链接；复测 third-party domains 与 owned citation。",
+                    "evidence": {
+                        "issue_id": "GEO-OFF-001",
+                        "top_domains": top_domains,
+                        "owned_citation_mean": round(owned_mean, 3),
+                        "threshold": 0.15,
+                        "run_ids": run_ids,
+                    },
+                }
+            )
+    return specs
