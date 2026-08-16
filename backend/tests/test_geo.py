@@ -518,3 +518,109 @@ def test_geo_provider_status_and_deepseek_non_grounded_does_not_count_citations(
     assert result["web_grounded"] == "false"
     assert result["owned_citations"] == []
     assert "非联网" in result["verification_note"]
+
+
+def test_geo_bocha_and_bailian_provider_adapters(client: TestClient, demo_user, monkeypatch) -> None:
+    headers = auth_header(client)
+    client.put(
+        "/api/project-targets",
+        headers=headers,
+        json={"site_origin": "https://sulzer.com", "markets": []},
+    )
+    prompt = client.post(
+        "/api/geo/prompts",
+        headers=headers,
+        json={"prompt_text": "Sulzer alternatives for industrial pumps", "locale": "en-US", "prompt_type": "competitor"},
+    ).json()
+
+    from app import geo_providers
+
+    monkeypatch.setattr(geo_providers.settings, "bocha_api_key", "test-bocha")
+    monkeypatch.setattr(geo_providers.settings, "dashscope_api_key", "test-dashscope")
+
+    status = client.get("/api/geo/providers/status", headers=headers).json()
+    providers = {row["key"]: row for row in status["providers"]}
+    assert providers["bocha"]["role"] == "search"
+    assert providers["bocha"]["configured"] is True
+    assert providers["bailian"]["role"] == "grounded_answer"
+    assert providers["bailian"]["configured"] is True
+
+    class FakeResponse:
+        def __init__(self, status_code: int, data: dict):
+            self.status_code = status_code
+            self._data = data
+            self.text = "ok"
+
+        def json(self):
+            return self._data
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def post(self, url: str, headers: dict, json: dict):
+            if "bochaai" in url:
+                return FakeResponse(
+                    200,
+                    {
+                        "data": {
+                            "webPages": {
+                                "value": [
+                                    {
+                                        "name": "Sulzer on GlobalSpec",
+                                        "url": "https://www.globalspec.com/supplier/sulzer",
+                                        "snippet": "Sulzer pump supplier profile",
+                                    },
+                                    {
+                                        "name": "Sulzer official",
+                                        "url": "https://www.sulzer.com/en",
+                                        "summary": "Official Sulzer site",
+                                    },
+                                ]
+                            }
+                        }
+                    },
+                )
+            return FakeResponse(
+                200,
+                {
+                    "choices": [
+                        {
+                            "message": {
+                                "content": "Sulzer is often compared with Flowserve and Alfa Laval. See https://www.sulzer.com/en and https://industry.example/report."
+                            }
+                        }
+                    ],
+                    "search_results": [{"url": "https://industry.example/report"}],
+                },
+            )
+
+    monkeypatch.setattr(geo_providers.httpx, "Client", FakeClient)
+
+    bocha_run = client.post(
+        "/api/geo/sample-runs/auto",
+        headers=headers,
+        json={"prompt_ids": [prompt["id"]], "trials": 1, "limit": 1, "provider": "bocha"},
+    )
+    assert bocha_run.status_code == 201, bocha_run.text
+    bocha_result = bocha_run.json()["results"][0]
+    assert bocha_result["web_grounded"] == "true"
+    assert "https://www.sulzer.com/en" in bocha_result["owned_citations"]
+    assert "https://www.globalspec.com/supplier/sulzer" in bocha_result["third_party_citations"]
+
+    bailian_run = client.post(
+        "/api/geo/sample-runs/auto",
+        headers=headers,
+        json={"prompt_ids": [prompt["id"]], "trials": 1, "limit": 1, "provider": "bailian"},
+    )
+    assert bailian_run.status_code == 201, bailian_run.text
+    bailian_result = bailian_run.json()["results"][0]
+    assert bailian_result["engine"] == "bailian"
+    assert "https://www.sulzer.com/en" in bailian_result["owned_citations"]
+    assert "https://industry.example/report" in bailian_result["third_party_citations"]

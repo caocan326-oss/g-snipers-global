@@ -67,6 +67,7 @@ const ticketStatus: Record<string, string> = {
 const providerRoleLabel: Record<string, string> = {
   analysis: "分析建议",
   search: "联网搜索",
+  grounded_answer: "联网答案",
   citation: "引用来源",
   crawler: "抓取证据",
 };

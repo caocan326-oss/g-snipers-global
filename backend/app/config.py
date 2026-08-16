@@ -36,6 +36,11 @@ class Settings(BaseSettings):
     you_api_key: str = ""
     exa_api_key: str = ""
     tavily_api_key: str = ""
+    bocha_api_key: str = ""
+    bocha_web_search_url: str = "https://api.bochaai.com/v1/web-search"
+    dashscope_api_key: str = ""
+    bailian_model: str = "qwen-plus"
+    bailian_chat_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
 
 
 settings = Settings()
