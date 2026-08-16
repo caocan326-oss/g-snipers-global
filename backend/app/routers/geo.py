@@ -634,7 +634,7 @@ def seed_prompt_panel(user: User = Depends(get_current_user), db: Session = Depe
                 keyword=keyword,
                 locale=page.locale,
                 seo_page_id=page.id,
-                limit_per_source=12,
+                limit_per_source=20,
             )
         )
     signals = (
@@ -658,7 +658,7 @@ def seed_prompt_panel(user: User = Depends(get_current_user), db: Session = Depe
                 keyword=theme,
                 locale=signal.locale,
                 demand_signal_id=signal.id,
-                limit_per_source=12,
+                limit_per_source=20,
             )
         )
     if not candidates:

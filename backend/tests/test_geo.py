@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 
+from app.llm import LlmResult, OK
 from tests.conftest import auth_header
 
 
@@ -245,10 +246,12 @@ def test_geo_prompt_panel_evidence_rates_and_exports(client: TestClient, demo_us
     table = client.get("/api/geo/report-table", headers=headers)
     assert table.status_code == 200
     csv_text = table.json()["csv"]
-    assert "问句,语言,诊断层,引擎" in csv_text
+    assert "问句,Prompt ID,Prompt 类型,Prompt 包,语言,诊断层,引擎" in csv_text
     assert "证据层级,证据说明" in csv_text
     assert "consumer_scrape" in csv_text
     assert "https://example.com/pumps" in csv_text
+    assert prompt["prompt_pack_id"] == "export-b2b-observation-v1"
+    assert prompt["prompt_type"] in {"branded", "category", "competitor", "task"}
 
 
 def test_geo_verified_citation_is_separate_from_plain_citation(client: TestClient, demo_user) -> None:
@@ -325,6 +328,7 @@ def test_geo_sample_run_freezes_manual_observations_as_evidence(client: TestClie
     assert run["cite_rate"] == "100.0%"
     assert run["verified_citation_rate"] == "100.0%"
     result = run["results"][0]
+    assert result["prompt_type"] == "custom"
     assert result["evidence_id"].startswith("ev_")
     assert result["owned_citations"] == ["https://example.com/pumps"]
     assert result["third_party_citations"] == ["https://industry.example.org/list"]
@@ -349,6 +353,41 @@ def test_geo_sample_run_freezes_manual_observations_as_evidence(client: TestClie
     table = client.get("/api/geo/report-table", headers=headers).json()["csv"]
     assert "run_id,evidence_id,prompt_hash,answer_hash" in table
     assert result["evidence_id"] in table
+
+
+def test_geo_b2b_prompt_pack_keeps_prompt_ids_and_types(client: TestClient, demo_user) -> None:
+    headers = auth_header(client)
+    market = client.post(
+        "/api/markets",
+        headers=headers,
+        json={"name": "United States", "region": "North America", "country_code": "US", "primary_locale": "en-US"},
+    ).json()
+    client.post(
+        f"/api/markets/{market['id']}/competitors",
+        headers=headers,
+        json={"name": "ApexFlow", "website": "https://apex.example"},
+    )
+    client.post(
+        "/api/seo-pages",
+        headers=headers,
+        json={
+            "title": "Ball Valve Guide",
+            "target_keyword": "industrial ball valves",
+            "locale": "en-US",
+            "market_id": market["id"],
+        },
+    )
+
+    seeded = client.post("/api/geo/prompt-panel/seed", headers=headers).json()
+    assert seeded["created"] >= 8
+    prompts = client.get("/api/geo/prompts", headers=headers).json()
+    keys = {p["prompt_key"] for p in prompts}
+    types = {p["prompt_type"] for p in prompts}
+    assert "EX-EN-B01" in keys
+    assert "EX-EN-C01" in keys
+    assert "EX-EN-P01" in keys
+    assert {"branded", "category", "competitor", "task"} <= types
+    assert all(p["prompt_pack_id"] == "export-b2b-observation-v1" for p in prompts)
 
 
 def test_geo_draft_tickets_from_evidence_rules(client: TestClient, demo_user) -> None:
@@ -382,3 +421,56 @@ def test_geo_draft_tickets_from_evidence_rules(client: TestClient, demo_user) ->
     second = client.post("/api/geo/tickets/draft-from-evidence", headers=headers).json()
     assert second["created"] == 0
     assert second["skipped"] >= 3
+
+
+def test_geo_auto_sampling_aggregate_creates_ent_off_tickets(client: TestClient, demo_user, monkeypatch) -> None:
+    headers = auth_header(client)
+    client.put(
+        "/api/project-targets",
+        headers=headers,
+        json={"site_origin": "https://example.com", "markets": []},
+    )
+    prompt = client.post(
+        "/api/geo/prompts",
+        headers=headers,
+        json={
+            "prompt_text": "Best industrial valve manufacturers for export to the United States",
+            "locale": "en-US",
+            "prompt_pack_id": "export-b2b-observation-v1",
+            "prompt_key": "EX-EN-C01",
+            "prompt_type": "category",
+        },
+    ).json()
+
+    import app.routers.geo as geo_router
+
+    monkeypatch.setattr(geo_router, "llm_configured", lambda: True)
+    monkeypatch.setattr(
+        geo_router,
+        "complete",
+        lambda **kwargs: LlmResult(
+            configured=True,
+            status=OK,
+            text="Buyers often compare suppliers listed at https://www.thomasnet.com and https://www.globalspec.com.",
+            detail="",
+        ),
+    )
+
+    run = client.post(
+        "/api/geo/sample-runs/auto",
+        headers=headers,
+        json={"prompt_ids": [prompt["id"]], "trials": 3, "limit": 1, "engine": "llm", "web_grounded": "false"},
+    )
+    assert run.status_code == 201, run.text
+    body = run.json()
+    assert body["results_count"] == 3
+    assert body["aggregate"]["byPrompt"][0]["type"] == "category"
+    assert body["aggregate"]["byPrompt"][0]["trials"] == 3
+    assert body["aggregate"]["byPrompt"][0]["mention_rate"] == 0
+    assert "thomasnet.com" in body["aggregate"]["byPrompt"][0]["top_third_party_domains"]
+
+    drafted = client.post("/api/geo/tickets/draft-from-evidence", headers=headers)
+    assert drafted.status_code == 200, drafted.text
+    titles = {ticket["title"] for ticket in drafted.json()["tickets"]}
+    assert "GEO-ENT-003 品类问题下品牌关联弱" in titles
+    assert "GEO-OFF-001 权威第三方源高频出现但自有引用弱" in titles
