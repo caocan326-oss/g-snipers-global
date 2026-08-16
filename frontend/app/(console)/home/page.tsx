@@ -393,11 +393,13 @@ export default function HomePage() {
                 <Badge tone={gsc?.connected ? "green" : gsc?.configured ? "amber" : "red"}>{gsc?.connected ? "已连接" : gsc?.configured ? "待授权" : "未配置"}</Badge>
               </div>
               <div className="mt-1 truncate text-xs text-slate-500">{gsc?.site_url || gsc?.note || "读取中"}</div>
-              <div className="mt-3">
+              <div className="mt-3 flex flex-wrap gap-2">
                 {gsc?.connected ? (
                   <Link href="/onsite"><Button type="button" variant="outline" size="sm">同步 GSC 数据</Button></Link>
+                ) : gsc?.configured ? (
+                  <Button type="button" size="sm" onClick={authorizeGsc}>打开授权页</Button>
                 ) : (
-                  <Button type="button" size="sm" onClick={authorizeGsc} disabled={!gsc?.configured}>连接 GSC</Button>
+                  <Link href="/onsite"><Button type="button" variant="outline" size="sm">查看配置要求</Button></Link>
                 )}
               </div>
             </div>

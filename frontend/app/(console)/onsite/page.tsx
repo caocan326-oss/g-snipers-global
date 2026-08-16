@@ -160,6 +160,7 @@ export default function OnsiteBoardPage() {
   const [busyId, setBusyId] = useState("");
   const [maxUrls, setMaxUrls] = useState(50);
   const [maxDepth, setMaxDepth] = useState(2);
+  const [showGscSetup, setShowGscSetup] = useState(false);
   const [performanceSource, setPerformanceSource] = useState<"gsc_csv" | "bing_csv">("gsc_csv");
   const [form, setForm] = useState({ path: "/", locale: "en-US", title: "" });
   const [origin, setOrigin] = useState("");
@@ -407,6 +408,7 @@ export default function OnsiteBoardPage() {
       const res = await api<GscAuthUrl>("/api/onsite/gsc/auth-url");
       if (!res.configured || !res.auth_url) {
         setError(res.note || "服务器未配置 GSC OAuth。");
+        setShowGscSetup(true);
         return;
       }
       window.location.href = res.auth_url;
@@ -799,8 +801,8 @@ export default function OnsiteBoardPage() {
           <CardTitle>SEO 表现数据源</CardTitle>
           <p className="mt-1 text-sm text-slate-500">优先使用免费且可信的数据源：GSC/Bing 记录真实搜索表现，PageSpeed 记录速度体验，Bright Data 记录目标关键词的 Google SERP。</p>
         </CardHeader>
-        <CardContent className="grid gap-4 xl:grid-cols-5">
-          <div className="rounded-md border border-slate-200 p-3">
+        <CardContent className="grid gap-4 xl:grid-cols-2">
+          <div className="rounded-md border border-slate-200 p-4">
             <div className="flex items-center gap-2 text-sm font-medium text-slate-800">
               <Search className="h-4 w-4" />
               GSC 自动同步
@@ -819,22 +821,47 @@ export default function OnsiteBoardPage() {
               {gsc?.last_error ? <div className="text-xs text-red-600">{gsc.last_error}</div> : null}
             </div>
             <div className="mt-3 grid gap-2">
-              <Button type="button" variant="outline" onClick={authorizeGsc} disabled={!gsc?.configured}>
-                授权 GSC
-              </Button>
+              {gsc?.configured ? (
+                <Button type="button" variant="outline" onClick={authorizeGsc}>
+                  {gsc.connected ? "重新授权 GSC" : "打开 Google 授权页"}
+                </Button>
+              ) : (
+                <Button type="button" variant="outline" onClick={() => setShowGscSetup((value) => !value)}>
+                  查看配置要求
+                </Button>
+              )}
               <Button type="button" onClick={syncGsc} disabled={!gsc?.connected || busyId === "gsc-sync"}>
-                {busyId === "gsc-sync" ? "同步中…" : "同步 28 天"}
+                {busyId === "gsc-sync" ? "同步中…" : "同步 28 天数据"}
               </Button>
             </div>
+            {showGscSetup || !gsc?.configured ? (
+              <div className="mt-3 rounded-md bg-amber-50 p-3 text-xs leading-5 text-amber-900">
+                <div className="font-medium">为什么现在打不开？</div>
+                <p className="mt-1">Google 授权页需要服务器先配置 OAuth Client ID / Secret。配置完成后，这里会变成“打开 Google 授权页”。</p>
+                <div className="mt-2 rounded border border-amber-200 bg-white px-2 py-1 font-mono text-[11px] text-amber-950">
+                  GSC_CLIENT_ID / GSC_CLIENT_SECRET / GSC_REDIRECT_URI
+                </div>
+              </div>
+            ) : null}
           </div>
-          <div className="rounded-md border border-slate-200 p-3">
-            <div className="flex items-center gap-2 text-sm font-medium text-slate-800">
-              <Upload className="h-4 w-4" />
-              导入搜索表现 CSV
+          <div className="rounded-md border border-slate-200 p-4">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <div className="flex items-center gap-2 text-sm font-medium text-slate-800">
+                  <Upload className="h-4 w-4" />
+                  导入搜索表现 CSV
+                </div>
+                <p className="mt-2 text-xs leading-5 text-slate-500">
+                  适合客户暂时不能授权 GSC 时使用。支持 GSC/Bing 导出的关键词、页面、国家、设备、点击、曝光、CTR、平均排名字段。
+                </p>
+              </div>
+              <Badge tone={(performance?.imports.length ?? 0) > 0 ? "green" : "amber"}>
+                已导入 {performance?.imports.length ?? 0} 批
+              </Badge>
             </div>
-            <div className="mt-3 grid gap-2 sm:grid-cols-[150px_1fr]">
+            <div className="mt-3 grid gap-2 md:grid-cols-[160px_minmax(0,1fr)]">
               <select
-                className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm outline-none focus:border-emerald-500"
+                className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm outline-none focus:border-emerald-500"
                 value={performanceSource}
                 onChange={(e) => setPerformanceSource(e.target.value as "gsc_csv" | "bing_csv")}
               >
@@ -842,17 +869,15 @@ export default function OnsiteBoardPage() {
                 <option value="bing_csv">Bing CSV</option>
               </select>
               <Input
+                className="min-w-0"
                 type="file"
                 accept=".csv,text/csv"
                 onChange={importPerformanceFile}
                 disabled={busyId === "performance-import"}
               />
             </div>
-            <div className="mt-3 text-xs text-slate-500">
-              已导入 {performance?.imports.length ?? 0} 批；支持查询、页面、国家、设备、点击、曝光、CTR、平均排名等常见中英文字段。
-            </div>
           </div>
-          <div className="rounded-md border border-slate-200 p-3">
+          <div className="rounded-md border border-slate-200 p-4">
             <div className="flex items-center gap-2 text-sm font-medium text-slate-800">
               <Gauge className="h-4 w-4" />
               免费测速
@@ -876,7 +901,7 @@ export default function OnsiteBoardPage() {
               {busyId === "pagespeed" ? "测速中…" : "测首页和核心页"}
             </Button>
           </div>
-          <div className="rounded-md border border-slate-200 p-3">
+          <div className="rounded-md border border-slate-200 p-4">
             <div className="flex items-center gap-2 text-sm font-medium text-slate-800">
               <Search className="h-4 w-4" />
               Bright Data SERP
@@ -903,12 +928,12 @@ export default function OnsiteBoardPage() {
               {performance?.serp?.configured ? "按目标国家和核心搜索词查询 Google 前 10，作为市场可见度证据。" : "服务器尚未配置 Bright Data SERP，关键词排名保持未测。"}
             </p>
           </div>
-          <div className="rounded-md border border-slate-200 p-3">
+          <div className="rounded-md border border-slate-200 p-4 xl:col-span-2">
             <div className="flex items-center gap-2 text-sm font-medium text-slate-800">
               <BarChart3 className="h-4 w-4" />
               搜索表现摘要
             </div>
-            <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+            <div className="mt-3 grid gap-2 text-center sm:grid-cols-3">
               <div className="rounded-md bg-slate-50 p-2">
                 <div className="text-lg font-semibold">{performance?.total_impressions ?? 0}</div>
                 <div className="text-[11px] text-slate-500">曝光</div>
