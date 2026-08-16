@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+from datetime import datetime, timezone
 from sqlalchemy.orm import Session, selectinload
 
 from app.ai_engine import assist_offsite_gap
@@ -18,29 +19,57 @@ from app.schemas import (
 
 router = APIRouter(prefix="/api/offsite", tags=["offsite"])
 
-GAP_STATUSES = {"identified", "outreach", "replied", "won", "lost", "skipped"}
+GAP_STATUSES = {
+    "identified",
+    "outreach",
+    "replied",
+    "converted_to_task",
+    "in_progress",
+    "needs_retest",
+    "won",
+    "lost",
+    "skipped",
+    "blocked",
+    "closed",
+    "ignored",
+}
 OUTREACH_STATUSES = {"todo", "sent_manual", "replied", "closed"}
 VERIFY_STATUSES = {"unverified", "valid", "dead", "spam"}
 KINDS = {"inbound", "competitor"}
+PRIORITIES = {"P0", "P1", "P2", "P3"}
 
 
 def _gap_out(row: BacklinkGap) -> BacklinkGapOut:
     return BacklinkGapOut(
         id=row.id,
+        title=row.title or "",
+        issue_type=row.issue_type or "competitor_gap",
+        source=row.source or "manual",
+        source_platform_id=row.source_platform_id or "",
         competitor_name=row.competitor_name,
         referring_domain=row.referring_domain,
         competitor_url=row.competitor_url,
         link_url=row.link_url,
         kind=row.kind or "competitor",
+        priority=row.priority or "P2",
         verify_status=row.verify_status or "unverified",
         market_id=row.market_id,
         our_presence=row.our_presence,
         domain_metric=row.domain_metric,
         status=row.status,
+        owner_hint=row.owner_hint or "",
+        acceptance_criteria=row.acceptance_criteria or "",
+        recommended_action=row.recommended_action or "",
+        retest_method=row.retest_method or "",
+        retest_result=row.retest_result or "",
+        result_url=row.result_url or "",
+        blocked_reason=row.blocked_reason or "",
         notes=row.notes,
         ai_status=row.ai_status or "untested",
         ai_review=row.ai_review or "",
         evidence=row.evidence or "",
+        last_checked_at=row.last_checked_at,
+        closed_at=row.closed_at,
         outreach=[OutreachOut.model_validate(o, from_attributes=True) for o in row.outreach],
     )
 
@@ -88,12 +117,21 @@ def create_gap(
 ) -> BacklinkGapOut:
     if body.kind not in KINDS:
         raise HTTPException(status_code=400, detail="无效链接类型")
+    if body.priority not in PRIORITIES:
+        raise HTTPException(status_code=400, detail="无效优先级")
+    payload = body.model_dump()
+    if not payload.get("title"):
+        payload["title"] = f"{body.referring_domain} · {('我方曝光' if body.kind == 'inbound' else '竞品机会')}"
+    if not payload.get("acceptance_criteria"):
+        payload["acceptance_criteria"] = "记录 result_url，并完成 Placement 核验。"
+    if not payload.get("retest_method"):
+        payload["retest_method"] = "复查 result_url 是否可访问、是否提及客户、是否链接到目标页。"
     row = BacklinkGap(
         tenant_id=user.tenant_id,
         domain_metric="untested",
         status="identified",
         verify_status="unverified",
-        **body.model_dump(),
+        **payload,
     )
     db.add(row)
     db.commit()
@@ -119,10 +157,12 @@ def update_gap(
         if next_status not in GAP_STATUSES:
             raise HTTPException(status_code=400, detail="无效缺口状态")
         row.status = next_status
+        row.closed_at = datetime.now(timezone.utc) if next_status in {"closed", "ignored", "won"} else None
     if "verify_status" in payload:
         if payload["verify_status"] not in VERIFY_STATUSES:
             raise HTTPException(status_code=400, detail="无效核验状态")
         row.verify_status = payload["verify_status"]
+        row.last_checked_at = datetime.now(timezone.utc)
     if "notes" in payload:
         row.notes = payload["notes"]
     if "link_url" in payload:
@@ -131,6 +171,25 @@ def update_gap(
         if payload["kind"] not in KINDS:
             raise HTTPException(status_code=400, detail="无效链接类型")
         row.kind = payload["kind"]
+    if "priority" in payload:
+        if payload["priority"] not in PRIORITIES:
+            raise HTTPException(status_code=400, detail="无效优先级")
+        row.priority = payload["priority"]
+    for field in (
+        "title",
+        "issue_type",
+        "source",
+        "source_platform_id",
+        "owner_hint",
+        "acceptance_criteria",
+        "recommended_action",
+        "retest_method",
+        "retest_result",
+        "result_url",
+        "blocked_reason",
+    ):
+        if field in payload:
+            setattr(row, field, payload[field] or "")
     db.commit()
     row = (
         db.query(BacklinkGap)

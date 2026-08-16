@@ -801,19 +801,33 @@ export type OutreachItem = {
 
 export type BacklinkGap = {
   id: string;
+  title: string;
+  issue_type: string;
+  source: string;
+  source_platform_id: string;
   competitor_name: string;
   referring_domain: string;
   competitor_url: string | null;
   link_url: string | null;
   kind: string;
+  priority: string;
   verify_status: string;
   our_presence: string;
   domain_metric: string;
   status: string;
+  owner_hint: string;
+  acceptance_criteria: string;
+  recommended_action: string;
+  retest_method: string;
+  retest_result: string;
+  result_url: string;
+  blocked_reason: string;
   notes: string | null;
   ai_status?: string;
   ai_review?: string;
   evidence?: string;
+  last_checked_at: string | null;
+  closed_at: string | null;
   outreach: OutreachItem[];
 };
 
@@ -827,13 +841,21 @@ export type DistProvider = {
 
 export type DistJob = {
   id: string;
+  gap_id: string | null;
   title: string;
   target_url: string;
   provider_key: string;
+  task_type: string;
   payload_summary: string;
+  owner_hint: string;
   status: string;
+  result_url: string;
+  verify_status: string;
+  blocked_reason: string;
   last_result: string;
   last_detail: string | null;
+  due_at: string | null;
+  last_checked_at: string | null;
 };
 
 export type GeoChecklistItem = {

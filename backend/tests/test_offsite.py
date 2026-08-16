@@ -9,8 +9,14 @@ def test_offsite_gap_and_outreach(client: TestClient, demo_user) -> None:
         "/api/offsite/gaps",
         headers=headers,
         json={
+            "title": "Reddit 竞品讨论机会",
             "competitor_name": "August Home",
             "referring_domain": "reddit.com",
+            "priority": "P1",
+            "owner_hint": "站外执行",
+            "acceptance_criteria": "记录 result_url 并完成核验",
+            "recommended_action": "判断是否可参与讨论或补充第三方资料",
+            "retest_method": "复查页面是否可访问、是否提及客户",
             "notes": "公开讨论记下的缺口",
         },
     )
@@ -19,6 +25,10 @@ def test_offsite_gap_and_outreach(client: TestClient, demo_user) -> None:
     assert gap.json()["status"] == "identified"
     assert gap.json()["verify_status"] == "unverified"
     assert gap.json()["kind"] == "competitor"
+    assert gap.json()["title"] == "Reddit 竞品讨论机会"
+    assert gap.json()["priority"] == "P1"
+    assert gap.json()["owner_hint"] == "站外执行"
+    assert gap.json()["acceptance_criteria"] == "记录 result_url 并完成核验"
     gap_id = gap.json()["id"]
 
     verified = client.patch(
@@ -28,6 +38,7 @@ def test_offsite_gap_and_outreach(client: TestClient, demo_user) -> None:
     )
     assert verified.status_code == 200
     assert verified.json()["verify_status"] == "valid"
+    assert verified.json()["last_checked_at"] is not None
 
     inbound = client.post(
         "/api/offsite/gaps",

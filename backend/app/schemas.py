@@ -1112,13 +1112,25 @@ class SitePageDetailOut(SitePageOut):
 
 
 class BacklinkGapCreate(BaseModel):
+    title: str = ""
+    issue_type: str = "competitor_gap"
+    source: str = "manual"
+    source_platform_id: str = ""
     competitor_name: str
     referring_domain: str
     competitor_url: str | None = None
     link_url: str | None = None
     kind: str = "competitor"
     market_id: str | None = None
+    priority: str = "P2"
     our_presence: str = "none"
+    owner_hint: str = ""
+    acceptance_criteria: str = ""
+    recommended_action: str = ""
+    retest_method: str = ""
+    retest_result: str = ""
+    result_url: str = ""
+    blocked_reason: str = ""
     notes: str | None = None
 
 
@@ -1128,6 +1140,18 @@ class BacklinkGapUpdate(BaseModel):
     notes: str | None = None
     link_url: str | None = None
     kind: str | None = None
+    title: str | None = None
+    issue_type: str | None = None
+    source: str | None = None
+    source_platform_id: str | None = None
+    priority: str | None = None
+    owner_hint: str | None = None
+    acceptance_criteria: str | None = None
+    recommended_action: str | None = None
+    retest_method: str | None = None
+    retest_result: str | None = None
+    result_url: str | None = None
+    blocked_reason: str | None = None
 
 
 class OutreachOut(BaseModel):
@@ -1147,20 +1171,34 @@ class OutreachCreate(BaseModel):
 
 class BacklinkGapOut(BaseModel):
     id: str
+    title: str = ""
+    issue_type: str = "competitor_gap"
+    source: str = "manual"
+    source_platform_id: str = ""
     competitor_name: str
     referring_domain: str
     competitor_url: str | None
     link_url: str | None = None
     kind: str = "competitor"
+    priority: str = "P2"
     verify_status: str = "unverified"
     market_id: str | None
     our_presence: str
     domain_metric: str
     status: str
+    owner_hint: str = ""
+    acceptance_criteria: str = ""
+    recommended_action: str = ""
+    retest_method: str = ""
+    retest_result: str = ""
+    result_url: str = ""
+    blocked_reason: str = ""
     notes: str | None
     ai_status: str = "untested"
     ai_review: str = ""
     evidence: str = ""
+    last_checked_at: datetime | None = None
+    closed_at: datetime | None = None
     outreach: list[OutreachOut] = []
 
 
@@ -1182,18 +1220,46 @@ class DistributionJobCreate(BaseModel):
     title: str
     target_url: str
     provider_key: str
+    gap_id: str | None = None
+    task_type: str = "profile_create"
     payload_summary: str = ""
+    owner_hint: str = ""
+    result_url: str = ""
+    blocked_reason: str = ""
 
 
 class DistributionJobOut(BaseModel):
     id: str
+    gap_id: str | None = None
     title: str
     target_url: str
     provider_key: str
+    task_type: str = "profile_create"
     payload_summary: str
+    owner_hint: str = ""
     status: str
+    result_url: str = ""
+    verify_status: str = "pending"
+    blocked_reason: str = ""
     last_result: str
     last_detail: str | None
+    due_at: datetime | None = None
+    last_checked_at: datetime | None = None
+
+
+class DistributionJobUpdate(BaseModel):
+    status: str | None = None
+    owner_hint: str | None = None
+    result_url: str | None = None
+    verify_status: str | None = None
+    blocked_reason: str | None = None
+    payload_summary: str | None = None
+
+
+class DistributionSubmitResultIn(BaseModel):
+    result_url: str
+    evidence: str = ""
+    verify_status: str = "pending"
 
 
 class ProviderOut(BaseModel):
