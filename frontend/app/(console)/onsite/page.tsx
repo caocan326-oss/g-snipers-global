@@ -36,6 +36,7 @@ import {
   type GscAuthUrl,
   type GscStatus,
   type GscSyncResult,
+  type IntegrationSettings,
   type IndexNowStatus,
   type IndexNowSubmitResult,
   type Market,
@@ -146,6 +147,7 @@ export default function OnsiteBoardPage() {
   const [seoTargets, setSeoTargets] = useState<SeoPage[]>([]);
   const [performance, setPerformance] = useState<SeoPerformanceSummary | null>(null);
   const [gsc, setGsc] = useState<GscStatus | null>(null);
+  const [integrations, setIntegrations] = useState<IntegrationSettings | null>(null);
   const [bing, setBing] = useState<BingStatus | null>(null);
   const [indexNow, setIndexNow] = useState<IndexNowStatus | null>(null);
   const [syncStatus, setSyncStatus] = useState<DataSyncStatus | null>(null);
@@ -161,6 +163,15 @@ export default function OnsiteBoardPage() {
   const [maxUrls, setMaxUrls] = useState(50);
   const [maxDepth, setMaxDepth] = useState(2);
   const [showGscSetup, setShowGscSetup] = useState(false);
+  const [integrationForm, setIntegrationForm] = useState({
+    gsc_oauth_client_id: "",
+    gsc_oauth_client_secret: "",
+    gsc_oauth_redirect_uri: "",
+    pagespeed_api_key: "",
+    brightdata_dataset_api_key: "",
+    brightdata_serp_dataset_id: "",
+    brightdata_serp_endpoint: "",
+  });
   const [performanceSource, setPerformanceSource] = useState<"gsc_csv" | "bing_csv">("gsc_csv");
   const [form, setForm] = useState({ path: "/", locale: "en-US", title: "" });
   const [origin, setOrigin] = useState("");
@@ -175,13 +186,14 @@ export default function OnsiteBoardPage() {
       api<Market[]>("/api/markets"),
       api<SeoPage[]>("/api/seo-pages"),
       api<SeoPerformanceSummary>("/api/onsite/performance"),
+      api<IntegrationSettings>("/api/onsite/integrations"),
       api<GscStatus>("/api/onsite/gsc/status"),
       api<BingStatus>("/api/onsite/bing/status"),
       api<IndexNowStatus>("/api/onsite/indexnow/status"),
       api<DataSyncStatus>("/api/onsite/data-sync/status"),
       api<ProjectTargets>("/api/project-targets"),
     ])
-      .then(([b, p, br, s, cs, m, seo, perf, gscStatus, bingStatus, indexNowStatus, ds, targetConfig]) => {
+      .then(([b, p, br, s, cs, m, seo, perf, integrationStatus, gscStatus, bingStatus, indexNowStatus, ds, targetConfig]) => {
         setBoard(b);
         setPages(p);
         setBriefs(br);
@@ -190,6 +202,7 @@ export default function OnsiteBoardPage() {
         setMarkets(m);
         setSeoTargets(seo);
         setPerformance(perf);
+        setIntegrations(integrationStatus);
         setGsc(gscStatus);
         setBing(bingStatus);
         setIndexNow(indexNowStatus);
@@ -414,6 +427,43 @@ export default function OnsiteBoardPage() {
       window.location.href = res.auth_url;
     } catch (e) {
       setError(e instanceof Error ? e.message : "获取 GSC 授权链接失败");
+    }
+  }
+
+  async function saveIntegrationSettings() {
+    setError("");
+    setBusyId("integrations");
+    try {
+      const payload = Object.fromEntries(
+        Object.entries(integrationForm).filter(([, value]) => value.trim())
+      );
+      if (!Object.keys(payload).length) {
+        setError("请至少填写一个要保存的配置项。已保存的密钥会以掩码显示，不会回显原文。");
+        return;
+      }
+      const saved = await api<IntegrationSettings>("/api/onsite/integrations", {
+        method: "PATCH",
+        body: JSON.stringify(payload),
+      });
+      setIntegrations(saved);
+      setIntegrationForm({
+        gsc_oauth_client_id: "",
+        gsc_oauth_client_secret: "",
+        gsc_oauth_redirect_uri: "",
+        pagespeed_api_key: "",
+        brightdata_dataset_api_key: "",
+        brightdata_serp_dataset_id: "",
+        brightdata_serp_endpoint: "",
+      });
+      const nextGsc = await api<GscStatus>("/api/onsite/gsc/status");
+      setGsc(nextGsc);
+      setNote("数据源配置已保存。密钥只保存在后端，页面不会回显完整值。");
+      setShowGscSetup(false);
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "保存数据源配置失败");
+    } finally {
+      setBusyId("");
     }
   }
 
@@ -836,10 +886,72 @@ export default function OnsiteBoardPage() {
             </div>
             {showGscSetup || !gsc?.configured ? (
               <div className="mt-3 rounded-md bg-amber-50 p-3 text-xs leading-5 text-amber-900">
-                <div className="font-medium">为什么现在打不开？</div>
-                <p className="mt-1">Google 授权页需要服务器先配置 OAuth Client ID / Secret。配置完成后，这里会变成“打开 Google 授权页”。</p>
-                <div className="mt-2 rounded border border-amber-200 bg-white px-2 py-1 font-mono text-[11px] text-amber-950">
-                  GSC_CLIENT_ID / GSC_CLIENT_SECRET / GSC_REDIRECT_URI
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="font-medium">配置数据源</div>
+                  <Badge tone={integrations?.gsc_configured ? "green" : "amber"}>
+                    {integrations?.gsc_configured ? "GSC 已配置" : "GSC 待配置"}
+                  </Badge>
+                </div>
+                <p className="mt-1">
+                  Google 授权页需要先保存 OAuth Client ID / Secret。密钥只提交到后端保存，前端不会回显完整值。
+                </p>
+                <div className="mt-3 grid gap-2">
+                  <Input
+                    placeholder="Google OAuth Client ID"
+                    value={integrationForm.gsc_oauth_client_id}
+                    onChange={(e) => setIntegrationForm({ ...integrationForm, gsc_oauth_client_id: e.target.value })}
+                  />
+                  <Input
+                    placeholder="Google OAuth Client Secret"
+                    type="password"
+                    value={integrationForm.gsc_oauth_client_secret}
+                    onChange={(e) => setIntegrationForm({ ...integrationForm, gsc_oauth_client_secret: e.target.value })}
+                  />
+                  <Input
+                    placeholder={`Redirect URI，默认 ${gsc?.redirect_uri || "前端 /onsite"}`}
+                    value={integrationForm.gsc_oauth_redirect_uri}
+                    onChange={(e) => setIntegrationForm({ ...integrationForm, gsc_oauth_redirect_uri: e.target.value })}
+                  />
+                </div>
+                <div className="mt-3 grid gap-2 border-t border-amber-200 pt-3">
+                  <Input
+                    placeholder="Bright Data Dataset API Key"
+                    type="password"
+                    value={integrationForm.brightdata_dataset_api_key}
+                    onChange={(e) => setIntegrationForm({ ...integrationForm, brightdata_dataset_api_key: e.target.value })}
+                  />
+                  <Input
+                    placeholder="Bright Data SERP Dataset ID，默认 gd_mfz5x93lmsjjjylob"
+                    value={integrationForm.brightdata_serp_dataset_id}
+                    onChange={(e) => setIntegrationForm({ ...integrationForm, brightdata_serp_dataset_id: e.target.value })}
+                  />
+                  <Input
+                    placeholder="PageSpeed API Key（可选，不填也可免费测速）"
+                    type="password"
+                    value={integrationForm.pagespeed_api_key}
+                    onChange={(e) => setIntegrationForm({ ...integrationForm, pagespeed_api_key: e.target.value })}
+                  />
+                </div>
+                {integrations?.fields.some((field) => field.configured) ? (
+                  <div className="mt-3 grid gap-1">
+                    {integrations.fields.filter((field) => field.configured).map((field) => (
+                      <div key={field.key} className="flex items-center justify-between gap-2 rounded border border-amber-200 bg-white px-2 py-1">
+                        <span className="truncate">{field.label}</span>
+                        <span className="shrink-0 font-mono text-[11px]">{field.masked_value} · {field.source === "env" ? ".env" : "前台保存"}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button type="button" size="sm" onClick={saveIntegrationSettings} disabled={busyId === "integrations"}>
+                    <Wrench className="mr-2 h-3.5 w-3.5" />
+                    {busyId === "integrations" ? "保存中…" : "保存配置"}
+                  </Button>
+                  {integrations?.gsc_configured ? (
+                    <Button type="button" size="sm" variant="outline" onClick={authorizeGsc}>
+                      打开授权页
+                    </Button>
+                  ) : null}
                 </div>
               </div>
             ) : null}

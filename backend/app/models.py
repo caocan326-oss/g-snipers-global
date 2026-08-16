@@ -23,6 +23,21 @@ class Tenant(Base):
     users: Mapped[list["User"]] = relationship(back_populates="tenant")
 
 
+class IntegrationSetting(Base):
+    __tablename__ = "integration_settings"
+    __table_args__ = (UniqueConstraint("tenant_id", "key", name="uq_integration_settings_tenant_key"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
+    key: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
+    value: Mapped[str] = mapped_column(Text, default="")
+    updated_by: Mapped[str | None] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
 class User(Base):
     __tablename__ = "users"
 

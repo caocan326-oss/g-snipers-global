@@ -22,6 +22,7 @@ from app.models import (
     DataSyncRun,
     GscConnection,
     GscSyncRun,
+    IntegrationSetting,
     IndexNowSubmission,
     Market,
     OnsiteIssue,
@@ -79,6 +80,9 @@ from app.schemas import (
     DataSyncRunDueOut,
     DataSyncRunOut,
     DataSyncStatusOut,
+    IntegrationFieldOut,
+    IntegrationSettingsIn,
+    IntegrationSettingsOut,
     IndexNowStatusOut,
     IndexNowSubmitIn,
     IndexNowSubmitOut,
@@ -131,6 +135,16 @@ PAGE_TYPE_LABELS = {
     "article": "文章页",
     "contact": "联系页",
     "other": "其他页面",
+}
+
+INTEGRATION_FIELDS = {
+    "gsc_oauth_client_id": ("Google OAuth Client ID", "gsc_oauth_client_id"),
+    "gsc_oauth_client_secret": ("Google OAuth Client Secret", "gsc_oauth_client_secret"),
+    "gsc_oauth_redirect_uri": ("Google OAuth Redirect URI", "gsc_oauth_redirect_uri"),
+    "pagespeed_api_key": ("PageSpeed API Key", "pagespeed_api_key"),
+    "brightdata_dataset_api_key": ("Bright Data Dataset API Key", "brightdata_dataset_api_key"),
+    "brightdata_serp_dataset_id": ("Bright Data SERP Dataset ID", "brightdata_serp_dataset_id"),
+    "brightdata_serp_endpoint": ("Bright Data SERP Endpoint", "brightdata_serp_endpoint"),
 }
 CRAWL_LABELS = {
     "ok": "可正常访问",
@@ -771,8 +785,11 @@ def _performance_summary(db: Session, user: User) -> SeoPerformanceSummaryOut:
     )
 
 
-def _serp_configured() -> bool:
-    return bool(settings.brightdata_dataset_api_key and settings.brightdata_serp_dataset_id)
+def _serp_configured(db: Session, tenant_id: str) -> bool:
+    return bool(
+        _integration_value(db, tenant_id, "brightdata_dataset_api_key")
+        and _integration_value(db, tenant_id, "brightdata_serp_dataset_id")
+    )
 
 
 def _domain(url: str) -> str:
@@ -860,7 +877,16 @@ def _extract_organic_results(data: object, limit: int) -> list[dict[str, str | i
     return rows
 
 
-def _fetch_brightdata_serp(keyword: str, *, country: str, locale: str, device: str, limit: int) -> list[dict[str, str | int]]:
+def _fetch_brightdata_serp(
+    db: Session,
+    tenant_id: str,
+    keyword: str,
+    *,
+    country: str,
+    locale: str,
+    device: str,
+    limit: int,
+) -> list[dict[str, str | int]]:
     language = locale.split("-", 1)[0].lower() if locale else ""
     payload = {
         "input": [
@@ -879,15 +905,15 @@ def _fetch_brightdata_serp(keyword: str, *, country: str, locale: str, device: s
         "limit_per_input": limit,
     }
     params = {
-        "dataset_id": settings.brightdata_serp_dataset_id,
+        "dataset_id": _integration_value(db, tenant_id, "brightdata_serp_dataset_id"),
         "notify": "false",
         "include_errors": "true",
     }
     headers = {
-        "Authorization": f"Bearer {settings.brightdata_dataset_api_key}",
+        "Authorization": f"Bearer {_integration_value(db, tenant_id, 'brightdata_dataset_api_key')}",
         "Content-Type": "application/json",
     }
-    endpoint = settings.brightdata_serp_endpoint or "https://api.brightdata.com/datasets/v3/scrape"
+    endpoint = _integration_value(db, tenant_id, "brightdata_serp_endpoint") or "https://api.brightdata.com/datasets/v3/scrape"
     with httpx.Client(timeout=90, headers=headers) as client:
         response = client.post(endpoint, params=params, json=payload)
         response.raise_for_status()
@@ -935,8 +961,8 @@ def _serp_summary(db: Session, user: User) -> SerpSummaryOut:
         .all()
     )
     return SerpSummaryOut(
-        configured=_serp_configured(),
-        status="已配置" if _serp_configured() else "未配置",
+        configured=_serp_configured(db, user.tenant_id),
+        status="已配置" if _serp_configured(db, user.tenant_id) else "未配置",
         total_runs=len(runs),
         own_visible_runs=sum(1 for row in ok_runs if row.own_best_position is not None),
         competitor_visible_runs=sum(1 for row in ok_runs if row.competitor_best_position is not None),
@@ -1003,7 +1029,7 @@ def _run_one_serp(db: Session, user: User, keyword: str, *, country: str, locale
     db.add(run)
     db.flush()
     try:
-        rows = _fetch_brightdata_serp(keyword, country=country, locale=locale, device=device, limit=limit)
+        rows = _fetch_brightdata_serp(db, user.tenant_id, keyword, country=country, locale=locale, device=device, limit=limit)
         own_positions: list[int] = []
         competitor_positions: list[int] = []
         third_party_count = 0
@@ -1101,10 +1127,11 @@ def _audit_numeric(audits: dict, key: str) -> int | None:
         return None
 
 
-def _run_pagespeed(url: str, strategy: str) -> dict:
+def _run_pagespeed(db: Session, tenant_id: str, url: str, strategy: str) -> dict:
     params = {"url": url, "strategy": strategy, "category": ["performance", "seo", "accessibility", "best-practices"]}
-    if settings.pagespeed_api_key:
-        params["key"] = settings.pagespeed_api_key
+    pagespeed_key = _integration_value(db, tenant_id, "pagespeed_api_key")
+    if pagespeed_key:
+        params["key"] = pagespeed_key
     with httpx.Client(timeout=45) as client:
         response = client.get(PAGESPEED_ENDPOINT, params=params)
         response.raise_for_status()
@@ -1124,12 +1151,15 @@ def _run_pagespeed(url: str, strategy: str) -> dict:
     }
 
 
-def _gsc_redirect_uri() -> str:
-    return settings.gsc_oauth_redirect_uri or f"{settings.frontend_origin.rstrip('/')}/onsite"
+def _gsc_redirect_uri(db: Session, tenant_id: str) -> str:
+    return _integration_value(db, tenant_id, "gsc_oauth_redirect_uri") or f"{settings.frontend_origin.rstrip('/')}/onsite"
 
 
-def _gsc_configured() -> bool:
-    return bool(settings.gsc_oauth_client_id and settings.gsc_oauth_client_secret)
+def _gsc_configured(db: Session, tenant_id: str) -> bool:
+    return bool(
+        _integration_value(db, tenant_id, "gsc_oauth_client_id")
+        and _integration_value(db, tenant_id, "gsc_oauth_client_secret")
+    )
 
 
 def _gsc_connection(db: Session, tenant_id: str) -> GscConnection | None:
@@ -1138,7 +1168,7 @@ def _gsc_connection(db: Session, tenant_id: str) -> GscConnection | None:
 
 def _gsc_status(db: Session, user: User) -> GscStatusOut:
     conn = _gsc_connection(db, user.tenant_id)
-    configured = _gsc_configured()
+    configured = _gsc_configured(db, user.tenant_id)
     connected = bool(conn and conn.status == "connected" and conn.refresh_token)
     note = "已连接，可同步 Google Search Console 数据。" if connected else "需要客户授权 Google Search Console。"
     if not configured:
@@ -1150,7 +1180,7 @@ def _gsc_status(db: Session, user: User) -> GscStatusOut:
         site_url=conn.site_url if conn else "",
         last_sync_at=conn.last_sync_at if conn else None,
         last_error=conn.last_error if conn else "",
-        redirect_uri=_gsc_redirect_uri(),
+        redirect_uri=_gsc_redirect_uri(db, user.tenant_id),
         note=note,
     )
 
@@ -1165,15 +1195,15 @@ def _gsc_site_url(tenant: Tenant, raw: str) -> str:
     return origin.rstrip("/") + "/"
 
 
-def _exchange_gsc_code(code: str) -> dict:
+def _exchange_gsc_code(db: Session, user: User, code: str) -> dict:
     with httpx.Client(timeout=30) as client:
         response = client.post(
             GSC_TOKEN_ENDPOINT,
             data={
                 "code": code,
-                "client_id": settings.gsc_oauth_client_id,
-                "client_secret": settings.gsc_oauth_client_secret,
-                "redirect_uri": _gsc_redirect_uri(),
+                "client_id": _integration_value(db, user.tenant_id, "gsc_oauth_client_id"),
+                "client_secret": _integration_value(db, user.tenant_id, "gsc_oauth_client_secret"),
+                "redirect_uri": _gsc_redirect_uri(db, user.tenant_id),
                 "grant_type": "authorization_code",
             },
         )
@@ -1182,7 +1212,7 @@ def _exchange_gsc_code(code: str) -> dict:
         return response.json()
 
 
-def _refresh_gsc_token(conn: GscConnection) -> str:
+def _refresh_gsc_token(db: Session, conn: GscConnection) -> str:
     if conn.access_token and conn.token_expires_at and conn.token_expires_at > datetime.now(timezone.utc) + timedelta(minutes=5):
         return conn.access_token
     if not conn.refresh_token:
@@ -1191,8 +1221,8 @@ def _refresh_gsc_token(conn: GscConnection) -> str:
         response = client.post(
             GSC_TOKEN_ENDPOINT,
             data={
-                "client_id": settings.gsc_oauth_client_id,
-                "client_secret": settings.gsc_oauth_client_secret,
+                "client_id": _integration_value(db, conn.tenant_id, "gsc_oauth_client_id"),
+                "client_secret": _integration_value(db, conn.tenant_id, "gsc_oauth_client_secret"),
                 "refresh_token": conn.refresh_token,
                 "grant_type": "refresh_token",
             },
@@ -1241,6 +1271,66 @@ def _finish_data_sync(
     return row
 
 
+def _integration_rows(db: Session | None, tenant_id: str) -> dict[str, IntegrationSetting]:
+    if db is None:
+        return {}
+    rows = db.query(IntegrationSetting).filter(IntegrationSetting.tenant_id == tenant_id).all()
+    return {row.key: row for row in rows}
+
+
+def _integration_value(db: Session | None, tenant_id: str, key: str) -> str:
+    if key not in INTEGRATION_FIELDS:
+        return ""
+    row = _integration_rows(db, tenant_id).get(key)
+    if row and row.value.strip():
+        return row.value.strip()
+    fallback = getattr(settings, INTEGRATION_FIELDS[key][1], "")
+    return (fallback or "").strip()
+
+
+def _integration_source(db: Session | None, tenant_id: str, key: str) -> str:
+    row = _integration_rows(db, tenant_id).get(key)
+    if row and row.value.strip():
+        return "database"
+    if (getattr(settings, INTEGRATION_FIELDS[key][1], "") or "").strip():
+        return "env"
+    return "none"
+
+
+def _mask_secret(value: str) -> str:
+    text = (value or "").strip()
+    if not text:
+        return ""
+    if len(text) <= 8:
+        return "*" * len(text)
+    return f"{text[:4]}...{text[-4:]}"
+
+
+def _integration_settings_out(db: Session, tenant_id: str) -> IntegrationSettingsOut:
+    fields = [
+        IntegrationFieldOut(
+            key=key,
+            label=label,
+            configured=bool(_integration_value(db, tenant_id, key)),
+            masked_value=_mask_secret(_integration_value(db, tenant_id, key)),
+            source=_integration_source(db, tenant_id, key),
+        )
+        for key, (label, _setting_attr) in INTEGRATION_FIELDS.items()
+    ]
+    return IntegrationSettingsOut(
+        fields=fields,
+        gsc_configured=bool(
+            _integration_value(db, tenant_id, "gsc_oauth_client_id")
+            and _integration_value(db, tenant_id, "gsc_oauth_client_secret")
+        ),
+        pagespeed_configured=bool(_integration_value(db, tenant_id, "pagespeed_api_key")),
+        brightdata_serp_configured=bool(
+            _integration_value(db, tenant_id, "brightdata_dataset_api_key")
+            and _integration_value(db, tenant_id, "brightdata_serp_dataset_id")
+        ),
+    )
+
+
 def _gsc_sync_due(conn: GscConnection) -> bool:
     if not conn.last_sync_at:
         return True
@@ -1252,7 +1342,7 @@ def _gsc_sync_due(conn: GscConnection) -> bool:
 
 
 def _sync_gsc_rows(db: Session, user: User, conn: GscConnection, body: GscSyncIn, *, mode: str = "manual") -> GscSyncOut:
-    token = _refresh_gsc_token(conn)
+    token = _refresh_gsc_token(db, conn)
     date_start, date_end = _gsc_date_range(body.days)
     run = GscSyncRun(
         tenant_id=user.tenant_id,
@@ -1374,13 +1464,50 @@ def serp_status(user: User = Depends(get_current_user), db: Session = Depends(ge
     return _serp_summary(db, user)
 
 
+@router.get("/integrations", response_model=IntegrationSettingsOut)
+def get_integration_settings(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> IntegrationSettingsOut:
+    return _integration_settings_out(db, user.tenant_id)
+
+
+@router.patch("/integrations", response_model=IntegrationSettingsOut)
+def update_integration_settings(
+    body: IntegrationSettingsIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> IntegrationSettingsOut:
+    existing = _integration_rows(db, user.tenant_id)
+    for key in body.clear_keys:
+        if key not in INTEGRATION_FIELDS:
+            continue
+        row = existing.get(key)
+        if row:
+            db.delete(row)
+
+    values = body.model_dump(exclude={"clear_keys"}, exclude_none=True)
+    for key, raw in values.items():
+        if key not in INTEGRATION_FIELDS:
+            continue
+        value = str(raw or "").strip()
+        if not value:
+            continue
+        row = existing.get(key)
+        if row is None:
+            row = IntegrationSetting(tenant_id=user.tenant_id, key=key)
+            db.add(row)
+        row.value = value
+        row.updated_by = user.id
+
+    db.commit()
+    return _integration_settings_out(db, user.tenant_id)
+
+
 @router.post("/serp/run", response_model=SerpRunBatchOut)
 def run_serp(
     body: SerpRunIn,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> SerpRunBatchOut:
-    if not _serp_configured():
+    if not _serp_configured(db, user.tenant_id):
         return SerpRunBatchOut(
             status="未配置",
             configured=False,
@@ -1422,11 +1549,11 @@ def gsc_status(user: User = Depends(get_current_user), db: Session = Depends(get
 
 @router.get("/gsc/auth-url", response_model=GscAuthUrlOut)
 def gsc_auth_url(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> GscAuthUrlOut:
-    if not _gsc_configured():
-        return GscAuthUrlOut(configured=False, redirect_uri=_gsc_redirect_uri(), note="服务器未配置 GSC OAuth Client ID / Secret。")
+    if not _gsc_configured(db, user.tenant_id):
+        return GscAuthUrlOut(configured=False, redirect_uri=_gsc_redirect_uri(db, user.tenant_id), note="服务器未配置 GSC OAuth Client ID / Secret。")
     params = {
-        "client_id": settings.gsc_oauth_client_id,
-        "redirect_uri": _gsc_redirect_uri(),
+        "client_id": _integration_value(db, user.tenant_id, "gsc_oauth_client_id"),
+        "redirect_uri": _gsc_redirect_uri(db, user.tenant_id),
         "response_type": "code",
         "scope": GSC_SCOPE,
         "access_type": "offline",
@@ -1436,7 +1563,7 @@ def gsc_auth_url(user: User = Depends(get_current_user), db: Session = Depends(g
     return GscAuthUrlOut(
         configured=True,
         auth_url=f"{GSC_AUTH_ENDPOINT}?{urlencode(params)}",
-        redirect_uri=_gsc_redirect_uri(),
+        redirect_uri=_gsc_redirect_uri(db, user.tenant_id),
         note="打开授权链接后，Google 会回到诊断页并带上 code。",
     )
 
@@ -1447,10 +1574,10 @@ def gsc_connect(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> GscStatusOut:
-    if not _gsc_configured():
+    if not _gsc_configured(db, user.tenant_id):
         raise HTTPException(status_code=400, detail="服务器未配置 GSC OAuth Client ID / Secret。")
     tenant = _tenant(db, user)
-    data = _exchange_gsc_code(body.code)
+    data = _exchange_gsc_code(db, user, body.code)
     conn = _gsc_connection(db, user.tenant_id)
     if conn is None:
         conn = GscConnection(tenant_id=user.tenant_id)
@@ -1475,7 +1602,7 @@ def gsc_sync(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> GscSyncOut:
-    if not _gsc_configured():
+    if not _gsc_configured(db, user.tenant_id):
         raise HTTPException(status_code=400, detail="服务器未配置 GSC OAuth Client ID / Secret。")
     conn = _gsc_connection(db, user.tenant_id)
     if conn is None or not conn.refresh_token:
@@ -1504,7 +1631,7 @@ def data_sync_run_due(
     requested = set(body.sources or ["gsc"])
     if "gsc" not in requested:
         return DataSyncRunDueOut(status="skipped", skipped=1, note="本次没有请求可自动同步的数据源。")
-    if not _gsc_configured():
+    if not _gsc_configured(db, user.tenant_id):
         return DataSyncRunDueOut(status="skipped", skipped=1, note="GSC OAuth 未配置，无法执行自动同步。")
     conn = _gsc_connection(db, user.tenant_id)
     if conn is None or not conn.refresh_token:
@@ -1674,7 +1801,7 @@ def run_pagespeed_audits(
     for url in urls:
         for strategy in strategies:
             try:
-                metrics = _run_pagespeed(url, strategy)
+                metrics = _run_pagespeed(db, user.tenant_id, url, strategy)
                 audit = PageSpeedAudit(tenant_id=user.tenant_id, url=url, strategy=strategy, status="ok", **metrics)
             except Exception as exc:
                 audit = PageSpeedAudit(

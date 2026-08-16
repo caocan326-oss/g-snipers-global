@@ -335,7 +335,7 @@ def test_gsc_oauth_connect_and_sync_feeds_performance(client: TestClient, demo_u
     monkeypatch.setattr(
         onsite_router,
         "_exchange_gsc_code",
-        lambda code: {
+        lambda db, user, code: {
             "access_token": "access-1",
             "refresh_token": "refresh-1",
             "expires_in": 3600,
@@ -352,7 +352,7 @@ def test_gsc_oauth_connect_and_sync_feeds_performance(client: TestClient, demo_u
     assert connected.json()["connected"] is True
     assert connected.json()["site_url"] == "https://example.com/"
 
-    monkeypatch.setattr(onsite_router, "_refresh_gsc_token", lambda conn: "access-2")
+    monkeypatch.setattr(onsite_router, "_refresh_gsc_token", lambda db, conn: "access-2")
 
     class FakeGscClient:
         def __init__(self, *args, **kwargs) -> None:
@@ -402,6 +402,34 @@ def test_gsc_oauth_connect_and_sync_feeds_performance(client: TestClient, demo_u
     assert runs.json()["runs"][0]["rows_imported"] == 1
 
 
+def test_integration_settings_can_be_saved_from_console(client: TestClient, demo_user) -> None:
+    headers = auth_header(client)
+    initial = client.get("/api/onsite/integrations", headers=headers)
+    assert initial.status_code == 200
+    assert initial.json()["gsc_configured"] is False
+
+    saved = client.patch(
+        "/api/onsite/integrations",
+        headers=headers,
+        json={
+            "gsc_oauth_client_id": "client-id-from-ui",
+            "gsc_oauth_client_secret": "client-secret-from-ui",
+            "gsc_oauth_redirect_uri": "http://localhost:3000/onsite",
+            "brightdata_dataset_api_key": "brightdata-key-from-ui",
+            "brightdata_serp_dataset_id": "gd_mfz5x93lmsjjjylob",
+        },
+    )
+    assert saved.status_code == 200, saved.text
+    body = saved.json()
+    assert body["gsc_configured"] is True
+    assert body["brightdata_serp_configured"] is True
+    assert "client-secret-from-ui" not in json.dumps(body)
+    assert any(field["source"] == "database" for field in body["fields"])
+
+    gsc = client.get("/api/onsite/gsc/status", headers=headers).json()
+    assert gsc["configured"] is True
+
+
 def test_data_sync_run_due_executes_gsc_once(client: TestClient, demo_user, monkeypatch) -> None:
     import httpx
 
@@ -417,7 +445,7 @@ def test_data_sync_run_due_executes_gsc_once(client: TestClient, demo_user, monk
     monkeypatch.setattr(
         onsite_router,
         "_exchange_gsc_code",
-        lambda code: {
+        lambda db, user, code: {
             "access_token": "access-1",
             "refresh_token": "refresh-1",
             "expires_in": 3600,
@@ -430,7 +458,7 @@ def test_data_sync_run_due_executes_gsc_once(client: TestClient, demo_user, monk
         json={"code": "oauth-code", "site_url": "https://example.com/"},
     )
     assert connected.status_code == 200, connected.text
-    monkeypatch.setattr(onsite_router, "_refresh_gsc_token", lambda conn: "access-2")
+    monkeypatch.setattr(onsite_router, "_refresh_gsc_token", lambda db, conn: "access-2")
 
     calls = {"count": 0}
 
@@ -562,7 +590,7 @@ def test_brightdata_serp_run_classifies_owned_competitor_and_third_party(client:
     monkeypatch.setattr(settings, "brightdata_dataset_api_key", "dataset-key")
     monkeypatch.setattr(settings, "brightdata_serp_dataset_id", "gd_mfz5x93lmsjjjylob")
 
-    def fake_serp(keyword: str, *, country: str, locale: str, device: str, limit: int):
+    def fake_serp(db, tenant_id: str, keyword: str, *, country: str, locale: str, device: str, limit: int):
         assert keyword == "industrial pump supplier"
         assert country == "US"
         return [
@@ -635,6 +663,8 @@ def test_brightdata_dataset_serp_request_shape(monkeypatch) -> None:
 
     monkeypatch.setattr(onsite_router.httpx, "Client", FakeClient)
     rows = onsite_router._fetch_brightdata_serp(
+        None,
+        "tenant",
         "industrial pump supplier",
         country="US",
         locale="en-US",

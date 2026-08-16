@@ -314,6 +314,22 @@ export type DataSyncRunDueResult = {
   note: string;
 };
 
+export type IntegrationField = {
+  key: string;
+  label: string;
+  configured: boolean;
+  masked_value: string;
+  source: string;
+};
+
+export type IntegrationSettings = {
+  fields: IntegrationField[];
+  gsc_configured: boolean;
+  pagespeed_configured: boolean;
+  brightdata_serp_configured: boolean;
+  note: string;
+};
+
 export type BingStatus = {
   configured: boolean;
   status: string;
