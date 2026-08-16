@@ -21,6 +21,8 @@ from app.schemas import (
     OnsiteStatusIn,
 )
 
+import app.routers.onsite as _onsite_pkg
+
 from . import router
 from .common import (
     _ai_batch_limit,
@@ -47,7 +49,7 @@ def _ai_after_analyze(db: Session, user: User, pages: list[SitePage], *, limit: 
         page = by_id.get(issue.page_id) or db.get(SitePage, issue.page_id)
         if page is None:
             continue
-        assist_onsite_issue(db, issue, page, step="analyze")
+        _onsite_pkg.assist_onsite_issue(db, issue, page, step="analyze")
         processed += 1
     remaining = max(len(issues) - processed, 0)
     return (UNCONFIGURED if not configured() else "ok", processed, remaining)
@@ -307,7 +309,7 @@ def ai_issue(
     page = db.get(SitePage, row.page_id)
     if page is None:
         raise HTTPException(status_code=404, detail="页面不存在")
-    payload = assist_onsite_issue(db, row, page, step=body.step)
+    payload = _onsite_pkg.assist_onsite_issue(db, row, page, step=body.step)
     db.commit()
     return AiAssistOut(**payload)
 
@@ -348,7 +350,7 @@ def ai_onsite_engine(
         page = by_id.get(issue.page_id)
         if page is None:
             continue
-        last = assist_onsite_issue(db, issue, page, step=body.step)
+        last = _onsite_pkg.assist_onsite_issue(db, issue, page, step=body.step)
         processed += 1
         if last.get("status") == "ok":
             ok += 1

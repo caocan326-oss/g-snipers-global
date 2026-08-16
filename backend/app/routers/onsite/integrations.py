@@ -43,6 +43,8 @@ from app.schemas import (
     SeoPerformanceImportOut,
 )
 
+import app.routers.onsite as _onsite_pkg
+
 from . import router
 from .common import _csv_value, _parse_float, _parse_int, _tenant
 from .constants import (
@@ -247,7 +249,7 @@ def _gsc_sync_due(conn: GscConnection) -> bool:
 
 
 def _sync_gsc_rows(db: Session, user: User, conn: GscConnection, body: GscSyncIn, *, mode: str = "manual") -> GscSyncOut:
-    token = _refresh_gsc_token(db, conn)
+    token = _onsite_pkg._refresh_gsc_token(db, conn)
     date_start, date_end = _gsc_date_range(body.days)
     run = GscSyncRun(
         tenant_id=user.tenant_id,
@@ -431,7 +433,7 @@ def gsc_connect(
     if not _gsc_configured(db, user.tenant_id):
         raise HTTPException(status_code=400, detail="服务器未配置 GSC OAuth Client ID / Secret。")
     tenant = _tenant(db, user)
-    data = _exchange_gsc_code(db, user, body.code)
+    data = _onsite_pkg._exchange_gsc_code(db, user, body.code)
     conn = _gsc_connection(db, user.tenant_id)
     if conn is None:
         conn = GscConnection(tenant_id=user.tenant_id)

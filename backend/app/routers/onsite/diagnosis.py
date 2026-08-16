@@ -40,6 +40,8 @@ from app.schemas import (
     SerpSummaryOut,
 )
 
+import app.routers.onsite as _onsite_pkg
+
 from . import router
 from .common import _parse_float, _tenant
 from .constants import BRIGHTDATA_SERP_INPUT_URL, PAGESPEED_ENDPOINT
@@ -370,7 +372,7 @@ def _run_one_serp(db: Session, user: User, keyword: str, *, country: str, locale
     db.add(run)
     db.flush()
     try:
-        rows = _fetch_brightdata_serp(db, user.tenant_id, keyword, country=country, locale=locale, device=device, limit=limit)
+        rows = _onsite_pkg._fetch_brightdata_serp(db, user.tenant_id, keyword, country=country, locale=locale, device=device, limit=limit)
         own_positions: list[int] = []
         competitor_positions: list[int] = []
         third_party_count = 0
