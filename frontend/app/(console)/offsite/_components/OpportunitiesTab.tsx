@@ -1,5 +1,5 @@
 import { FormEvent } from "react";
-import { Bot, ExternalLink } from "lucide-react";
+import { Bot, ExternalLink, RefreshCw, Wand2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -35,6 +35,8 @@ export function OpportunitiesTab({
   form,
   setForm,
   addGap,
+  generateOpportunitiesFromSignals,
+  generatingOpportunities,
 }: {
   gaps: BacklinkGap[];
   contact: string;
@@ -46,10 +48,49 @@ export function OpportunitiesTab({
   form: GapForm;
   setForm: (form: GapForm) => void;
   addGap: (e: FormEvent) => void;
+  generateOpportunitiesFromSignals: () => void;
+  generatingOpportunities: boolean;
 }) {
+  const sourceLabel: Record<string, string> = {
+    geo: "来自 GEO",
+    seo: "来自 SEO 表现",
+    onsite: "来自站内诊断",
+    manual: "手动登记",
+  };
+  const issueTypeLabel: Record<string, string> = {
+    competitor_gap: "竞品有我无",
+    unlinked_mention: "未链接提及",
+    lost_link: "已获链接失效",
+    authority_source: "权威第三方源缺失",
+    social_profile: "官方社媒主页维护",
+    monitor_only: "仅监控",
+    geo_citation_gap: "AI 引用缺口",
+    onsite_content_gap: "内容素材缺口",
+    seo_keyword_gap: "搜索表现缺口",
+    serp_visibility_gap: "SERP 可见度缺口",
+  };
+
   return (
     <section className="grid gap-5 xl:grid-cols-[1fr_360px]">
       <div className="space-y-3">
+        <Card className="rounded-md border-brand-100 bg-brand-50/50">
+          <CardContent className="flex flex-col gap-3 p-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <div className="flex items-center gap-2 text-sm font-semibold text-slate-950">
+                <Wand2 className="h-4 w-4 text-brand-700" />
+                从 SEO / GEO / 站内诊断生成站外执行机会
+              </div>
+              <p className="mt-1 text-sm leading-6 text-slate-600">
+                系统只整理已有诊断证据，不自动发布。生成后每条机会仍需人工判断、准备材料、选择平台并回填结果页面。
+              </p>
+            </div>
+            <Button onClick={generateOpportunitiesFromSignals} disabled={generatingOpportunities}>
+              <RefreshCw className={`mr-1.5 h-4 w-4 ${generatingOpportunities ? "animate-spin" : ""}`} />
+              {generatingOpportunities ? "正在生成" : "生成站外执行机会"}
+            </Button>
+          </CardContent>
+        </Card>
+
         {gaps.length ? (
           gaps.map((g) => (
             <Card key={g.id} className="rounded-md">
@@ -58,6 +99,8 @@ export function OpportunitiesTab({
                   <div className="flex flex-wrap items-center gap-2">
                     <CardTitle>{g.title || g.referring_domain}</CardTitle>
                     <Badge tone={g.priority === "P0" || g.priority === "P1" ? "red" : g.priority === "P2" ? "amber" : "default"}>{g.priority}</Badge>
+                    <Badge tone={g.source === "manual" ? "default" : "brand"}>{sourceLabel[g.source] ?? g.source}</Badge>
+                    <Badge>{issueTypeLabel[g.issue_type] ?? g.issue_type}</Badge>
                     <Badge>{kindLabel[g.kind] ?? g.kind}</Badge>
                     <Badge tone={verifyTone[g.verify_status]}>{verifyLabel[g.verify_status] ?? g.verify_status}</Badge>
                   </div>

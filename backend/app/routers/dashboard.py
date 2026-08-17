@@ -234,12 +234,16 @@ def _bucket(key: str, rows: list[SeoPerformanceRow]) -> WorkbenchSeoBucket:
     )
 
 
-def _top_buckets(rows: list[SeoPerformanceRow], attr: str, limit: int = 5) -> list[WorkbenchSeoBucket]:
+def _top_buckets(rows: list[SeoPerformanceRow], attr: str, limit: int | None = 5) -> list[WorkbenchSeoBucket]:
     grouped: dict[str, list[SeoPerformanceRow]] = defaultdict(list)
     for row in rows:
         grouped[getattr(row, attr) or "未标注"].append(row)
-    buckets = [_bucket(key, values) for key, values in grouped.items()]
-    return sorted(buckets, key=lambda item: (item.impressions, item.clicks), reverse=True)[:limit]
+    buckets = sorted(
+        (_bucket(key, values) for key, values in grouped.items()),
+        key=lambda item: (item.impressions, item.clicks),
+        reverse=True,
+    )
+    return buckets[:limit] if limit is not None else buckets
 
 
 def _seo_performance_for(user: User, db: Session, days: int) -> WorkbenchSeoPerformance:
@@ -276,7 +280,7 @@ def _seo_performance_for(user: User, db: Session, days: int) -> WorkbenchSeoPerf
     )
     ok_serp = [row for row in serp_runs if row.status == "ok"]
     own_positions = [row.own_best_position for row in ok_serp if row.own_best_position is not None]
-    keyword_positions = [item.position for item in _top_buckets(rows, "query", limit=200)]
+    keyword_positions = [item.position for item in _top_buckets(rows, "query", limit=None)]
     return WorkbenchSeoPerformance(
         days=days,
         data_status="已导入" if rows else "未导入",

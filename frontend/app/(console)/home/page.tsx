@@ -2,30 +2,42 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import { api, type GscAuthUrl, type GscStatus, type ProjectTargets, type SiteArchive, type SiteArchiveRestore, type Workbench } from "@/lib/api";
+import {
+  api,
+  type ExecutionBoard,
+  type GscAuthUrl,
+  type GscStatus,
+  type ProjectTargets,
+  type SiteArchive,
+  type SiteArchiveRestore,
+  type Workbench,
+} from "@/lib/api";
 
 import { activeTargetMarkets, reportReadyChecks, seoPerformanceVerdict, splitKeywordInput } from "./_helpers";
 import { DeliveryBoundarySection } from "./_components/DeliveryBoundarySection";
 import { DiagnosticTargetsSection, type TargetForm } from "./_components/DiagnosticTargetsSection";
 import { PillarsOverview } from "./_components/PillarsOverview";
+import { PriorityQueueSection } from "./_components/PriorityQueueSection";
 import { PriorityAndDataSourceSection } from "./_components/PriorityAndDataSourceSection";
 import { QuickLinksSection } from "./_components/QuickLinksSection";
 import { ReportReadinessSection } from "./_components/ReportReadinessSection";
-import { RiskAndGeoQueueSection } from "./_components/RiskAndGeoQueueSection";
 import { SeoPerformanceSection } from "./_components/SeoPerformanceSection";
 import { SiteArchivesSection } from "./_components/SiteArchivesSection";
 import { WorkbenchSummaryHeader } from "./_components/WorkbenchSummaryHeader";
 
 export default function HomePage() {
   const [data, setData] = useState<Workbench | null>(null);
+  const [executionBoard, setExecutionBoard] = useState<ExecutionBoard | null>(null);
   const [targets, setTargets] = useState<ProjectTargets | null>(null);
   const [archives, setArchives] = useState<SiteArchive[]>([]);
   const [gsc, setGsc] = useState<GscStatus | null>(null);
   const [error, setError] = useState("");
+  const [executionError, setExecutionError] = useState("");
   const [note, setNote] = useState("");
   const [days, setDays] = useState(28);
   const [targetForm, setTargetForm] = useState<TargetForm>({ site_origin: "", markets: "", keywords: "", competitors: "" });
   const [archiveBusyId, setArchiveBusyId] = useState("");
+  const [executionLoading, setExecutionLoading] = useState(false);
 
   useEffect(() => {
     api<Workbench>(`/api/dashboard/workbench?days=${days}`)
@@ -34,6 +46,7 @@ export default function HomePage() {
   }, [days]);
 
   useEffect(() => {
+    loadExecutionBoard();
     api<ProjectTargets>("/api/project-targets")
       .then((res) => {
         setTargets(res);
@@ -116,14 +129,17 @@ export default function HomePage() {
   }
 
   async function reloadWorkbench() {
-    const [nextWorkbench, nextTargets, nextArchives] = await Promise.all([
+    const [nextWorkbench, nextTargets, nextArchives, nextExecutionBoard] = await Promise.all([
       api<Workbench>(`/api/dashboard/workbench?days=${days}`),
       api<ProjectTargets>("/api/project-targets"),
       api<SiteArchive[]>("/api/site-context/archives"),
+      api<ExecutionBoard>("/api/execution/items"),
     ]);
     setData(nextWorkbench);
     setTargets(nextTargets);
     setArchives(nextArchives);
+    setExecutionBoard(nextExecutionBoard);
+    setExecutionError("");
     const targetMarkets = activeTargetMarkets(nextTargets);
     setTargetForm({
       site_origin: nextTargets.site_origin || "",
@@ -137,6 +153,15 @@ export default function HomePage() {
     api<SiteArchive[]>("/api/site-context/archives")
       .then(setArchives)
       .catch(() => undefined);
+  }
+
+  function loadExecutionBoard() {
+    setExecutionLoading(true);
+    setExecutionError("");
+    api<ExecutionBoard>("/api/execution/items")
+      .then(setExecutionBoard)
+      .catch((e) => setExecutionError(e instanceof Error ? e.message : "待处理队列加载失败"))
+      .finally(() => setExecutionLoading(false));
   }
 
   async function restoreArchive(item: SiteArchive) {
@@ -216,6 +241,8 @@ export default function HomePage() {
     <div className="space-y-6">
       <WorkbenchSummaryHeader data={data} targets={targets} executiveSummary={executiveSummary} />
 
+      <PriorityQueueSection board={executionBoard} loading={executionLoading} error={executionError} reload={loadExecutionBoard} />
+
       <PillarsOverview
         data={data}
         highRisk={highRisk}
@@ -242,8 +269,6 @@ export default function HomePage() {
         deleteArchive={deleteArchive}
         loadArchives={loadArchives}
       />
-
-      <RiskAndGeoQueueSection data={data} />
 
       <DeliveryBoundarySection data={data} days={days} setDays={setDays} />
 

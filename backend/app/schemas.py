@@ -79,6 +79,15 @@ class WorkbenchSeoBucket(BaseModel):
     position: float | None = None
 
 
+class SeoRankDistributionOut(BaseModel):
+    top_10: int = 0
+    top_30: int = 0
+    top_50: int = 0
+    beyond_50: int = 0
+    unranked: int = 0
+    total: int = 0
+
+
 class WorkbenchSeoPerformance(BaseModel):
     days: int = 28
     data_status: str = "未导入"
@@ -98,6 +107,8 @@ class WorkbenchSeoPerformance(BaseModel):
     serp_own_visible_runs: int = 0
     serp_competitor_visible_runs: int = 0
     serp_avg_own_position: float | None = None
+    keyword_rank_distribution: SeoRankDistributionOut = SeoRankDistributionOut()
+    serp_rank_distribution: SeoRankDistributionOut = SeoRankDistributionOut()
     top_countries: list[WorkbenchSeoBucket] = []
     top_keywords: list[WorkbenchSeoBucket] = []
     top_pages: list[WorkbenchSeoBucket] = []
@@ -251,6 +262,27 @@ class ProjectTargetsOut(BaseModel):
     competitor_count: int = 0
     primary_market_id: str | None = None
     readiness: str = "incomplete"
+    note: str = ""
+
+
+class SiteArchiveOut(BaseModel):
+    id: str
+    site_origin: str
+    archived_at: datetime | None = None
+    restored_at: datetime | None = None
+    note: str = ""
+    counts: dict[str, int] = {}
+    readable_counts: dict[str, int] = {}
+
+
+class SiteArchiveDeleteIn(BaseModel):
+    confirm: str = ""
+
+
+class SiteArchiveRestoreOut(BaseModel):
+    restored: bool
+    site_origin: str
+    archived_current: bool = False
     note: str = ""
 
 
@@ -861,7 +893,7 @@ class SerpRunIn(BaseModel):
     country: str = "US"
     locale: str = "en-US"
     device: str = Field(default="desktop", pattern="^(desktop|mobile)$")
-    limit: int = Field(default=10, ge=1, le=20)
+    limit: int = Field(default=50, ge=1, le=50)
 
 
 class SerpResultOut(BaseModel):
@@ -908,6 +940,7 @@ class SerpSummaryOut(BaseModel):
     own_visible_runs: int = 0
     competitor_visible_runs: int = 0
     avg_own_position: float | None = None
+    rank_distribution: SeoRankDistributionOut = SeoRankDistributionOut()
     latest_runs: list[SerpRunOut] = []
     top_third_party_domains: list[dict[str, int | str]] = []
 
@@ -942,6 +975,7 @@ class SeoPerformanceSummaryOut(BaseModel):
     total_impressions: int
     avg_ctr: float | None = None
     avg_position: float | None = None
+    keyword_rank_distribution: SeoRankDistributionOut = SeoRankDistributionOut()
     by_country: list[SeoPerformanceBucketOut] = []
     by_query: list[SeoPerformanceBucketOut] = []
     by_page: list[SeoPerformanceBucketOut] = []
@@ -1224,6 +1258,16 @@ class BacklinkGapOut(BaseModel):
     last_checked_at: datetime | None = None
     closed_at: datetime | None = None
     outreach: list[OutreachOut] = []
+
+
+class OffsiteOpportunityGenerateOut(BaseModel):
+    created: int
+    skipped: int
+    from_geo: int = 0
+    from_seo: int = 0
+    from_onsite: int = 0
+    note: str
+    gaps: list[BacklinkGapOut] = []
 
 
 class LinkCheckerOut(BaseModel):

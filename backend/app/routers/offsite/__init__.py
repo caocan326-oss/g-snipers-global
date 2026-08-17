@@ -7,5 +7,6 @@ router = APIRouter(prefix="/api/offsite", tags=["offsite"])
 # platforms depend on them.
 from . import common  # noqa: E402,F401
 from . import gaps  # noqa: E402,F401
+from . import opportunity_generation  # noqa: E402,F401
 from . import content  # noqa: E402,F401
 from . import platforms  # noqa: E402,F401

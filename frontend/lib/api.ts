@@ -107,6 +107,15 @@ export type WorkbenchSeoBucket = {
   position: number | null;
 };
 
+export type SeoRankDistribution = {
+  top_10: number;
+  top_30: number;
+  top_50: number;
+  beyond_50: number;
+  unranked: number;
+  total: number;
+};
+
 export type WorkbenchSeoPerformance = {
   days: number;
   data_status: string;
@@ -126,6 +135,8 @@ export type WorkbenchSeoPerformance = {
   serp_own_visible_runs: number;
   serp_competitor_visible_runs: number;
   serp_avg_own_position: number | null;
+  keyword_rank_distribution: SeoRankDistribution;
+  serp_rank_distribution: SeoRankDistribution;
   top_countries: WorkbenchSeoBucket[];
   top_keywords: WorkbenchSeoBucket[];
   top_pages: WorkbenchSeoBucket[];
@@ -200,6 +211,7 @@ export type SeoPerformanceSummary = {
   total_impressions: number;
   avg_ctr: number | null;
   avg_position: number | null;
+  keyword_rank_distribution: SeoRankDistribution;
   by_country: SeoPerformanceBucket[];
   by_query: SeoPerformanceBucket[];
   by_page: SeoPerformanceBucket[];
@@ -250,6 +262,7 @@ export type SerpSummary = {
   own_visible_runs: number;
   competitor_visible_runs: number;
   avg_own_position: number | null;
+  rank_distribution: SeoRankDistribution;
   latest_runs: SerpRun[];
   top_third_party_domains: { domain: string; count: number }[];
 };
@@ -409,6 +422,23 @@ export type ProjectTargets = {
   competitor_count: number;
   primary_market_id: string | null;
   readiness: string;
+  note: string;
+};
+
+export type SiteArchive = {
+  id: string;
+  site_origin: string;
+  archived_at: string | null;
+  restored_at: string | null;
+  note: string;
+  counts: Record<string, number>;
+  readable_counts: Record<string, number>;
+};
+
+export type SiteArchiveRestore = {
+  restored: boolean;
+  site_origin: string;
+  archived_current: boolean;
   note: string;
 };
 
@@ -844,6 +874,16 @@ export type BacklinkGap = {
   last_checked_at: string | null;
   closed_at: string | null;
   outreach: OutreachItem[];
+};
+
+export type OffsiteOpportunityGeneration = {
+  created: number;
+  skipped: number;
+  from_geo: number;
+  from_seo: number;
+  from_onsite: number;
+  note: string;
+  gaps: BacklinkGap[];
 };
 
 export type DistProvider = {

@@ -23,6 +23,20 @@ class Tenant(Base):
     users: Mapped[list["User"]] = relationship(back_populates="tenant")
 
 
+class SiteArchive(Base):
+    __tablename__ = "site_archives"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
+    site_origin: Mapped[str] = mapped_column(String(500), nullable=False, index=True)
+    snapshot_json: Mapped[str] = mapped_column(Text, default="{}")
+    counts_json: Mapped[str] = mapped_column(Text, default="{}")
+    note: Mapped[str] = mapped_column(Text, default="")
+    archived_by: Mapped[str | None] = mapped_column(ForeignKey("users.id"))
+    archived_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+    restored_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class IntegrationSetting(Base):
     __tablename__ = "integration_settings"
     __table_args__ = (UniqueConstraint("tenant_id", "key", name="uq_integration_settings_tenant_key"),)

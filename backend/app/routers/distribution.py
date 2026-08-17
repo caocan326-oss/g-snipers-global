@@ -37,6 +37,8 @@ TASK_TYPES = {
     "distributor_align",
     "link_claim",
     "monitor_only",
+    "social_profile_update",
+    "social_post_plan",
 }
 
 TASK_MATERIALS = {
@@ -45,10 +47,12 @@ TASK_MATERIALS = {
     "brand_fix": ["错误截图或 URL", "标准品牌名", "官网证明页", "建议替换文案"],
     "product_listing": ["产品英文名", "规格/参数", "产品页 URL", "图片或附件链接", "禁止宣传语检查"],
     "listicle_pitch": ["榜单/文章 URL", "入选理由", "客户事实亮点", "联系人邮箱", "人工终审后的 pitch"],
-    "guest_or_pr": ["PR/稿件草稿", "Fact Pack", "客户终审记录", "媒体联系人", "风险说明"],
+    "guest_or_pr": ["PR/稿件草稿", "客户基础资料", "客户终审记录", "媒体联系人", "风险说明"],
     "distributor_align": ["分销商页面 URL", "标准品牌名", "目标官网 URL", "统一产品描述", "客户授权说明"],
     "link_claim": ["未链接提及 URL", "建议链接目标页", "联系对象", "礼貌修正口径"],
     "monitor_only": ["监控 URL", "需要观察的品牌/产品词", "复测周期", "变更记录口径"],
+    "social_profile_update": ["平台官网主页 URL", "品牌头像/Logo", "英文公司简介", "官网链接", "联系方式", "目标国家/语言", "客户确认的品牌口径"],
+    "social_post_plan": ["发布平台", "人工批准的文案", "目标链接", "图片/视频素材链接", "发布时间", "负责人", "评论/私信处理口径"],
 }
 
 TASK_CHECKLIST = {
@@ -61,6 +65,8 @@ TASK_CHECKLIST = {
     "distributor_align": ["确认分销商关系真实", "统一品牌名、型号和官网链接", "通过商务/邮件推进修改", "上线后核验页面"],
     "link_claim": ["确认第三方已有真实提及", "建议添加最相关官网 URL", "不要强制要求 dofollow", "回填对方修改后的 URL"],
     "monitor_only": ["确认只做观察不提交", "记录当前页面状态", "定期复查是否删除、改链或改描述"],
+    "social_profile_update": ["确认这是客户官方账号或客户授权账号", "统一品牌名、官网链接、简介、联系方式和品类词", "不要编造认证、规模、客户案例", "人工登录修改后回填主页 URL"],
+    "social_post_plan": ["确认文案和素材已人工批准", "检查 banned claims 和链接目标页", "由负责人在官方账号发布或排期", "发布后回填帖子 URL 并核验可访问"],
 }
 
 
@@ -137,7 +143,7 @@ def create_job(
     if body.gap_id:
         gap = db.get(BacklinkGap, body.gap_id)
         if gap is None or gap.tenant_id != user.tenant_id:
-            raise HTTPException(status_code=404, detail="站外机会不存在")
+            raise HTTPException(status_code=404, detail="站外渠道不存在")
     platform = None
     account = None
     asset = None
@@ -158,7 +164,7 @@ def create_job(
         if asset is None or asset.tenant_id != user.tenant_id:
             raise HTTPException(status_code=404, detail="内容资产不存在")
         if asset.status != "human_approved":
-            raise HTTPException(status_code=400, detail="内容资产未人工批准，不能进入分发任务")
+            raise HTTPException(status_code=400, detail="对外材料未人工批准，不能进入执行任务")
         if not body.payload_summary:
             body.payload_summary = asset.body_md[:2000]
     row = DistributionJob(
@@ -178,7 +184,7 @@ def create_job(
         if not gap.owner_hint and body.owner_hint:
             gap.owner_hint = body.owner_hint
         if not gap.recommended_action:
-            gap.recommended_action = f"按 {body.task_type} 创建分发任务：{body.title}"
+            gap.recommended_action = f"按 {body.task_type} 创建执行任务：{body.title}"
         _sync_gap_from_job(gap, row)
     db.commit()
     db.refresh(row)
@@ -194,7 +200,7 @@ def update_job(
 ) -> DistributionJob:
     job = db.get(DistributionJob, job_id)
     if job is None or job.tenant_id != user.tenant_id:
-        raise HTTPException(status_code=404, detail="分发任务不存在")
+        raise HTTPException(status_code=404, detail="执行任务不存在")
     payload = body.model_dump(exclude_unset=True)
     if "status" in payload and payload["status"]:
         if payload["status"] not in JOB_STATUSES:
@@ -226,7 +232,7 @@ def update_job(
             if asset is None or asset.tenant_id != user.tenant_id:
                 raise HTTPException(status_code=404, detail="内容资产不存在")
             if asset.status != "human_approved":
-                raise HTTPException(status_code=400, detail="内容资产未人工批准，不能进入分发任务")
+                raise HTTPException(status_code=400, detail="对外材料未人工批准，不能进入执行任务")
             job.content_asset_id = asset.id
             if not job.payload_summary:
                 job.payload_summary = asset.body_md[:2000]
@@ -264,7 +270,7 @@ def submit_result(
         raise HTTPException(status_code=400, detail="无效核验状态")
     job = db.get(DistributionJob, job_id)
     if job is None or job.tenant_id != user.tenant_id:
-        raise HTTPException(status_code=404, detail="分发任务不存在")
+        raise HTTPException(status_code=404, detail="执行任务不存在")
     job.result_url = body.result_url
     job.verify_status = body.verify_status
     job.status = "verifying" if body.verify_status == "pending" else "done" if body.verify_status == "live" else "submitted"
@@ -288,7 +294,7 @@ def job_guide(
 ) -> DistributionGuideOut:
     job = db.get(DistributionJob, job_id)
     if job is None or job.tenant_id != user.tenant_id:
-        raise HTTPException(status_code=404, detail="分发任务不存在")
+        raise HTTPException(status_code=404, detail="执行任务不存在")
     platform = _platform_for_job(db, job)
     mode = platform.submission_mode if platform else "manual"
     risk_notes = [
@@ -323,7 +329,7 @@ def check_placement(
 ) -> PlacementCheckOut:
     job = db.get(DistributionJob, job_id)
     if job is None or job.tenant_id != user.tenant_id:
-        raise HTTPException(status_code=404, detail="分发任务不存在")
+        raise HTTPException(status_code=404, detail="执行任务不存在")
     result_url = (job.result_url or "").strip()
     if not result_url:
         raise HTTPException(status_code=400, detail="请先填写 result_url")
@@ -355,7 +361,7 @@ def check_placement(
         if is_live and (brand_mentioned or target_link_found):
             job.verify_status = "live"
             job.status = "done"
-            note = "Placement 已可访问，并发现客户域名或目标链接。"
+            note = "结果页面已可访问，并发现客户域名或目标链接。"
         elif is_live:
             job.verify_status = "unknown"
             job.status = "verifying"
@@ -369,13 +375,13 @@ def check_placement(
         job.status = "submitted"
         note = f"核验请求失败：{str(exc)[:200]}"
 
-    job.last_result = "Placement 核验"
+    job.last_result = "结果页面核验"
     job.last_detail = note
     job.last_checked_at = datetime.now(timezone.utc)
     if job.gap_id:
         gap = db.get(BacklinkGap, job.gap_id)
         if gap and gap.tenant_id == user.tenant_id:
-            evidence = f"Placement check：{note}"
+            evidence = f"结果页面核验：{note}"
             _sync_gap_from_job(gap, job, evidence=evidence)
             gap.retest_result = note
     db.commit()
@@ -402,7 +408,7 @@ def send_job(
     require_confirm(body.confirmed, action="向外链渠道发送")
     job = db.get(DistributionJob, job_id)
     if job is None or job.tenant_id != user.tenant_id:
-        raise HTTPException(status_code=404, detail="分发任务不存在")
+        raise HTTPException(status_code=404, detail="执行任务不存在")
     provider = get_provider(job.provider_key)
     if provider is None:
         raise HTTPException(status_code=400, detail="未知分发渠道")
@@ -454,7 +460,7 @@ def _sync_gap_from_job(gap: BacklinkGap, job: DistributionJob, *, evidence: str 
         gap.status = "needs_retest"
     elif job.status in {"blocked", "blocked_unconfigured"}:
         gap.status = "blocked"
-        gap.blocked_reason = job.blocked_reason or job.last_detail or "分发任务受阻"
+        gap.blocked_reason = job.blocked_reason or job.last_detail or "执行任务受阻"
     elif job.status in {"ready", "in_progress"}:
         gap.status = "in_progress"
     if job.owner_hint and not gap.owner_hint:

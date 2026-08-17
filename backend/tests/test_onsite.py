@@ -51,6 +51,125 @@ def test_project_targets_seed_customer_context_and_geo_prompts(client: TestClien
     assert any("industrial pump supplier" in row["prompt_text"] for row in prompts)
 
 
+def test_project_targets_replace_old_target_setup_when_site_changes(client: TestClient, demo_user) -> None:
+    headers = auth_header(client)
+    first = client.put(
+        "/api/project-targets",
+        headers=headers,
+        json={
+            "site_origin": "https://www.snipers.com.cn",
+            "markets": [
+                {
+                    "name": "China",
+                    "region": "China",
+                    "country_code": "CN",
+                    "primary_locale": "zh-CN",
+                    "status": "priority",
+                    "opportunity_score": 70,
+                }
+            ],
+            "keywords": [
+                {"theme": "seo", "locale": "en-US", "country_code": "CN"},
+                {"theme": "geo", "locale": "en-US", "country_code": "CN"},
+            ],
+            "competitors": [{"name": "Old Rival", "website": "https://old.example", "country_code": "CN"}],
+        },
+    )
+    assert first.status_code == 200, first.text
+    seeded = client.post("/api/geo/prompt-panel/seed", headers=headers)
+    assert seeded.status_code == 200, seeded.text
+
+    second = client.put(
+        "/api/project-targets",
+        headers=headers,
+        json={
+            "site_origin": "https://www.sulzer.com/",
+            "markets": [
+                {
+                    "name": "United States",
+                    "region": "North America",
+                    "country_code": "US",
+                    "primary_locale": "en-US",
+                    "status": "priority",
+                    "opportunity_score": 80,
+                }
+            ],
+            "keywords": [{"theme": "化工 泵", "locale": "en-US", "country_code": "US"}],
+            "competitors": [],
+        },
+    )
+    assert second.status_code == 200, second.text
+    body = second.json()
+    assert body["site_origin"] == "https://www.sulzer.com"
+    assert body["keyword_count"] == 2
+    assert [market["name"] for market in body["markets"]] == ["United States"]
+    themes = [signal["theme"] for signal in body["markets"][0]["demand_signals"]]
+    assert set(themes) == {"化工", "泵"}
+    assert "seo" not in themes
+    assert body["competitor_count"] == 0
+
+
+def test_site_context_archive_restore_switches_seo_geo_and_execution(client: TestClient, demo_user) -> None:
+    headers = auth_header(client)
+    first = client.put(
+        "/api/project-targets",
+        headers=headers,
+        json={
+            "site_origin": "https://www.snipers.com.cn",
+            "markets": [
+                {
+                    "name": "United States",
+                    "region": "North America",
+                    "country_code": "US",
+                    "primary_locale": "en-US",
+                    "status": "priority",
+                    "opportunity_score": 80,
+                }
+            ],
+            "keywords": [{"theme": "industrial pump", "locale": "en-US", "country_code": "US"}],
+            "competitors": [{"name": "Old Rival", "website": "https://old.example", "country_code": "US"}],
+        },
+    )
+    assert first.status_code == 200, first.text
+    page = client.post(
+        "/api/onsite/pages",
+        headers=headers,
+        json={"path": "/en-us/products", "locale": "en-US", "title": "Products"},
+    )
+    assert page.status_code == 201, page.text
+    issue = client.post(
+        f"/api/onsite/pages/{page.json()['id']}/issues",
+        headers=headers,
+        json={"category": "tdk", "title": "Title 缺少核心词", "priority": "P1"},
+    )
+    assert issue.status_code == 201, issue.text
+    seeded = client.post("/api/geo/prompt-panel/seed", headers=headers)
+    assert seeded.status_code == 200, seeded.text
+    before_exec = client.get("/api/execution/items", headers=headers).json()
+    assert before_exec["total_open"] >= 1
+
+    switched = client.put(
+        "/api/project-targets",
+        headers=headers,
+        json={"site_origin": "https://example-switch-test.com", "markets": [], "keywords": [], "competitors": []},
+    )
+    assert switched.status_code == 200, switched.text
+    assert switched.json()["site_origin"] == "https://example-switch-test.com"
+    assert client.get("/api/onsite/board", headers=headers).json()["pages"] == 0
+    assert client.get("/api/geo/summary", headers=headers).json()["prompts"] == 0
+    assert client.get("/api/execution/items", headers=headers).json()["total_open"] == 0
+
+    archives = client.get("/api/site-context/archives", headers=headers)
+    assert archives.status_code == 200, archives.text
+    archive = next(row for row in archives.json() if row["site_origin"] == "https://www.snipers.com.cn")
+    restored = client.post(f"/api/site-context/archives/{archive['id']}/restore", headers=headers)
+    assert restored.status_code == 200, restored.text
+    assert restored.json()["site_origin"] == "https://www.snipers.com.cn"
+    assert client.get("/api/onsite/board", headers=headers).json()["pages"] == 1
+    assert client.get("/api/geo/summary", headers=headers).json()["prompts"] >= 1
+    assert client.get("/api/execution/items", headers=headers).json()["total_open"] >= 1
+
+
 def test_onsite_page_and_risk_gates(client: TestClient, demo_user) -> None:
     headers = auth_header(client)
     page = client.post(

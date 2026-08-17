@@ -11,12 +11,12 @@ import { api, clearToken, getToken, type AiStatus, type User } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const nav = [
-  { href: "/home", label: "诊断总览", note: "表现 / 风险 / 下一步", icon: LayoutDashboard },
-  { href: "/onsite", label: "SEO 诊断", note: "抓取 / 收录 / 整改", icon: SearchCheck },
-  { href: "/geo", label: "GEO 可见度", note: "问句 / 提及 / 引用", icon: Globe2 },
-  { href: "/execution", label: "执行清单", note: "整改 / 复测 / 受阻", icon: SquareCheckBig },
-  { href: "/offsite", label: "站外曝光工作台", note: "机会 / 分发 / 核验", icon: ListChecks },
-  { href: "/distribution", label: "报告交付", note: "导出 / 交付记录", icon: FileText },
+  { href: "/home", label: "客户诊断总览", note: "能否交付 / 风险 / 下一步", icon: LayoutDashboard },
+  { href: "/onsite", label: "网站 SEO 诊断", note: "抓取网站 / 找问题 / 改完复测", icon: SearchCheck },
+  { href: "/geo", label: "AI 搜索可见度", note: "是否被提到 / 是否被引用", icon: Globe2 },
+  { href: "/execution", label: "整改清单", note: "负责人 / 验收 / 复测", icon: SquareCheckBig },
+  { href: "/offsite", label: "站外曝光", note: "资源库 / 执行 / 结果核验", icon: ListChecks },
+  { href: "/distribution", label: "客户报告", note: "预览 / 导出 / 交付", icon: FileText },
 ];
 
 export default function ConsoleLayout({ children }: { children: ReactNode }) {
@@ -45,11 +45,11 @@ export default function ConsoleLayout({ children }: { children: ReactNode }) {
       <aside className="hidden w-72 flex-col border-r border-slate-900/10 bg-slate-950 text-white lg:flex">
         <div className="px-5 py-5">
           <div className="text-sm font-semibold tracking-wide">G-Snipers Global</div>
-          <div className="mt-1 text-xs text-slate-400">SEO + GEO 获客诊断平台</div>
+          <div className="mt-1 text-xs text-slate-400">海外获客诊断与执行平台</div>
           <div className="mt-4 rounded-md border border-white/10 bg-white/5 px-3 py-2">
             <div className="text-[11px] uppercase tracking-wide text-slate-500">数据与 AI 状态</div>
             <div className="mt-1 flex items-center justify-between gap-2 text-xs">
-              <span className="text-slate-300">AI 建议</span>
+              <span className="text-slate-300">AI 分析建议</span>
               <span className={cn("font-medium", ai?.configured ? "text-emerald-300" : "text-amber-300")}>{ai?.status ?? "…"}</span>
             </div>
           </div>

@@ -67,7 +67,7 @@ def analyze_inventory(user: User = Depends(get_current_user), db: Session = Depe
     site_created, site_skipped = _reconcile_site_patterns(db, user, pages)
     created += site_created
     skipped += site_skipped
-    ai_status, ai_processed, ai_remaining = _ai_after_analyze(db, user, pages)
+    ai_status, ai_processed, ai_remaining = _onsite_pkg._ai_after_analyze(db, user, pages)
     db.commit()
     note = "分析只读当前观察，不改改稿，也不应用到线上。已满足的工单标为已验收。"
     if ai_processed:
@@ -89,7 +89,7 @@ def analyze_one_page(
 ) -> AnalyzeOut:
     page = _owned_page(db, user, page_id)
     created, skipped, verified = _analyze_one(db, user, page)
-    ai_status, ai_processed, ai_remaining = _ai_after_analyze(db, user, [page])
+    ai_status, ai_processed, ai_remaining = _onsite_pkg._ai_after_analyze(db, user, [page])
     db.commit()
     note = "分析只读当前观察，不改改稿，也不应用到线上。已满足的工单标为已验收。"
     if ai_processed:

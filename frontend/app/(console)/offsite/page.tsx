@@ -11,6 +11,7 @@ import {
   type DistJob,
   type DistProvider,
   type FactPack,
+  type OffsiteOpportunityGeneration,
   type PlacementCheck,
   type PlatformAccount,
   type PlatformConnector,
@@ -132,6 +133,7 @@ export default function OffsitePage() {
   const [resultForms, setResultForms] = useState<Record<string, string>>({});
   const [guides, setGuides] = useState<Record<string, DistGuide>>({});
   const [placementChecks, setPlacementChecks] = useState<Record<string, PlacementCheck>>({});
+  const [generatingOpportunities, setGeneratingOpportunities] = useState(false);
 
   const stats = useMemo(() => {
     const activeOpportunities = gaps.filter((g) => !["won", "closed", "ignored", "skipped"].includes(g.status)).length;
@@ -251,6 +253,21 @@ export default function OffsitePage() {
     });
     setNote("站外渠道已加入待处理列表。");
     loadGaps();
+  }
+
+  async function generateOpportunitiesFromSignals() {
+    setError("");
+    setNote("");
+    setGeneratingOpportunities(true);
+    try {
+      const res = await api<OffsiteOpportunityGeneration>("/api/offsite/gaps/generate-from-signals", { method: "POST" });
+      setNote(`${res.note} 新增 ${res.created} 条，跳过重复 ${res.skipped} 条；来源：GEO ${res.from_geo}，SEO ${res.from_seo}，站内 ${res.from_onsite}。`);
+      loadGaps();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "生成站外机会失败");
+    } finally {
+      setGeneratingOpportunities(false);
+    }
   }
 
   function prepareJobFromGap(gap: BacklinkGap) {
@@ -503,6 +520,8 @@ export default function OffsitePage() {
           form={form}
           setForm={setForm}
           addGap={addGap}
+          generateOpportunitiesFromSignals={generateOpportunitiesFromSignals}
+          generatingOpportunities={generatingOpportunities}
         />
       ) : null}
 

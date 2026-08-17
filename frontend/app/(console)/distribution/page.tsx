@@ -37,7 +37,7 @@ export default function ReportDeliveryPage() {
     return [
       { label: "诊断目标", ok: Boolean(data.site_origin), detail: data.site_origin || "未登记客户官网" },
       { label: "SEO 风险", ok: data.summary.onsite_pages > 0, detail: `${highRisk} 个 P0/P1，${data.summary.onsite_pages} 个页面` },
-      { label: "GEO 证据", ok: data.summary.geo_recorded > 0, detail: data.summary.geo_recorded > 0 ? `${data.summary.geo_recorded} 条记录` : `${data.summary.geo_untested} 个槽位未测` },
+      { label: "AI 搜索证据", ok: data.summary.geo_recorded > 0, detail: data.summary.geo_recorded > 0 ? `${data.summary.geo_recorded} 条记录` : `${data.summary.geo_untested} 个买家问题未测` },
       { label: "执行计划", ok: data.next_actions.length > 0, detail: `${data.next_actions.length} 个下一步动作` },
     ];
   }, [data]);
@@ -76,9 +76,9 @@ export default function ReportDeliveryPage() {
     try {
       const report = await api<GeoReport>("/api/geo/report");
       downloadText(`geo-report-${new Date(report.generated_at).toISOString().slice(0, 10)}.md`, report.markdown, "text/markdown;charset=utf-8");
-      setNote("GEO 客户报告已导出。");
+      setNote("AI 搜索可见度报告已导出。");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "GEO 报告导出失败");
+      setError(e instanceof Error ? e.message : "AI 搜索报告导出失败");
     } finally {
       setBusy("");
     }
@@ -90,9 +90,9 @@ export default function ReportDeliveryPage() {
     try {
       const report = await api<GeoReportTable>("/api/geo/report-table");
       downloadText(report.filename, report.csv, "text/csv;charset=utf-8");
-      setNote("GEO 证据表格已导出。");
+      setNote("AI 搜索证据表格已导出。");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "GEO 表格导出失败");
+      setError(e instanceof Error ? e.message : "AI 搜索表格导出失败");
     } finally {
       setBusy("");
     }
@@ -111,11 +111,11 @@ export default function ReportDeliveryPage() {
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <Badge tone="brand">报告交付</Badge>
-              <Badge tone={geoReady && highRisk >= 0 ? "green" : "amber"}>{geoReady ? "可生成阶段报告" : "GEO 证据待补"}</Badge>
+              <Badge tone={geoReady && highRisk >= 0 ? "green" : "amber"}>{geoReady ? "可生成阶段报告" : "AI 搜索证据待补"}</Badge>
             </div>
-            <h1 className="mt-3 text-2xl font-semibold text-slate-950">客户诊断报告</h1>
+            <h1 className="mt-3 text-2xl font-semibold text-slate-950">客户诊断报告预览与导出</h1>
             <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-500">
-              把当前 SEO 技术风险、GEO 可见度、站外线索和本周期执行项整理成客户可阅读的交付视图。报告数字必须能追溯到数据源、采样批次或问题证据。
+              把当前网站风险、AI 搜索可见度、站外线索和本周期整改项整理成客户可阅读的交付视图。报告数字必须能追溯到数据源、测试批次或问题证据。
             </p>
           </div>
           <div className="grid gap-2 sm:grid-cols-2">
@@ -129,11 +129,11 @@ export default function ReportDeliveryPage() {
             </Button>
             <Button onClick={exportGeoReport} disabled={busy === "geo-report"}>
               <FileText className="mr-2 h-4 w-4" />
-              导出 GEO 报告
+              导出 AI 搜索报告
             </Button>
             <Button variant="outline" onClick={exportGeoTable} disabled={busy === "geo-table"}>
               <Download className="mr-2 h-4 w-4" />
-              导出 GEO 表格
+              导出 AI 搜索表格
             </Button>
           </div>
         </div>
@@ -166,12 +166,12 @@ export default function ReportDeliveryPage() {
               <p className="mt-1">当前发现 {highRisk} 个 P0/P1 风险，优先处理抓取、收录、Canonical、Schema 和标题结构问题。</p>
             </div>
             <div className="rounded-md bg-slate-50 p-3">
-              <div className="font-medium text-slate-950">2. GEO 可见度状态</div>
-              <p className="mt-1">{geoReady ? `已有 ${data.summary.geo_recorded} 条 GEO 观测记录。` : `还有 ${data.summary.geo_untested} 个 GEO 采样槽位未测，报告中只能标记为待补证据。`}</p>
+                <div className="font-medium text-slate-950">2. AI 搜索可见度状态</div>
+              <p className="mt-1">{geoReady ? `已有 ${data.summary.geo_recorded} 条 AI 搜索观测记录。` : `还有 ${data.summary.geo_untested} 个买家问题未测，报告中只能标记为待补证据。`}</p>
             </div>
             <div className="rounded-md bg-slate-50 p-3">
               <div className="font-medium text-slate-950">3. 本周期优先行动</div>
-              <p className="mt-1">先完成高风险 SEO 整改、补齐 GEO 采样证据，并把待验收任务推进到复测。</p>
+              <p className="mt-1">先完成高风险网站整改、补齐 AI 搜索测试证据，并把待验收任务推进到复测。</p>
             </div>
           </CardContent>
         </Card>
@@ -182,10 +182,10 @@ export default function ReportDeliveryPage() {
           </CardHeader>
           <CardContent className="space-y-3">
             {[
-              ["技术分与 GEO 可见度分开呈现", true],
+              ["网站风险与 AI 搜索可见度分开呈现", true],
               ["未测数据保持未测", true],
               ["P0/P1 有整改任务", highRisk > 0],
-              ["GEO 结论有证据记录", geoReady],
+              ["AI 搜索结论有证据记录", geoReady],
             ].map(([label, ok]) => (
               <div key={String(label)} className="flex items-center justify-between gap-3 rounded-md border border-slate-200 px-3 py-2 text-sm">
                 <span className="text-slate-700">{label}</span>
@@ -194,7 +194,7 @@ export default function ReportDeliveryPage() {
             ))}
             <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-slate-500">
               <ShieldCheck className="mb-2 h-4 w-4 text-brand-700" />
-              禁止在未采样或无证据时写“已被 AI 稳定推荐”。客户报告只能写当前协议下已经观测到的事实。
+              禁止在未测试或无证据时写“已被 AI 稳定推荐”。客户报告只能写当前测试口径下已经观测到的事实。
             </div>
           </CardContent>
         </Card>
@@ -228,15 +228,15 @@ export default function ReportDeliveryPage() {
               <div className="mt-1 truncate font-medium text-slate-900">{data.site_origin || "未登记"}</div>
             </div>
             <div className="rounded-md bg-slate-50 p-3">
-              <div className="text-xs text-slate-500">协议</div>
-              <div className="mt-1 font-mono text-xs text-slate-900">geo-test-protocol-v1</div>
+              <div className="text-xs text-slate-500">AI 搜索测试口径</div>
+              <div className="mt-1 text-xs text-slate-900">标准买家问题集</div>
             </div>
             <div className="rounded-md bg-slate-50 p-3">
               <div className="text-xs text-slate-500">搜索表现</div>
               <div className="mt-1 font-medium text-slate-900">{data.seo_performance.data_status}</div>
             </div>
             <div className="rounded-md bg-slate-50 p-3">
-              <div className="text-xs text-slate-500">AI 建议</div>
+              <div className="text-xs text-slate-500">AI 分析建议</div>
               <div className="mt-1 font-medium text-slate-900">{data.summary.llm_status}</div>
             </div>
           </CardContent>

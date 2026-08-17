@@ -295,4 +295,4 @@ def test_placement_check_writes_back_to_offsite_issue(client: TestClient, demo_u
     refreshed = next(item for item in gaps if item["id"] == gap.json()["id"])
     assert refreshed["status"] == "won"
     assert refreshed["verify_status"] == "valid"
-    assert "Placement check" in refreshed["evidence"]
+    assert "结果页面核验" in refreshed["evidence"]

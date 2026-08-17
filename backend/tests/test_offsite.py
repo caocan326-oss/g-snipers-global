@@ -1,4 +1,7 @@
 from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
+
+from app.models import GeoPrompt, GeoTicket, OnsiteIssue, SeoPerformanceRow, SerpRun, SitePage
 
 from tests.conftest import auth_header
 
@@ -201,3 +204,86 @@ def test_content_asset_review_blocks_need_input_and_banned_claim(client: TestCli
         json={"confirmed": True},
     )
     assert denied.status_code == 400
+
+
+def test_generate_offsite_opportunities_from_existing_signals(
+    client: TestClient,
+    db: Session,
+    demo_user,
+) -> None:
+    headers = auth_header(client)
+    page = SitePage(
+        tenant_id=demo_user.tenant_id,
+        path="/products/pumps",
+        locale="en",
+        title="Pumps",
+        final_url="https://example.com/products/pumps",
+    )
+    db.add(page)
+    db.flush()
+    db.add(
+        OnsiteIssue(
+            tenant_id=demo_user.tenant_id,
+            page_id=page.id,
+            category="content",
+            title="产品参数和应用场景不足",
+            detail="页面缺少 B2B 买家需要的公开参数和应用场景。",
+            priority="P1",
+        )
+    )
+    prompt = GeoPrompt(
+        tenant_id=demo_user.tenant_id,
+        prompt_text="best industrial pump suppliers for chemical plants",
+        locale="en",
+    )
+    db.add(prompt)
+    db.flush()
+    db.add(
+        GeoTicket(
+            tenant_id=demo_user.tenant_id,
+            prompt_id=prompt.id,
+            title="AI 答案未引用客户品牌",
+            diagnosis="not_mentioned",
+            priority="P1",
+        )
+    )
+    db.add(
+        SeoPerformanceRow(
+            tenant_id=demo_user.tenant_id,
+            source="gsc",
+            query="industrial pump supplier",
+            page_url="https://example.com/products/pumps",
+            impressions=240,
+            clicks=3,
+            position=32.4,
+            country="US",
+        )
+    )
+    db.add(
+        SerpRun(
+            tenant_id=demo_user.tenant_id,
+            status="ok",
+            keyword="chemical pump manufacturer",
+            own_best_position=None,
+            third_party_count=5,
+            country="US",
+        )
+    )
+    db.commit()
+
+    generated = client.post("/api/offsite/gaps/generate-from-signals", headers=headers)
+    assert generated.status_code == 200, generated.text
+    body = generated.json()
+    assert body["created"] == 4
+    assert body["from_geo"] == 1
+    assert body["from_onsite"] == 1
+    assert body["from_seo"] == 2
+    issue_types = {item["issue_type"] for item in body["gaps"]}
+    assert {"geo_citation_gap", "onsite_content_gap", "seo_keyword_gap", "serp_visibility_gap"} <= issue_types
+    assert all(item["acceptance_criteria"] for item in body["gaps"])
+    assert all(item["retest_method"] for item in body["gaps"])
+
+    repeated = client.post("/api/offsite/gaps/generate-from-signals", headers=headers)
+    assert repeated.status_code == 200, repeated.text
+    assert repeated.json()["created"] == 0
+    assert repeated.json()["skipped"] == 4
