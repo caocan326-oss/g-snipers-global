@@ -23,15 +23,17 @@ git bundle create $bundle main
 scp -o BatchMode=yes $bundle g-snipers-server:/tmp/g-snipers-main.bundle
 
 $compose = if ($Rebuild) { "docker compose up -d --build" } else { "docker compose up -d" }
-ssh -o BatchMode=yes g-snipers-server @"
-set -e
-cd /opt/g-snipers-overseas
-git fetch /tmp/g-snipers-main.bundle main
-git checkout -f -B main FETCH_HEAD
-git update-ref refs/remotes/origin/main HEAD
-git log -1 --format='%H %s'
-git status -sb
-test -f .env
-$compose
-docker compose ps
-"@
+$remote = @(
+    "set -e"
+    "cd /opt/g-snipers-overseas"
+    "git fetch /tmp/g-snipers-main.bundle main"
+    "git checkout -f -B main FETCH_HEAD"
+    "git update-ref refs/remotes/origin/main HEAD"
+    "git log -1 --format='%H %s'"
+    "git status -sb"
+    "test -f .env"
+    $compose
+    "docker compose ps"
+) -join "; "
+
+ssh -o BatchMode=yes g-snipers-server $remote
