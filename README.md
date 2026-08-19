@@ -54,7 +54,8 @@
 日常开发、提交、发版只认 **`origin` = [g-snipers-global](https://github.com/caocan326-oss/g-snipers-global.git)**。  
 `upstream`（`g-snipers-overseas`）只做镜像，不要当主仓库。
 
-生产机器、域名、SSH、发版步骤见 **[docs/PRODUCTION.md](docs/PRODUCTION.md)**。改线上之前先读这份档案，避免对错仓库或盖掉 `.env`。
+生产机器、域名、SSH、发版步骤见 **[docs/PRODUCTION.md](docs/PRODUCTION.md)**。改线上之前先读这份档案，避免对错仓库或盖掉 `.env`。  
+往 `www.weiyids.com` 发版用 **`deploy/sync-from-local.ps1`**，不要在服务器上 `git pull`。
 
 ## 本地启动
 

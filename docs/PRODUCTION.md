@@ -157,16 +157,21 @@ git push upstream main    # 保持镜像同步，避免有人 clone 到旧仓
 
 ## 7. 发版到生产
 
-在本机把 `main` 推到 `origin` 之后：
+**不要在服务器上 `git pull origin`。** 华北2 轻量访问 GitHub HTTPS 会一直卡住（2026-08-20 已踩过，`git-remote-https` 无响应）。
 
-```bash
-ssh g-snipers-server
-cd /opt/g-snipers-overseas
-git status                 # 确认没有把 .env 改进暂存区
-git pull --ff-only origin main
-docker compose up -d --build
-docker compose ps
+正确顺序：
+
+1. 本机：`git push origin main` 且 `git push upstream main`（两个远端保持同一提交）
+2. 本机执行：
+
+```powershell
+powershell -File deploy/sync-from-local.ps1
 ```
+
+改了 Dockerfile / 依赖时加 `-Rebuild`。
+
+脚本会：打 `git bundle` → `scp` 到机器 → `git fetch` 本地包 → checkout `main` → `docker compose up -d`。  
+`.env` 不在包里，不会被覆盖。
 
 硬性规则：
 
@@ -188,6 +193,7 @@ docker compose ps
 | 2026-08-20 | 运维 | `www.weiyids.com` 申请 Let's Encrypt；HTTP→HTTPS；Nginx `server_name` 写入该域名 |
 | 2026-08-20 | 运维 | 确立 `g-snipers-global` 为权威源；镜像同步 `g-snipers-overseas`；生产目录改为 git；本档案入库 |
 | 2026-08-20 | 代码 | compose 的 `FRONTEND_ORIGIN` 改为读环境变量；`.gitignore` 忽略 `.env.*` |
+| 2026-08-20 | 运维 | 生产目录已是 `57df684` 的 git checkout；`FRONTEND_ORIGIN=https://www.weiyids.com`；发现服务器无法 `git pull` GitHub，发版改走 `deploy/sync-from-local.ps1` |
 
 ---
 
