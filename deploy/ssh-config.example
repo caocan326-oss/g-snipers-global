@@ -1,0 +1,8 @@
+# 复制需要的 Host 块到本机 ~/.ssh/config
+# 私钥只放本机，不要提交进仓库
+
+Host g-snipers-server
+  HostName 39.97.52.149
+  User root
+  IdentityFile ~/.ssh/g_snipers_deploy
+  StrictHostKeyChecking accept-new

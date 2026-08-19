@@ -49,6 +49,13 @@
 - **生产客户库：** 本期 Postgres + Alembic + 演示 seed。
 - 旧路由（SEO 选题台、工单、询盘）仍可直接打开，**不在主导航**，避免空壳菜单。
 
+## 权威源与生产档案
+
+日常开发、提交、发版只认 **`origin` = [g-snipers-global](https://github.com/caocan326-oss/g-snipers-global.git)**。  
+`upstream`（`g-snipers-overseas`）只做镜像，不要当主仓库。
+
+生产机器、域名、SSH、发版步骤见 **[docs/PRODUCTION.md](docs/PRODUCTION.md)**。改线上之前先读这份档案，避免对错仓库或盖掉 `.env`。
+
 ## 本地启动
 
 ```bash
