@@ -25,6 +25,7 @@ from app.models import (
     Tenant,
     User,
 )
+from app.boce_speed import BoceError, run_overseas_http_check
 from app.onsite_analyzer import rank_distribution
 from app.onsite_fetch import normalize_origin
 from app.schemas import (
@@ -44,7 +45,7 @@ import app.routers.onsite as _onsite_pkg
 
 from . import router
 from .common import _parse_float, _tenant
-from .constants import BRIGHTDATA_SERP_INPUT_URL, PAGESPEED_ENDPOINT
+from .constants import BRIGHTDATA_SERP_INPUT_URL
 from .integrations import _finish_data_sync, _integration_value
 
 
@@ -450,48 +451,16 @@ def _pagespeed_targets(tenant: Tenant, pages: list[SitePage], requested: list[st
     return urls[:limit]
 
 
-def _extract_pagespeed_score(category: dict) -> int | None:
-    score = category.get("score")
-    if score is None:
-        return None
-    try:
-        return int(round(float(score) * 100))
-    except (TypeError, ValueError):
-        return None
-
-
-def _audit_numeric(audits: dict, key: str) -> int | None:
-    value = (audits.get(key) or {}).get("numericValue")
-    if value is None:
-        return None
-    try:
-        return int(round(float(value)))
-    except (TypeError, ValueError):
-        return None
+def _speed_api_key(db: Session, tenant_id: str) -> str:
+    return _integration_value(db, tenant_id, "boce_api_key") or settings.boce_api_key
 
 
 def _run_pagespeed(db: Session, tenant_id: str, url: str, strategy: str) -> dict:
-    params = {"url": url, "strategy": strategy, "category": ["performance", "seo", "accessibility", "best-practices"]}
-    pagespeed_key = _integration_value(db, tenant_id, "pagespeed_api_key") or settings.pagespeed_api_key
-    if pagespeed_key:
-        params["key"] = pagespeed_key
-    with httpx.Client(timeout=45) as client:
-        response = client.get(PAGESPEED_ENDPOINT, params=params)
-        response.raise_for_status()
-        data = response.json()
-    lighthouse = data.get("lighthouseResult") or {}
-    categories = lighthouse.get("categories") or {}
-    audits = lighthouse.get("audits") or {}
-    return {
-        "performance_score": _extract_pagespeed_score(categories.get("performance") or {}),
-        "seo_score": _extract_pagespeed_score(categories.get("seo") or {}),
-        "accessibility_score": _extract_pagespeed_score(categories.get("accessibility") or {}),
-        "best_practices_score": _extract_pagespeed_score(categories.get("best-practices") or {}),
-        "lcp_ms": _audit_numeric(audits, "largest-contentful-paint"),
-        "inp_ms": _audit_numeric(audits, "interaction-to-next-paint") or _audit_numeric(audits, "max-potential-fid"),
-        "cls": _parse_float(str((audits.get("cumulative-layout-shift") or {}).get("numericValue", ""))),
-        "detail": "PageSpeed Insights 在线测速完成。",
-    }
+    del strategy
+    key = _speed_api_key(db, tenant_id)
+    if not key:
+        raise BoceError("国内服务器访问不了 Google 测速。请先配置拨测海外打开 Key。")
+    return run_overseas_http_check(api_key=key, url=url)
 
 
 def _diagnosis_targets(db: Session, user: User) -> dict[str, list]:
@@ -616,26 +585,24 @@ def run_pagespeed_audits(
     if not tenant.site_origin:
         raise HTTPException(status_code=400, detail="请先设置客户官网，再运行测速。")
     pages = db.query(SitePage).filter(SitePage.tenant_id == user.tenant_id).order_by(SitePage.path).all()
-    urls = _pagespeed_targets(tenant, pages, body.urls, body.limit)
+    urls = _pagespeed_targets(tenant, pages, body.urls, min(body.limit, 1))
     if not urls:
         raise HTTPException(status_code=400, detail="没有可测速的页面。请先登记官网或加入诊断页。")
-    strategies = [s for s in body.strategies if s in {"mobile", "desktop"}] or ["mobile"]
     audits: list[PageSpeedAudit] = []
     for url in urls:
-        for strategy in strategies:
-            try:
-                metrics = _run_pagespeed(db, user.tenant_id, url, strategy)
-                audit = PageSpeedAudit(tenant_id=user.tenant_id, url=url, strategy=strategy, status="ok", **metrics)
-            except Exception as exc:
-                audit = PageSpeedAudit(
-                    tenant_id=user.tenant_id,
-                    url=url,
-                    strategy=strategy,
-                    status="error",
-                    detail=f"PageSpeed Insights 测速失败：{exc}",
-                )
-            db.add(audit)
-            audits.append(audit)
+        try:
+            metrics = _run_pagespeed(db, user.tenant_id, url, "overseas")
+            audit = PageSpeedAudit(tenant_id=user.tenant_id, url=url, strategy="overseas", status="ok", **metrics)
+        except Exception as exc:
+            audit = PageSpeedAudit(
+                tenant_id=user.tenant_id,
+                url=url,
+                strategy="overseas",
+                status="error",
+                detail=f"海外打开检查失败：{exc}",
+            )
+        db.add(audit)
+        audits.append(audit)
     db.commit()
     for audit in audits:
         db.refresh(audit)

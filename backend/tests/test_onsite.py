@@ -604,6 +604,26 @@ def test_integration_settings_can_be_saved_from_console(client: TestClient, demo
     gsc = client.get("/api/onsite/gsc/status", headers=headers).json()
     assert gsc["configured"] is True
 
+    replaced = client.patch(
+        "/api/onsite/integrations",
+        headers=headers,
+        json={"gsc_oauth_client_id": "client-id-replaced"},
+    )
+    assert replaced.status_code == 200, replaced.text
+    replaced_body = replaced.json()
+    assert replaced_body["gsc_configured"] is True
+    client_id_field = next(field for field in replaced_body["fields"] if field["key"] == "gsc_oauth_client_id")
+    assert client_id_field["masked_value"].startswith("clie")
+    assert "client-id-replaced" not in json.dumps(replaced_body)
+
+    cleared = client.patch(
+        "/api/onsite/integrations",
+        headers=headers,
+        json={"clear_keys": ["gsc_oauth_client_id", "gsc_oauth_client_secret", "gsc_oauth_redirect_uri"]},
+    )
+    assert cleared.status_code == 200, cleared.text
+    assert cleared.json()["gsc_configured"] is False
+
 
 def test_data_sync_run_due_executes_gsc_once(client: TestClient, demo_user, monkeypatch) -> None:
     import httpx
@@ -848,3 +868,46 @@ def test_brightdata_dataset_serp_request_shape(monkeypatch) -> None:
     )
     assert rows[0]["position"] == 1
     assert rows[0]["url"] == "https://example.com/pumps"
+
+
+def test_pagespeed_uses_boce_overseas_check(client: TestClient, demo_user, monkeypatch) -> None:
+    import app.routers.onsite.diagnosis as diagnosis
+
+    headers = auth_header(client)
+    client.patch("/api/onsite/settings", headers=headers, json={"site_origin": "https://example.com"})
+    saved = client.patch("/api/onsite/integrations", headers=headers, json={"boce_api_key": "boce-independent-key"})
+    assert saved.status_code == 200, saved.text
+    assert saved.json()["boce_configured"] is True
+
+    monkeypatch.setattr(
+        diagnosis,
+        "run_overseas_http_check",
+        lambda **kwargs: {
+            "performance_score": None,
+            "seo_score": None,
+            "accessibility_score": None,
+            "best_practices_score": None,
+            "lcp_ms": 820,
+            "inp_ms": 1400,
+            "cls": None,
+            "detail": "拨测海外打开 https://example.com/：通 2/2。",
+        },
+    )
+    res = client.post("/api/onsite/performance/pagespeed", headers=headers, json={"urls": [], "strategies": ["mobile"], "limit": 2})
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert len(body) == 1
+    assert body[0]["status"] == "ok"
+    assert body[0]["strategy"] == "overseas"
+    assert body[0]["lcp_ms"] == 820
+    assert body[0]["performance_score"] is None
+    assert "拨测海外打开" in body[0]["detail"]
+
+
+def test_pagespeed_without_boce_key_records_error(client: TestClient, demo_user) -> None:
+    headers = auth_header(client)
+    client.patch("/api/onsite/settings", headers=headers, json={"site_origin": "https://example.com"})
+    res = client.post("/api/onsite/performance/pagespeed", headers=headers, json={"urls": [], "limit": 1})
+    assert res.status_code == 200, res.text
+    assert res.json()[0]["status"] == "error"
+    assert "拨测" in res.json()[0]["detail"]

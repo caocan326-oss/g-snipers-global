@@ -29,13 +29,14 @@ PAGE_TYPE_LABELS = {
 }
 
 INTEGRATION_FIELDS = {
-    "gsc_oauth_client_id": ("Google OAuth Client ID", "gsc_oauth_client_id"),
-    "gsc_oauth_client_secret": ("Google OAuth Client Secret", "gsc_oauth_client_secret"),
-    "gsc_oauth_redirect_uri": ("Google OAuth Redirect URI", "gsc_oauth_redirect_uri"),
-    "pagespeed_api_key": ("PageSpeed API Key", "pagespeed_api_key"),
-    "brightdata_dataset_api_key": ("Bright Data Dataset API Key", "brightdata_dataset_api_key"),
-    "brightdata_serp_dataset_id": ("Bright Data SERP Dataset ID", "brightdata_serp_dataset_id"),
-    "brightdata_serp_endpoint": ("Bright Data SERP Endpoint", "brightdata_serp_endpoint"),
+    "gsc_oauth_client_id": ("Google 授权 Client ID", "gsc_oauth_client_id"),
+    "gsc_oauth_client_secret": ("Google 授权 Client Secret", "gsc_oauth_client_secret"),
+    "gsc_oauth_redirect_uri": ("Google 授权回调地址", "gsc_oauth_redirect_uri"),
+    "pagespeed_api_key": ("网页测速 API Key", "pagespeed_api_key"),
+    "boce_api_key": ("拨测海外打开 Key", "boce_api_key"),
+    "brightdata_dataset_api_key": ("排名检查 API Key", "brightdata_dataset_api_key"),
+    "brightdata_serp_dataset_id": ("排名检查数据集 ID", "brightdata_serp_dataset_id"),
+    "brightdata_serp_endpoint": ("排名检查接口地址", "brightdata_serp_endpoint"),
 }
 CRAWL_LABELS = {
     "ok": "可正常访问",

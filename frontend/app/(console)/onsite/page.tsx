@@ -81,6 +81,7 @@ export default function OnsiteBoardPage() {
     gsc_oauth_client_secret: "",
     gsc_oauth_redirect_uri: "",
     pagespeed_api_key: "",
+    boce_api_key: "",
     brightdata_dataset_api_key: "",
     brightdata_serp_dataset_id: "",
     brightdata_serp_endpoint: "",
@@ -351,20 +352,20 @@ export default function OnsiteBoardPage() {
       const res = await api<{ status: string; performance_score: number | null; detail?: string }[]>("/api/onsite/performance/pagespeed", {
         method: "POST",
         body: JSON.stringify({ urls: [], strategies: ["mobile"], limit: 2 }),
-        timeoutMs: 70000,
+        timeoutMs: 80000,
       });
       const failed = res.filter((item) => item.status !== "ok");
       const ok = res.length - failed.length;
       if (!res.length || failed.length === res.length) {
-        const reason = failed[0]?.detail || "没有测速结果。可能是网关超时，或 PageSpeed 访问不了该页。";
-        setError(`免费测速未完成：${reason}`);
+        const reason = failed[0]?.detail || "没有测速结果。拨测海外节点可能还没返回。";
+        setError(`海外打开检查未完成：${reason}`);
         return;
       }
-      setNote(`PageSpeed 测速完成：成功 ${ok} 项，失败 ${failed.length} 项。`);
-      if (failed.length) setError(failed[0]?.detail || "部分页面测速失败。");
+      setNote(`海外打开检查完成：成功 ${ok} 项，失败 ${failed.length} 项。`);
+      if (failed.length) setError(failed[0]?.detail || "部分页面海外打开检查失败。");
       load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "PageSpeed 测速失败");
+      setError(e instanceof Error ? e.message : "海外打开检查失败");
     } finally {
       setBusyId("");
     }
@@ -413,6 +414,27 @@ export default function OnsiteBoardPage() {
     }
   }
 
+  async function clearIntegrationKeys(keys: string[]) {
+    setError("");
+    setBusyId("integrations");
+    try {
+      const saved = await api<IntegrationSettings>("/api/onsite/integrations", {
+        method: "PATCH",
+        body: JSON.stringify({ clear_keys: keys }),
+      });
+      setIntegrations(saved);
+      const nextGsc = await api<GscStatus>("/api/onsite/gsc/status");
+      setGsc(nextGsc);
+      setNote("已清除前台覆盖，改回服务器默认。");
+      setShowGscSetup(true);
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "清除配置失败");
+    } finally {
+      setBusyId("");
+    }
+  }
+
   async function saveIntegrationSettings() {
     setError("");
     setBusyId("integrations");
@@ -434,14 +456,15 @@ export default function OnsiteBoardPage() {
         gsc_oauth_client_secret: "",
         gsc_oauth_redirect_uri: "",
         pagespeed_api_key: "",
+        boce_api_key: "",
         brightdata_dataset_api_key: "",
         brightdata_serp_dataset_id: "",
         brightdata_serp_endpoint: "",
       });
       const nextGsc = await api<GscStatus>("/api/onsite/gsc/status");
       setGsc(nextGsc);
-      setNote("数据源配置已保存。密钥只保存在后端，页面不会回显完整值。");
-      setShowGscSetup(false);
+      setNote("数据源配置已保存。还可以继续改；留空的项保持原值。");
+      setShowGscSetup(true);
       load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "保存数据源配置失败");
@@ -766,6 +789,7 @@ export default function OnsiteBoardPage() {
         setIntegrationForm={setIntegrationForm}
         authorizeGsc={authorizeGsc}
         saveIntegrationSettings={saveIntegrationSettings}
+        clearIntegrationKeys={clearIntegrationKeys}
         syncGsc={syncGsc}
         busyId={busyId}
         performanceSource={performanceSource}

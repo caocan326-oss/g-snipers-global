@@ -19,6 +19,7 @@ type IntegrationForm = {
   gsc_oauth_client_secret: string;
   gsc_oauth_redirect_uri: string;
   pagespeed_api_key: string;
+  boce_api_key: string;
   brightdata_dataset_api_key: string;
   brightdata_serp_dataset_id: string;
   brightdata_serp_endpoint: string;
@@ -37,6 +38,7 @@ export function PerformanceDataCard({
   setIntegrationForm,
   authorizeGsc,
   saveIntegrationSettings,
+  clearIntegrationKeys,
   syncGsc,
   busyId,
   performanceSource,
@@ -60,6 +62,7 @@ export function PerformanceDataCard({
   setIntegrationForm: (form: IntegrationForm) => void;
   authorizeGsc: () => void;
   saveIntegrationSettings: () => void;
+  clearIntegrationKeys: (keys: string[]) => void;
   syncGsc: () => void;
   busyId: string;
   performanceSource: "gsc_csv" | "bing_csv";
@@ -101,9 +104,14 @@ export function PerformanceDataCard({
               <Button type="button" variant="outline" onClick={authorizeGsc}>
                 {gsc.connected ? "重新授权 Google 数据" : "打开 Google 授权页"}
               </Button>
+            ) : null}
+            {gsc?.configured ? (
+              <Button type="button" variant="outline" onClick={() => setShowGscSetup((value) => !value)}>
+                {showGscSetup ? "收起配置" : "修改配置"}
+              </Button>
             ) : (
               <Button type="button" variant="outline" onClick={() => setShowGscSetup((value) => !value)}>
-                查看配置要求
+                {showGscSetup ? "收起配置" : "查看配置要求"}
               </Button>
             )}
             <Button type="button" onClick={syncGsc} disabled={!gsc?.connected || busyId === "gsc-sync"}>
@@ -113,49 +121,49 @@ export function PerformanceDataCard({
           {showGscSetup || !gsc?.configured ? (
             <div className="mt-3 rounded-md bg-amber-50 p-3 text-xs leading-5 text-amber-900">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="font-medium">配置数据源</div>
+                <div className="font-medium">修改数据源</div>
                 <Badge tone={integrations?.gsc_configured ? "green" : "amber"}>
-                  {integrations?.gsc_configured ? "Google 数据已配置" : "Google 数据待配置"}
+                  {integrations?.gsc_configured ? "已有配置，可覆盖" : "尚未配置"}
                 </Badge>
               </div>
               <p className="mt-1">
-                Google 授权页需要先保存授权 Client ID / Secret。密钥只提交到后端保存，前端不会回显完整值。
+                已保存的密钥不会回显原文。要改就填新值再保存；留空的项保持原值。前台覆盖可以清掉，改回服务器默认。
               </p>
               <div className="mt-3 grid gap-2">
                 <Input
-                  placeholder="Google OAuth Client ID"
+                  placeholder="新的 Google Client ID，留空则不改"
                   value={integrationForm.gsc_oauth_client_id}
                   onChange={(e) => setIntegrationForm({ ...integrationForm, gsc_oauth_client_id: e.target.value })}
                 />
                 <Input
-                  placeholder="Google OAuth Client Secret"
+                  placeholder="新的 Google Client Secret，留空则不改"
                   type="password"
                   value={integrationForm.gsc_oauth_client_secret}
                   onChange={(e) => setIntegrationForm({ ...integrationForm, gsc_oauth_client_secret: e.target.value })}
                 />
                 <Input
-                  placeholder={`Redirect URI，默认 ${gsc?.redirect_uri || "前端 /onsite"}`}
+                  placeholder={`回调地址，默认 ${gsc?.redirect_uri || "https://www.weiyids.com/onsite"}`}
                   value={integrationForm.gsc_oauth_redirect_uri}
                   onChange={(e) => setIntegrationForm({ ...integrationForm, gsc_oauth_redirect_uri: e.target.value })}
                 />
               </div>
               <div className="mt-3 grid gap-2 border-t border-amber-200 pt-3">
                 <Input
-                  placeholder="Bright Data Dataset API Key"
+                  placeholder="新的排名检查 API Key，留空则不改"
                   type="password"
                   value={integrationForm.brightdata_dataset_api_key}
                   onChange={(e) => setIntegrationForm({ ...integrationForm, brightdata_dataset_api_key: e.target.value })}
                 />
                 <Input
-                  placeholder="Bright Data SERP Dataset ID，默认 gd_mfz5x93lmsjjjylob"
+                  placeholder="排名数据集 ID，默认 gd_mfz5x93lmsjjjylob"
                   value={integrationForm.brightdata_serp_dataset_id}
                   onChange={(e) => setIntegrationForm({ ...integrationForm, brightdata_serp_dataset_id: e.target.value })}
                 />
                 <Input
-                  placeholder="网页速度测试 API Key（可选，不填也可免费测速）"
+                  placeholder="拨测 HTTP 检测独立 Key，留空则不改"
                   type="password"
-                  value={integrationForm.pagespeed_api_key}
-                  onChange={(e) => setIntegrationForm({ ...integrationForm, pagespeed_api_key: e.target.value })}
+                  value={integrationForm.boce_api_key}
+                  onChange={(e) => setIntegrationForm({ ...integrationForm, boce_api_key: e.target.value })}
                 />
               </div>
               {integrations?.fields.some((field) => field.configured) ? (
@@ -163,7 +171,19 @@ export function PerformanceDataCard({
                   {integrations.fields.filter((field) => field.configured).map((field) => (
                     <div key={field.key} className="flex items-center justify-between gap-2 rounded border border-amber-200 bg-white px-2 py-1">
                       <span className="truncate">{field.label}</span>
-                      <span className="shrink-0 font-mono text-[11px]">{field.masked_value} · {field.source === "env" ? ".env" : "前台保存"}</span>
+                      <span className="flex shrink-0 items-center gap-2">
+                        <span className="font-mono text-[11px]">{field.masked_value} · {field.source === "env" ? "服务器默认" : "前台覆盖"}</span>
+                        {field.source === "database" ? (
+                          <button
+                            type="button"
+                            className="text-[11px] text-amber-800 underline"
+                            disabled={busyId === "integrations"}
+                            onClick={() => clearIntegrationKeys([field.key])}
+                          >
+                            改回默认
+                          </button>
+                        ) : null}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -171,8 +191,19 @@ export function PerformanceDataCard({
               <div className="mt-3 flex flex-wrap gap-2">
                 <Button type="button" size="sm" onClick={saveIntegrationSettings} disabled={busyId === "integrations"}>
                   <Wrench className="mr-2 h-3.5 w-3.5" />
-                  {busyId === "integrations" ? "保存中…" : "保存配置"}
+                  {busyId === "integrations" ? "保存中…" : "保存修改"}
                 </Button>
+                {integrations?.fields.some((field) => field.source === "database") ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={busyId === "integrations"}
+                    onClick={() => clearIntegrationKeys(integrations.fields.filter((field) => field.source === "database").map((field) => field.key))}
+                  >
+                    全部改回服务器默认
+                  </Button>
+                ) : null}
                 {integrations?.gsc_configured ? (
                   <Button type="button" size="sm" variant="outline" onClick={authorizeGsc}>
                     打开授权页
@@ -218,26 +249,33 @@ export function PerformanceDataCard({
         <div className="rounded-md border border-slate-200 p-4">
           <div className="flex items-center gap-2 text-sm font-medium text-slate-800">
             <Gauge className="h-4 w-4" />
-            免费测速
+            海外打开检查
           </div>
           <div className="mt-3 grid grid-cols-3 gap-2 text-center">
             <div className="rounded-md bg-slate-50 p-2">
               <div className="text-lg font-semibold">{performance?.speed_latest.length ?? 0}</div>
-              <div className="text-[11px] text-slate-500">测速记录</div>
+              <div className="text-[11px] text-slate-500">检查记录</div>
             </div>
             <div className="rounded-md bg-slate-50 p-2">
-              <div className="text-lg font-semibold">{performance?.speed_latest[0]?.performance_score ?? "-"}</div>
-              <div className="text-[11px] text-slate-500">最近性能</div>
+              <div className="text-lg font-semibold">{performance?.speed_latest[0]?.lcp_ms != null ? `${performance.speed_latest[0].lcp_ms}ms` : "-"}</div>
+              <div className="text-[11px] text-slate-500">平均打开</div>
             </div>
             <div className="rounded-md bg-slate-50 p-2">
-              <div className="text-lg font-semibold">{performance?.speed_latest[0]?.seo_score ?? "-"}</div>
-              <div className="text-[11px] text-slate-500">最近 SEO</div>
+              <div className="text-lg font-semibold">{performance?.speed_latest[0]?.inp_ms != null ? `${performance.speed_latest[0].inp_ms}ms` : "-"}</div>
+              <div className="text-[11px] text-slate-500">最慢节点</div>
             </div>
           </div>
-          <Button type="button" onClick={runPageSpeed} disabled={busyId === "pagespeed"} className="mt-3 w-full">
+          <Button type="button" onClick={runPageSpeed} disabled={busyId === "pagespeed" || !integrations?.boce_configured} className="mt-3 w-full">
             <Gauge className="mr-2 h-4 w-4" />
-            {busyId === "pagespeed" ? "测速中，最多约 1 分钟…" : "测首页和核心页"}
+            {busyId === "pagespeed" ? "检查中，最多约 1 分钟…" : "从海外节点打开首页"}
           </Button>
+          {performance?.speed_latest[0]?.detail ? (
+            <p className="mt-2 text-xs leading-5 text-slate-500">{performance.speed_latest[0].detail}</p>
+          ) : (
+            <p className="mt-2 text-xs text-slate-500">
+              {integrations?.boce_configured ? "用拨测海外节点看客户官网打不打得开、要多久。不是 Google 页面分数。" : "还没配置拨测 Key，按钮已停用。国内服务器访问不了 Google 测速。"}
+            </p>
+          )}
         </div>
         <div className="rounded-md border border-slate-200 p-4">
           <div className="flex items-center gap-2 text-sm font-medium text-slate-800">
