@@ -206,6 +206,7 @@ powershell -File deploy/sync-from-local.ps1
 | 2026-08-20 | 产品 | 总览不再重复计算紧急问题；买家问题与检查条数分开写；演示数据与步骤条对齐；未发版 |
 | 2026-08-20 | 运维 | 生产发到 `9dbf4d0`（`sync-from-local.ps1 -Rebuild`）。公司机补了 SSH Host `g-snipers-server`，私钥用本机 `~/.ssh/g_snipers_deploy` |
 | 2026-08-20 | 产品 | 增加管理员账号（`ADMIN_EMAIL` / `ADMIN_PASSWORD`）；登录页不再预填演示密码；生产可关 `DEMO_LOGIN_ENABLED` |
+| 2026-08-20 | 产品/运维 | 北京出不去 Google PageSpeed。测速改 17CE 海外 HTTP（`CE17_USER` / `CE17_API_PWD` 只在服务器 `.env`）。工作台不再让人填。排名仍 Bright Data。 |
 
 ---
 

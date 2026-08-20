@@ -7,7 +7,7 @@
 
 约定：家里和公司**不会同时改**。换机器前必须把这边 push 完。
 
-最后更新：2026-08-20。
+最后更新：2026-08-20（公司收工，已 push）。
 
 ---
 
@@ -209,11 +209,13 @@ git log -1 --oneline
 | 日期 | 2026-08-20 |
 | 最后一台 | 公司 `E:\G-snipers海外版` |
 | 分支 | `main` |
-| 提交 | 诊断目标切站保护 + QA 收口（测速/排名报错、侧栏内部页、/insights/new） |
-| 已 push origin / upstream | 待本提交一起推 |
-| 已发版生产 | 待本提交发版 |
-| 未完成 | 演示租户尚未接一把真实联网检查 |
-| 下一台先做 | `git pull origin main`。管理员账号只在服务器 `.env`。 |
+| 提交 | 海外打开改走 17CE 系统默认；切站保护与 QA 收口已在线上 |
+| 已 push origin / upstream | 本提交一起推 |
+| 已发版生产 | 代码已在 `884aeb4`。本交接提交发版后应对齐最新 HEAD |
+| 未完成 | 关键词排名仍走 Bright Data，容易超时。Serper 国内可通、更快，但不支持支付宝，先没换。GSC 现场同步从北京出不去。 |
+| 下一台先做 | 家里 `git pull origin main`。不要再让人填 17CE。排名等 can 决定是否换 Serper；换了只写服务器 `.env`，不进 git。 |
+
+真人测：https://www.weiyids.com/onsite 点「从海外节点打开首页」。17CE 要 WebSocket 账户有积分。排名按钮仍是 Bright Data，可能超时。管理员只在服务器 `.env`。密钥不要提交。
 
 ---
 
