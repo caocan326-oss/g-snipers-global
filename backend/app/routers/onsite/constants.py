@@ -56,7 +56,7 @@ GSC_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
 GSC_SEARCH_ANALYTICS_ENDPOINT = "https://searchconsole.googleapis.com/webmasters/v3/sites/{site_url}/searchAnalytics/query"
 GSC_SCOPE = "https://www.googleapis.com/auth/webmasters.readonly"
 INDEXNOW_ENDPOINT = "https://api.indexnow.org/indexnow"
-BRIGHTDATA_SERP_INPUT_URL = "https://www.google.com/"
+BRIGHTDATA_SERP_SEARCH_URL = "https://www.google.com/search"
 
 CSV_ALIASES = {
     "query": {"query", "queries", "查询", "搜索查询", "关键词", "关键字"},

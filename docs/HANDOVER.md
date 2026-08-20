@@ -7,7 +7,7 @@
 
 约定：家里和公司**不会同时改**。换机器前必须把这边 push 完。
 
-最后更新：2026-08-21 01:27（家里。中转代码已提交未发版。域名橙云明天继续）。
+最后更新：2026-08-21 01:30（家里。中转已提交未发版。排名请求已补 `q=`。域名橙云明天继续）。
 
 ---
 
@@ -212,7 +212,7 @@ git log -1 --oneline
 | 提交 | 本提交：GSC / PageSpeed 走 Cloudflare Worker；未配中转时测速仍用 17CE。生产仍是 `f8b242c`。 |
 | 已 push origin / upstream | 本提交一起推 |
 | 已发版生产 | 没有。Worker 已在 `workers.dev`。服务器 `.env` 已有 `GOOGLE_RELAY_*`，**密钥不在 git**。北京出不去 `workers.dev`，发版无意义。 |
-| 未完成 | 绑 Cloudflare 橙云自定义域名（卡手机验证码）。通了再改 `GOOGLE_RELAY_URL`、测北京、再 `sync-from-local.ps1`。今晚接着修排名 0 条。 |
+| 未完成 | 绑 Cloudflare 橙云自定义域名（卡手机验证码）。通了再改 `GOOGLE_RELAY_URL`、测北京、再 `sync-from-local.ps1`。排名请求已改成带 `q=` / `gl` / `hl`，生产还没发这版。 |
 | 下一台先做 | 公司先 `git pull origin main`。不要两边同时改。 |
 
 不要再发密钥。不要开 Google Ads。不要在服务器 `git pull`。

@@ -46,7 +46,7 @@ import app.routers.onsite as _onsite_pkg
 
 from . import router
 from .common import _parse_float, _tenant
-from .constants import BRIGHTDATA_SERP_INPUT_URL, PAGESPEED_ENDPOINT
+from .constants import BRIGHTDATA_SERP_SEARCH_URL, PAGESPEED_ENDPOINT
 from .integrations import _finish_data_sync, _integration_value
 
 
@@ -218,6 +218,16 @@ def _extract_organic_results(data: object, limit: int) -> list[dict[str, str | i
     return rows
 
 
+def _brightdata_serp_url(keyword: str, *, country: str, locale: str) -> str:
+    language = locale.split("-", 1)[0].lower() if locale else "en"
+    query = [("q", keyword)]
+    if country.strip():
+        query.append(("gl", country.strip().lower()))
+    if language:
+        query.append(("hl", language))
+    return f"{BRIGHTDATA_SERP_SEARCH_URL}?{urlencode(query)}"
+
+
 def _fetch_brightdata_serp(
     db: Session,
     tenant_id: str,
@@ -232,9 +242,10 @@ def _fetch_brightdata_serp(
     payload = {
         "input": [
             {
-                "url": BRIGHTDATA_SERP_INPUT_URL,
+                "url": _brightdata_serp_url(keyword, country=country, locale=locale),
                 "keyword": keyword,
                 "language": language,
+                "country": country.strip().upper(),
                 "uule": "",
                 "brd_mobile": "1" if device == "mobile" else "",
                 "tbs": "",

@@ -77,7 +77,7 @@ docker compose up --build
 
 Bright Data Browser API 用于 JS 空壳页的二次渲染复查，可选配置：`BRIGHTDATA_BROWSER_WS`、`ONSITE_RENDER_JS_ENABLED`、`ONSITE_RENDER_TIMEOUT_MS`。
 
-Bright Data Dataset SERP API 用于目标国家/关键词下的 Google 搜索结果观察，使用「Google SERP - 100 Results - collect by URL」端点。可选配置：`BRIGHTDATA_DATASET_API_KEY`、`BRIGHTDATA_SERP_DATASET_ID`、`BRIGHTDATA_SERP_ENDPOINT`。Browser API 和 Dataset SERP API 是两条通道，不要混填。不要把真实连接串、Bearer Key 或密码提交进仓库。
+Bright Data Dataset SERP API 用于目标国家/关键词下的 Google 搜索结果观察，使用「Google SERP - 100 Results - collect by URL」端点。请求必须带 `https://www.google.com/search?q=...&gl=...&hl=...`，不要只传首页。可选配置：`BRIGHTDATA_DATASET_API_KEY`、`BRIGHTDATA_SERP_DATASET_ID`、`BRIGHTDATA_SERP_ENDPOINT`。Browser API 和 Dataset SERP API 是两条通道，不要混填。不要把真实连接串、Bearer Key 或密码提交进仓库。
 
 GEO provider 层已区分非联网分析和联网 AI 搜索：`LLM_API_KEY` / DeepSeek 只做回答、分析和建议，`web_grounded=false`，不计入真实 citation。`PERPLEXITY_API_KEY`、`YOU_API_KEY`、`EXA_API_KEY`、`TAVILY_API_KEY` 是后续联网 AI 搜索 adapter 的预留配置位。
 

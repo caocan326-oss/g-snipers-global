@@ -812,9 +812,13 @@ def test_brightdata_dataset_serp_request_shape(monkeypatch) -> None:
         assert request.url.params["notify"] == "false"
         assert request.headers["Authorization"] == "Bearer dataset-key"
         body = json.loads(request.content.decode())
-        assert body["input"][0]["url"] == "https://www.google.com/"
+        assert body["input"][0]["url"].startswith("https://www.google.com/search?")
+        assert "q=industrial+pump+supplier" in body["input"][0]["url"]
+        assert "gl=us" in body["input"][0]["url"]
+        assert "hl=en" in body["input"][0]["url"]
         assert body["input"][0]["keyword"] == "industrial pump supplier"
         assert body["input"][0]["language"] == "en"
+        assert body["input"][0]["country"] == "US"
         assert body["input"][0]["brd_mobile"] == ""
         return httpx.Response(
             200,
@@ -838,6 +842,7 @@ def test_brightdata_dataset_serp_request_shape(monkeypatch) -> None:
             self.client.close()
 
     monkeypatch.setattr(onsite_router.httpx, "Client", FakeClient)
+    monkeypatch.setattr(onsite_router.diagnosis.httpx, "Client", FakeClient)
     rows = onsite_router._fetch_brightdata_serp(
         None,
         "tenant",
@@ -849,6 +854,27 @@ def test_brightdata_dataset_serp_request_shape(monkeypatch) -> None:
     )
     assert rows[0]["position"] == 1
     assert rows[0]["url"] == "https://example.com/pumps"
+
+
+def test_extract_organic_results_accepts_official_results_link() -> None:
+    import app.routers.onsite.diagnosis as diagnosis
+
+    rows = diagnosis._extract_organic_results(
+        {
+            "keyword": "best coffee nyc",
+            "results": [
+                {
+                    "position": 1,
+                    "title": "The 38 Best Coffee Shops in NYC",
+                    "link": "https://example.com/best-coffee-nyc",
+                    "description": "Our picks.",
+                }
+            ],
+        },
+        10,
+    )
+    assert rows[0]["url"] == "https://example.com/best-coffee-nyc"
+    assert rows[0]["position"] == 1
 
 
 def test_pagespeed_uses_google_relay_when_configured(client: TestClient, demo_user, monkeypatch) -> None:
