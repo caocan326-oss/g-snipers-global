@@ -8,7 +8,7 @@ from app.auth import get_current_user
 from app.database import get_db
 from app.geo_helpers import ENGINES
 from app.onsite_fetch import normalize_origin, OriginError
-from app.site_context import archive_and_reset_if_site_changed
+from app.site_context import SiteSwitchError, prepare_site_switch
 from app.models import (
     BacklinkGap,
     Competitor,
@@ -238,11 +238,22 @@ def save_project_targets(
             requested_origin = normalize_origin(body.site_origin) if body.site_origin.strip() else ""
         except OriginError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-    site_changed = archive_and_reset_if_site_changed(
-        db, user, old_origin=old_origin, new_origin=requested_origin
-    )
+    try:
+        switch = prepare_site_switch(
+            db,
+            user,
+            old_origin=old_origin,
+            new_origin=requested_origin,
+            confirm=body.confirm_site_switch,
+        )
+    except SiteSwitchError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if switch["restored"]:
+        db.commit()
+        return _project_targets_out(db, user, note=switch["note"])
     if tenant and requested_origin is not None:
         tenant.site_origin = requested_origin
+    site_changed = bool(switch["changed"])
 
     markets = db.query(Market).filter(Market.tenant_id == user.tenant_id).all()
     markets_by_id = {market.id: market for market in markets}
@@ -385,11 +396,10 @@ def save_project_targets(
         created_competitors += 1
 
     db.commit()
-    return _project_targets_out(
-        db,
-        user,
-        note=f"已保存目标：市场新增 {created_markets} / 更新 {updated_markets}，关键词新增 {created_keywords}，竞品新增 {created_competitors}。",
-    )
+    note = f"已保存目标：市场新增 {created_markets} / 更新 {updated_markets}，关键词新增 {created_keywords}，竞品新增 {created_competitors}。"
+    if switch["note"]:
+        note = f"{switch['note']} {note}"
+    return _project_targets_out(db, user, note=note)
 
 
 @router.get("/markets", response_model=list[MarketOut])

@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { ExecutionBoard, ExecutionItem } from "@/lib/api";
+import { executionStatusLabel } from "../../_labels";
 
 const moduleLabel: Record<string, string> = {
   seo: "网站检查",
@@ -18,16 +19,7 @@ const priorityLabel: Record<string, string> = {
   P2: "常规",
 };
 
-const statusLabel: Record<string, string> = {
-  open: "待处理",
-  drafted: "已有方案",
-  confirmed: "待复测",
-  in_progress: "执行中",
-  converted_to_task: "已生成任务",
-  needs_retest: "待复测",
-  blocked: "受阻",
-  reopened: "已重开",
-};
+const statusLabel = executionStatusLabel;
 
 function priorityTone(priority: string) {
   if (priority === "P0") return "red";

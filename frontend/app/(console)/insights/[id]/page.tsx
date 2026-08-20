@@ -84,7 +84,14 @@ export default function MarketDetailPage() {
     load();
   }
 
-  if (error && !market) return <p className="text-red-600">{error}</p>;
+  if (error && !market) {
+    return (
+      <div className="space-y-3">
+        <p className="text-sm text-red-600">{error === "市场不存在" ? "没有这个市场。" : error}</p>
+        <Link href="/insights" className="text-sm text-brand-700">返回市场列表</Link>
+      </div>
+    );
+  }
   if (!market) return <p className="text-sm text-slate-500">加载中…</p>;
 
   return (

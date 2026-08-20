@@ -46,6 +46,7 @@ export function PerformanceDataCard({
   runSerp,
   submitIndexNow,
   runDueSync,
+  actionError,
 }: {
   gsc: GscStatus | null;
   integrations: IntegrationSettings | null;
@@ -68,6 +69,7 @@ export function PerformanceDataCard({
   runSerp: () => void;
   submitIndexNow: () => void;
   runDueSync: () => void;
+  actionError: string;
 }) {
   return (
     <Card className="rounded-md">
@@ -234,7 +236,7 @@ export function PerformanceDataCard({
           </div>
           <Button type="button" onClick={runPageSpeed} disabled={busyId === "pagespeed"} className="mt-3 w-full">
             <Gauge className="mr-2 h-4 w-4" />
-            {busyId === "pagespeed" ? "测速中…" : "测首页和核心页"}
+            {busyId === "pagespeed" ? "测速中，最多约 1 分钟…" : "测首页和核心页"}
           </Button>
         </div>
         <div className="rounded-md border border-slate-200 p-4">
@@ -256,14 +258,15 @@ export function PerformanceDataCard({
               <div className="text-[11px] text-slate-500">竞品出现</div>
             </div>
           </div>
-          <Button type="button" onClick={runSerp} disabled={busyId === "serp"} className="mt-3 w-full">
+          <Button type="button" onClick={runSerp} disabled={busyId === "serp" || !performance?.serp?.configured} className="mt-3 w-full">
             <Search className="mr-2 h-4 w-4" />
-            {busyId === "serp" ? "查询中…" : "查询目标关键词排名"}
+            {busyId === "serp" ? "查询中，最多约 1 分钟…" : "查询目标关键词排名"}
           </Button>
           <p className="mt-2 text-xs text-slate-500">
-            {performance?.serp?.configured ? "按目标国家和核心搜索词查询 Google 前 50，作为市场可见度证据。" : "服务器尚未配置排名检查数据源，关键词排名保持未测。"}
+            {performance?.serp?.configured ? "按目标国家和核心搜索词查询 Google 前 50，作为市场可见度证据。" : "服务器尚未配置排名检查数据源，按钮已停用，不会空转。"}
           </p>
         </div>
+        {actionError ? <p className="text-sm text-red-600 xl:col-span-2">{actionError}</p> : null}
         <div className="rounded-md border border-slate-200 p-4 xl:col-span-2">
           <div className="flex items-center gap-2 text-sm font-medium text-slate-800">
             <BarChart3 className="h-4 w-4" />

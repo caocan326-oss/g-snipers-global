@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { FileText, Globe2, LayoutDashboard, ListChecks, SearchCheck, SquareCheckBig } from "lucide-react";
+import { FileText, Globe2, LayoutDashboard, ListChecks, MapPinned, MessageSquare, Newspaper, SearchCheck, SquareCheckBig } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { api, clearToken, getToken, type AiStatus, type User } from "@/lib/api";
@@ -17,6 +17,12 @@ const nav = [
   { href: "/execution", label: "处理清单", note: "负责人 / 完成标准 / 复查", icon: SquareCheckBig },
   { href: "/offsite", label: "站外曝光", note: "渠道 / 执行 / 结果核对", icon: ListChecks },
   { href: "/distribution", label: "客户说明", note: "预览 / 下载 / 交付", icon: FileText },
+];
+
+const internalNav = [
+  { href: "/insights", label: "市场机会", note: "国家 / 竞品 / 需求", icon: MapPinned },
+  { href: "/seo", label: "SEO 内容", note: "选题 / 大纲 / 正文", icon: Newspaper },
+  { href: "/inquiries", label: "询盘", note: "线索记录", icon: MessageSquare },
 ];
 
 export default function ConsoleLayout({ children }: { children: ReactNode }) {
@@ -38,7 +44,8 @@ export default function ConsoleLayout({ children }: { children: ReactNode }) {
       .catch(() => router.replace("/login"));
   }, [router]);
 
-  const activeNav = nav.find((item) => pathname === item.href || pathname.startsWith(item.href + "/")) ?? nav[0];
+  const allNav = [...nav, ...internalNav];
+  const activeNav = allNav.find((item) => pathname === item.href || pathname.startsWith(item.href + "/")) ?? nav[0];
 
   return (
     <div className="min-h-screen bg-slate-100 lg:flex">
@@ -73,6 +80,28 @@ export default function ConsoleLayout({ children }: { children: ReactNode }) {
               <span className="min-w-0">
                 <span className="block font-medium">{item.label}</span>
                 <span className={cn("mt-0.5 block truncate text-xs", active ? "text-slate-500" : "text-slate-500")}>{item.note}</span>
+              </span>
+            </Link>
+          )})}
+          <div className="px-3 pt-4 text-[11px] uppercase tracking-wide text-slate-500">内部页</div>
+          {internalNav.map((item) => {
+            const Icon = item.icon;
+            const active = pathname === item.href || pathname.startsWith(item.href + "/");
+            return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={cn(
+                "flex gap-3 rounded-md px-3 py-2.5 text-sm transition",
+                active
+                  ? "bg-white text-slate-950 shadow-sm"
+                  : "text-slate-300 hover:bg-white/10 hover:text-white"
+              )}
+            >
+              <Icon className={cn("mt-0.5 h-4 w-4 shrink-0", active ? "text-brand-700" : "text-slate-500")} />
+              <span className="min-w-0">
+                <span className="block font-medium">{item.label}</span>
+                <span className={cn("mt-0.5 block truncate text-xs", "text-slate-500")}>{item.note}</span>
               </span>
             </Link>
           )})}
@@ -116,7 +145,7 @@ export default function ConsoleLayout({ children }: { children: ReactNode }) {
               </Button>
             </div>
             <nav className="-mx-1 mt-3 flex gap-2 overflow-x-auto pb-1">
-              {nav.map((item) => {
+              {allNav.map((item) => {
                 const Icon = item.icon;
                 const active = pathname === item.href || pathname.startsWith(item.href + "/");
                 return (

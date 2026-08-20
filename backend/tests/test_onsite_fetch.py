@@ -345,6 +345,17 @@ def test_normalize_origin_does_not_guess_www() -> None:
     assert normalize_origin("https://www.snipers.com.cn/") == "https://www.snipers.com.cn"
 
 
+def test_normalize_origin_rejects_bare_words() -> None:
+    from pytest import raises
+
+    from app.onsite_fetch import OriginError
+
+    with raises(OriginError):
+        normalize_origin("notaurl")
+    with raises(OriginError):
+        normalize_origin("https://notaurl")
+
+
 def test_fetch_many_does_not_share_client_across_urls(monkeypatch) -> None:
     """Would fail if fetch_many handed one Client to a thread pool (httpx is not thread-safe)."""
     import threading

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { crawlStatusLabel, type ContentBrief, type SitePage } from "@/lib/api";
+import { discoverySourceLabel, labelOr, pageTypeLabel, priorityHintLabel } from "../../_labels";
 
 type PageForm = { path: string; locale: string; title: string };
 
@@ -46,10 +47,10 @@ export function PagesAndBriefsSection({
                 <div>
                   <div className="font-medium text-brand-700">{p.path}</div>
                   <div className="mt-1 flex flex-wrap gap-2 text-xs text-slate-500">
-                    <span>{p.priority_hint ?? "P2"}</span>
-                    <span>{p.page_type ?? "other"}</span>
+                    <span>{labelOr(priorityHintLabel, p.priority_hint, "常规")}</span>
+                    <span>{labelOr(pageTypeLabel, p.page_type, "其他页")}</span>
                     <span>深度 {p.url_depth ?? 0}</span>
-                    <span>{p.discovery_source ?? "manual"}</span>
+                    <span>{labelOr(discoverySourceLabel, p.discovery_source, "手工登记")}</span>
                     <span>sitemap {p.is_in_sitemap ?? "未测"}</span>
                     <span>字数 {p.word_count ?? 0}</span>
                     <span>缺 alt {p.images_missing_alt ?? 0}/{p.image_count ?? 0}</span>

@@ -4,6 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 
 import {
   api,
+  confirmSiteSwitch,
+  looksLikeSiteOrigin,
+  siteOriginHost,
   type ExecutionBoard,
   type GscAuthUrl,
   type GscStatus,
@@ -66,9 +69,10 @@ export default function HomePage() {
   }, []);
 
   const reviewTotal = useMemo(() => {
+    if (executionBoard) return executionBoard.total_open;
     if (!data) return 0;
-    return data.summary.onsite_open_critical + data.summary.onsite_open_high + data.summary.geo_tickets_open + data.summary.seo_pending_review;
-  }, [data]);
+    return data.summary.onsite_open_critical + data.summary.onsite_open_high + data.summary.geo_tickets_open + data.summary.offsite_gaps;
+  }, [data, executionBoard]);
 
   if (error) return <p className="text-sm text-red-600">{error}</p>;
   if (!data) return <p className="text-sm text-slate-500">加载中…</p>;
@@ -97,7 +101,7 @@ export default function HomePage() {
     },
     {
       label: "下一步",
-      text: reviewTotal > 0 ? `本周期先推进 ${reviewTotal} 个动作：紧急网站改法、AI 搜索检查、站外曝光和改完复查。` : "本周期暂无阻塞动作，可以进入客户说明或复查。",
+      text: reviewTotal > 0 ? `处理清单里还有 ${reviewTotal} 条未关闭事项，先处理紧急网站改法、AI 搜索和站外曝光。` : "本周期暂无阻塞动作，可以进入客户说明或复查。",
       tone: workTone,
     },
   ];
@@ -204,11 +208,22 @@ export default function HomePage() {
       const parsedKeywords = parseKeywords(targetForm.keywords);
       const parsedCompetitors = parseCompetitors(targetForm.competitors);
       if (!targetForm.site_origin.trim()) return setError("请先填写客户官网。");
+      if (!looksLikeSiteOrigin(targetForm.site_origin)) return setError("官网地址无效。请填写带域名的网址，例如 https://www.snipers.com.cn。");
       if (!parsedMarkets.length) return setError("请至少填写 1 个目标国家，例如：United States | North America | US | en-US");
       if (!parsedKeywords.length) return setError("请至少填写 1 个核心关键词。");
+      const currentHost = siteOriginHost(targets?.site_origin || "");
+      const nextHost = siteOriginHost(targetForm.site_origin);
+      const switching = Boolean(currentHost && nextHost && currentHost !== nextHost);
+      if (switching && !confirmSiteSwitch(targets?.site_origin || "", targetForm.site_origin.trim())) return;
       const saved = await api<ProjectTargets>("/api/project-targets", {
         method: "PUT",
-        body: JSON.stringify({ site_origin: targetForm.site_origin, markets: parsedMarkets, keywords: parsedKeywords, competitors: parsedCompetitors }),
+        body: JSON.stringify({
+          site_origin: targetForm.site_origin,
+          markets: parsedMarkets,
+          keywords: parsedKeywords,
+          competitors: parsedCompetitors,
+          confirm_site_switch: switching,
+        }),
       });
       setTargets(saved);
       const targetMarkets = activeTargetMarkets(saved);
@@ -260,7 +275,7 @@ export default function HomePage() {
 
       <PriorityAndDataSourceSection data={data} gsc={gsc} untestedTotal={untestedTotal} perf={perf} authorizeGsc={authorizeGsc} />
 
-      <DiagnosticTargetsSection targets={targets} targetForm={targetForm} setTargetForm={setTargetForm} saveTargets={saveTargets} note={note} />
+      <DiagnosticTargetsSection targets={targets} targetForm={targetForm} setTargetForm={setTargetForm} saveTargets={saveTargets} note={note} error={error} />
 
       <SiteArchivesSection
         archives={archives}

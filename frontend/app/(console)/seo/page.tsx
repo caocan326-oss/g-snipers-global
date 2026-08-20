@@ -94,9 +94,15 @@ export default function SeoListPage() {
             </thead>
             <tbody>
               {pages.map((p) => (
-                <tr key={p.id} className="border-b last:border-0">
+                <tr
+                  key={p.id}
+                  className="cursor-pointer border-b last:border-0 hover:bg-slate-50"
+                  onClick={() => {
+                    window.location.href = `/seo/${p.id}`;
+                  }}
+                >
                   <td className="px-5 py-3">
-                    <Link className="font-medium text-brand-700" href={`/seo/${p.id}`}>
+                    <Link className="font-medium text-brand-700" href={`/seo/${p.id}`} onClick={(e) => e.stopPropagation()}>
                       {p.title}
                     </Link>
                   </td>

@@ -4,6 +4,9 @@ import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 
 import {
   api,
+  confirmSiteSwitch,
+  looksLikeSiteOrigin,
+  siteOriginHost,
   type AiAssist,
   type BingStatus,
   type ContentBrief,
@@ -85,6 +88,7 @@ export default function OnsiteBoardPage() {
   const [performanceSource, setPerformanceSource] = useState<"gsc_csv" | "bing_csv">("gsc_csv");
   const [form, setForm] = useState({ path: "/", locale: "en-US", title: "" });
   const [origin, setOrigin] = useState("");
+  const [savedOrigin, setSavedOrigin] = useState("");
   const [guide, setGuide] = useState<OnsiteGuide | null>(null);
   const [voicePending, setVoicePending] = useState(false);
 
@@ -111,6 +115,7 @@ export default function OnsiteBoardPage() {
         setPages(p);
         setBriefs(br);
         setOrigin(s.site_origin || "");
+        setSavedOrigin(s.site_origin || "");
         setSessions(cs);
         setMarkets(m);
         setSeoTargets(seo);
@@ -240,12 +245,19 @@ export default function OnsiteBoardPage() {
     setError("");
     setBusyId("save-origin");
     try {
-      const res = await api<{ site_origin: string }>("/api/onsite/settings", {
+      if (!looksLikeSiteOrigin(origin)) {
+        setError("官网地址无效。请填写带域名的网址，例如 https://www.snipers.com.cn。");
+        return;
+      }
+      const switching = Boolean(siteOriginHost(savedOrigin) && siteOriginHost(origin) && siteOriginHost(savedOrigin) !== siteOriginHost(origin));
+      if (switching && !confirmSiteSwitch(savedOrigin, origin.trim())) return;
+      const res = await api<{ site_origin: string; note?: string }>("/api/onsite/settings", {
         method: "PATCH",
-        body: JSON.stringify({ site_origin: origin }),
+        body: JSON.stringify({ site_origin: origin, confirm_site_switch: switching }),
       });
       setOrigin(res.site_origin);
-      setNote(`已保存客户官网：${res.site_origin}`);
+      setSavedOrigin(res.site_origin);
+      setNote(res.note && !res.note.startsWith("只抓") ? res.note : `已保存客户官网：${res.site_origin}`);
       load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "保存官网失败");
@@ -257,9 +269,11 @@ export default function OnsiteBoardPage() {
   async function setupSnipersTest() {
     setError("");
     try {
+      const switching = Boolean(siteOriginHost(savedOrigin) && siteOriginHost(SNIPERS_TEST_ORIGIN) && siteOriginHost(savedOrigin) !== siteOriginHost(SNIPERS_TEST_ORIGIN));
+      if (switching && !confirmSiteSwitch(savedOrigin, SNIPERS_TEST_ORIGIN)) return;
       const saved = await api<{ site_origin: string }>("/api/onsite/settings", {
         method: "PATCH",
-        body: JSON.stringify({ site_origin: SNIPERS_TEST_ORIGIN }),
+        body: JSON.stringify({ site_origin: SNIPERS_TEST_ORIGIN, confirm_site_switch: switching }),
       });
       const known = new Set(pages.map((page) => page.path));
       let added = 0;
@@ -270,6 +284,7 @@ export default function OnsiteBoardPage() {
         added += 1;
       }
       setOrigin(saved.site_origin);
+      setSavedOrigin(saved.site_origin);
       setNote(`已设为 Snipers 官网测试：${saved.site_origin}，新增 ${added} 个诊断页面。`);
       load();
     } catch (e) {
@@ -333,12 +348,20 @@ export default function OnsiteBoardPage() {
     setError("");
     setBusyId("pagespeed");
     try {
-      const res = await api<{ status: string; performance_score: number | null }[]>("/api/onsite/performance/pagespeed", {
+      const res = await api<{ status: string; performance_score: number | null; detail?: string }[]>("/api/onsite/performance/pagespeed", {
         method: "POST",
-        body: JSON.stringify({ urls: [], strategies: ["mobile", "desktop"], limit: 3 }),
+        body: JSON.stringify({ urls: [], strategies: ["mobile"], limit: 2 }),
+        timeoutMs: 70000,
       });
-      const ok = res.filter((item) => item.status === "ok").length;
-      setNote(`PageSpeed 免费测速完成：成功 ${ok} 项，失败 ${res.length - ok} 项。`);
+      const failed = res.filter((item) => item.status !== "ok");
+      const ok = res.length - failed.length;
+      if (!res.length || failed.length === res.length) {
+        const reason = failed[0]?.detail || "没有测速结果。可能是网关超时，或 PageSpeed 访问不了该页。";
+        setError(`免费测速未完成：${reason}`);
+        return;
+      }
+      setNote(`PageSpeed 测速完成：成功 ${ok} 项，失败 ${failed.length} 项。`);
+      if (failed.length) setError(failed[0]?.detail || "部分页面测速失败。");
       load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "PageSpeed 测速失败");
@@ -353,15 +376,20 @@ export default function OnsiteBoardPage() {
     try {
       const country = targetMarkets[0]?.country_code || "US";
       const locale = targetMarkets[0]?.primary_locale || "en-US";
+      if (!performance?.serp?.configured) {
+        setError("关键词排名数据源未配置，不能查询。不会在后台一直转。");
+        return;
+      }
       const res = await api<SerpRunBatch>("/api/onsite/serp/run", {
         method: "POST",
         body: JSON.stringify({ keywords: [], country, locale, device: "desktop", limit: 50 }),
+        timeoutMs: 60000,
       });
       if (!res.configured) {
-        setError(res.note || "Bright Data SERP 未配置。");
-      } else {
-        setNote(res.note || `SERP 查询完成：${res.ran} 个关键词。`);
+        setError(res.note || "关键词排名数据源未配置。");
+        return;
       }
+      setNote(res.note || `SERP 查询完成：${res.ran} 个关键词。`);
       load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "SERP 查询失败");
@@ -695,6 +723,8 @@ export default function OnsiteBoardPage() {
         downloadReport={downloadReport}
         downloadReportTable={downloadReportTable}
       />
+      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      {note ? <p className="text-sm text-emerald-700">{note}</p> : null}
 
       <SiteSetupCard
         origin={origin}
@@ -745,12 +775,10 @@ export default function OnsiteBoardPage() {
         runSerp={runSerp}
         submitIndexNow={submitIndexNow}
         runDueSync={runDueSync}
+        actionError={error}
       />
 
       <StatsGrid board={board} stats={stats} />
-
-      {note ? <p className="text-sm text-slate-600">{note}</p> : null}
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
 
       <IssueBoard
         visibleIssues={visibleIssues}

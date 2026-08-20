@@ -4,7 +4,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.onsite_fetch import normalize_origin, origin_host
+from app.onsite_fetch import OriginError, normalize_origin, origin_host
 from app.models import (
     AiRun,
     BacklinkGap,
@@ -153,6 +153,64 @@ def site_host_changed(old_origin: str | None, new_origin: str | None) -> bool:
     old_host = origin_host(normalize_origin(old_origin)) if old_origin else ""
     new_host = origin_host(normalize_origin(new_origin)) if new_origin else ""
     return bool(old_host and new_host and old_host != new_host)
+
+
+class SiteSwitchError(ValueError):
+    pass
+
+
+def latest_archive_for_origin(db: Session, tenant_id: str, origin: str | None) -> SiteArchive | None:
+    if not origin:
+        return None
+    try:
+        host = origin_host(normalize_origin(origin))
+    except OriginError:
+        return None
+    archives = (
+        db.query(SiteArchive)
+        .filter(SiteArchive.tenant_id == tenant_id)
+        .order_by(SiteArchive.archived_at.desc())
+        .all()
+    )
+    for archive in archives:
+        try:
+            if origin_host(normalize_origin(archive.site_origin)) == host:
+                return archive
+        except OriginError:
+            continue
+    return None
+
+
+def prepare_site_switch(
+    db: Session,
+    user: User,
+    *,
+    old_origin: str | None,
+    new_origin: str | None,
+    confirm: bool,
+) -> dict[str, Any]:
+    """Archive current site when the host changes. Reuse the latest matching archive."""
+    if not new_origin or not site_host_changed(old_origin, new_origin):
+        return {"changed": False, "restored": False, "note": ""}
+    if not confirm:
+        raise SiteSwitchError(
+            f"更换官网会归档当前工作台（{old_origin or '未设置'} → {new_origin}）。确认后才会切换；若该官网查过，会恢复历史数据，不会再造空站。"
+        )
+    archive_current_context(db, user, note=f"切换到 {new_origin} 前自动归档")
+    existing = latest_archive_for_origin(db, user.tenant_id, new_origin)
+    if existing:
+        restore_archive_context(db, user, existing)
+        return {
+            "changed": True,
+            "restored": True,
+            "note": f"已恢复历史网站 {existing.site_origin}。刚才的网站已归档，可在历史网站里查看。",
+        }
+    reset_current_context(db, user)
+    return {
+        "changed": True,
+        "restored": False,
+        "note": f"已切换到 {new_origin}。原网站已归档，可在历史网站里恢复。",
+    }
 
 
 def archive_and_reset_if_site_changed(

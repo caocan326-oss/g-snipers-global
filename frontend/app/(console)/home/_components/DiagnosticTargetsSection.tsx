@@ -14,12 +14,14 @@ export function DiagnosticTargetsSection({
   setTargetForm,
   saveTargets,
   note,
+  error,
 }: {
   targets: ProjectTargets | null;
   targetForm: TargetForm;
   setTargetForm: (value: TargetForm) => void;
   saveTargets: () => void;
   note: string;
+  error: string;
 }) {
   return (
     <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
@@ -30,7 +32,7 @@ export function DiagnosticTargetsSection({
             <h2 className="text-lg font-semibold text-slate-950">客户诊断目标</h2>
             <Badge tone={targets?.readiness === "ready" ? "green" : "amber"}>{targets?.readiness === "ready" ? "可开跑" : "待补"}</Badge>
           </div>
-          <p className="mt-1 text-sm text-slate-500">先明确客户官网、目标国家、核心关键词和竞品，后续网站抓取、关键词排名检查和 AI 搜索买家问题都会按这些目标执行。</p>
+          <p className="mt-1 text-sm text-slate-500">先明确客户官网、目标国家、核心关键词和竞品。更换官网会归档当前工作台；同一官网会恢复历史，不会再造空站。</p>
         </div>
         <Button type="button" onClick={saveTargets}>保存诊断目标</Button>
       </div>
@@ -52,6 +54,7 @@ export function DiagnosticTargetsSection({
           <Textarea className="min-h-[96px]" value={targetForm.competitors} onChange={(e) => setTargetForm({ ...targetForm, competitors: e.target.value })} placeholder="Competitor | https://competitor.com" />
         </div>
       </div>
+      {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
       {note ? <p className="mt-3 text-sm text-emerald-700">{note}</p> : null}
     </section>
   );

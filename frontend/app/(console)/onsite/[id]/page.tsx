@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { api, crawlStatusLabel, type AiAssist, type FetchRegistered, type OnsiteIssue, type SitePageDetail } from "@/lib/api";
 
+import { discoverySourceLabel, labelOr, pageTypeLabel, priorityHintLabel } from "../../_labels";
 import { catLabel, sevLabel, sevTone, statusLabel } from "../_helpers";
 
 export default function OnsiteEditorPage() {
@@ -141,7 +142,7 @@ export default function OnsiteEditorPage() {
           {page.index_status === "untested" ? "尚未检查" : page.index_status}
         </p>
         <p className="mt-1 text-xs text-slate-500">
-          {page.priority_hint || "P2"} · {page.page_type || "other"} · 深度 {page.url_depth ?? 0} · 来源 {page.discovery_source || "manual"} · sitemap {page.is_in_sitemap || "未测"} · 字数 {page.word_count ?? 0} · 图片缺 alt {page.images_missing_alt ?? 0}/{page.image_count ?? 0} · 外链 {page.external_link_count ?? 0}
+          {labelOr(priorityHintLabel, page.priority_hint, "常规")} · {labelOr(pageTypeLabel, page.page_type, "其他页")} · 深度 {page.url_depth ?? 0} · 来源 {labelOr(discoverySourceLabel, page.discovery_source, "手工登记")} · sitemap {page.is_in_sitemap || "未测"} · 字数 {page.word_count ?? 0} · 图片缺 alt {page.images_missing_alt ?? 0}/{page.image_count ?? 0} · 外链 {page.external_link_count ?? 0}
         </p>
         {(page.meta_robots || page.x_robots_tag) ? (
           <p className="mt-1 text-xs text-slate-500">

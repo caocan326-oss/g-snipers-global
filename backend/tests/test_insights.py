@@ -3,6 +3,12 @@ from fastapi.testclient import TestClient
 from tests.conftest import auth_header
 
 
+def test_reserved_new_market_path_is_not_an_id(client: TestClient, demo_user) -> None:
+    headers = auth_header(client)
+    res = client.get("/api/markets/new", headers=headers)
+    assert res.status_code == 404
+
+
 def test_market_crud_and_brief(client: TestClient, demo_user) -> None:
     headers = auth_header(client)
     created = client.post(

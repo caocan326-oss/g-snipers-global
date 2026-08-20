@@ -13,32 +13,68 @@ export function clearToken() {
   localStorage.removeItem(TOKEN_KEY);
 }
 
-export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const headers = new Headers(init.headers);
-  if (!headers.has("Content-Type") && init.body) {
+export async function api<T>(path: string, init: RequestInit & { timeoutMs?: number } = {}): Promise<T> {
+  const { timeoutMs, ...rest } = init;
+  const headers = new Headers(rest.headers);
+  if (!headers.has("Content-Type") && rest.body) {
     headers.set("Content-Type", "application/json");
   }
   const token = getToken();
   if (token) headers.set("Authorization", `Bearer ${token}`);
-  const res = await fetch(path, { ...init, headers });
-  if (res.status === 401 && typeof window !== "undefined") {
-    clearToken();
-    if (!path.includes("/api/auth/login")) {
-      window.location.href = "/login";
+  const controller = timeoutMs ? new AbortController() : undefined;
+  const timer = timeoutMs ? window.setTimeout(() => controller?.abort(), timeoutMs) : undefined;
+  try {
+    const res = await fetch(path, { ...rest, headers, signal: controller?.signal ?? rest.signal });
+    if (res.status === 401 && typeof window !== "undefined") {
+      clearToken();
+      if (!path.includes("/api/auth/login")) {
+        window.location.href = "/login";
+      }
     }
-  }
-  if (!res.ok) {
-    let detail = res.statusText;
-    try {
-      const data = await res.json();
-      detail = data.detail || JSON.stringify(data);
-    } catch {
-      /* ignore */
+    if (!res.ok) {
+      let detail = res.statusText;
+      try {
+        const data = await res.json();
+        detail = data.detail || JSON.stringify(data);
+      } catch {
+        /* ignore */
+      }
+      throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
     }
-    throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
+    if (res.status === 204) return undefined as T;
+    return res.json() as Promise<T>;
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error("请求超时，请稍后重试。测速和排名检查不会在后台偷偷完成。");
+    }
+    throw error;
+  } finally {
+    if (timer) window.clearTimeout(timer);
   }
-  if (res.status === 204) return undefined as T;
-  return res.json() as Promise<T>;
+}
+
+export function siteOriginHost(raw: string): string {
+  const text = raw.trim();
+  if (!text) return "";
+  try {
+    return new URL(text.includes("://") ? text : `https://${text}`).hostname.toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
+export function looksLikeSiteOrigin(raw: string): boolean {
+  const host = siteOriginHost(raw);
+  if (!host) return false;
+  if (host === "localhost" || host === "127.0.0.1") return true;
+  const labels = host.split(".");
+  return labels.length >= 2 && /^[a-z]{2,24}$/i.test(labels[labels.length - 1] || "");
+}
+
+export function confirmSiteSwitch(currentOrigin: string, nextOrigin: string): boolean {
+  return window.confirm(
+    `更换官网会归档当前工作台，页面上的检查、AI 搜索和清单都会换成新站点。\n\n当前：${currentOrigin || "未设置"}\n新官网：${nextOrigin}\n\n若这个新官网以前查过，会恢复那份历史，不会再造空站。确定更换？`,
+  );
 }
 
 export type User = {

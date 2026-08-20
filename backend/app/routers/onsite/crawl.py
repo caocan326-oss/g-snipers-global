@@ -24,7 +24,7 @@ from app.onsite_fetch import (
     registered_targets,
 )
 from app.risk import severity_to_risk
-from app.site_context import archive_and_reset_if_site_changed
+from app.site_context import SiteSwitchError, prepare_site_switch
 from app.schemas import (
     CrawlOrSeedOut,
     CrawlSessionOut,
@@ -96,10 +96,20 @@ def update_site_settings(
         next_origin = normalize_origin(body.site_origin)
     except OriginError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    archive_and_reset_if_site_changed(db, user, old_origin=tenant.site_origin, new_origin=next_origin)
-    tenant.site_origin = next_origin
+    try:
+        switch = prepare_site_switch(
+            db,
+            user,
+            old_origin=tenant.site_origin,
+            new_origin=next_origin,
+            confirm=body.confirm_site_switch,
+        )
+    except SiteSwitchError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if not switch["restored"]:
+        tenant.site_origin = next_origin
     db.commit()
-    return SiteSettingsOut(site_origin=tenant.site_origin)
+    return SiteSettingsOut(site_origin=tenant.site_origin, note=switch["note"] or "只抓已登记页。主机名必须与 origin 一致，不猜 www。")
 
 
 @router.post("/fetch-registered", response_model=FetchRegisteredOut)

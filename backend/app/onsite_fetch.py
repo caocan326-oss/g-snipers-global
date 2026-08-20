@@ -69,14 +69,34 @@ class OriginError(ValueError):
     pass
 
 
+_IPV4 = re.compile(r"^(?:\d{1,3}\.){3}\d{1,3}$")
+_LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
+
+
+def _usable_site_host(host: str) -> bool:
+    value = (host or "").lower().rstrip(".")
+    if value in _LOCAL_HOSTS:
+        return True
+    if _IPV4.fullmatch(value):
+        return True
+    labels = value.split(".")
+    if len(labels) < 2:
+        return False
+    if any(not label or label.startswith("-") or label.endswith("-") for label in labels):
+        return False
+    return bool(re.fullmatch(r"[a-z]{2,24}", labels[-1]))
+
+
 def normalize_origin(raw: str) -> str:
     text = (raw or "").strip()
     if not text:
-        raise OriginError("请先填写站点 origin，例如 https://www.snipers.com.cn")
+        raise OriginError("请先填写网站地址，例如 https://www.snipers.com.cn")
     parsed = urlparse(text if "://" in text else f"https://{text}")
     if parsed.scheme not in {"http", "https"} or not parsed.hostname:
-        raise OriginError("站点 origin 必须是 http(s) 地址，例如 https://www.snipers.com.cn")
+        raise OriginError("网站地址必须是 http(s) 网址，例如 https://www.snipers.com.cn")
     host = parsed.hostname.lower()
+    if not _usable_site_host(host):
+        raise OriginError("网站地址无效。请填写带域名的网址，例如 https://www.snipers.com.cn，不要填 notaurl 这种词。")
     netloc = f"{host}:{parsed.port}" if parsed.port else host
     return f"{parsed.scheme}://{netloc}"
 

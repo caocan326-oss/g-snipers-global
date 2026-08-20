@@ -617,6 +617,8 @@ def run_pagespeed_audits(
         raise HTTPException(status_code=400, detail="请先设置客户官网，再运行测速。")
     pages = db.query(SitePage).filter(SitePage.tenant_id == user.tenant_id).order_by(SitePage.path).all()
     urls = _pagespeed_targets(tenant, pages, body.urls, body.limit)
+    if not urls:
+        raise HTTPException(status_code=400, detail="没有可测速的页面。请先登记官网或加入诊断页。")
     strategies = [s for s in body.strategies if s in {"mobile", "desktop"}] or ["mobile"]
     audits: list[PageSpeedAudit] = []
     for url in urls:

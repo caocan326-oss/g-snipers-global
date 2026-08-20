@@ -269,6 +269,7 @@ class ProjectTargetsIn(BaseModel):
     markets: list[ProjectTargetMarketIn] = Field(default_factory=list)
     keywords: list[ProjectTargetKeywordIn] = Field(default_factory=list)
     competitors: list[ProjectTargetCompetitorIn] = Field(default_factory=list)
+    confirm_site_switch: bool = False
 
 
 class ProjectTargetsOut(BaseModel):
@@ -809,6 +810,7 @@ class CrawlOrSeedOut(BaseModel):
 
 class SiteOriginIn(BaseModel):
     site_origin: str
+    confirm_site_switch: bool = False
 
 
 class SiteSettingsOut(BaseModel):

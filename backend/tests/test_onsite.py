@@ -84,6 +84,7 @@ def test_project_targets_replace_old_target_setup_when_site_changes(client: Test
         headers=headers,
         json={
             "site_origin": "https://www.sulzer.com/",
+            "confirm_site_switch": True,
             "markets": [
                 {
                     "name": "United States",
@@ -148,10 +149,24 @@ def test_site_context_archive_restore_switches_seo_geo_and_execution(client: Tes
     before_exec = client.get("/api/execution/items", headers=headers).json()
     assert before_exec["total_open"] >= 1
 
-    switched = client.put(
+    blocked = client.put(
         "/api/project-targets",
         headers=headers,
         json={"site_origin": "https://example-switch-test.com", "markets": [], "keywords": [], "competitors": []},
+    )
+    assert blocked.status_code == 400
+    assert "确认" in blocked.json()["detail"]
+
+    switched = client.put(
+        "/api/project-targets",
+        headers=headers,
+        json={
+            "site_origin": "https://example-switch-test.com",
+            "markets": [],
+            "keywords": [],
+            "competitors": [],
+            "confirm_site_switch": True,
+        },
     )
     assert switched.status_code == 200, switched.text
     assert switched.json()["site_origin"] == "https://example-switch-test.com"
@@ -159,6 +174,36 @@ def test_site_context_archive_restore_switches_seo_geo_and_execution(client: Tes
     assert client.get("/api/geo/summary", headers=headers).json()["prompts"] == 0
     assert client.get("/api/execution/items", headers=headers).json()["total_open"] == 0
 
+    reused = client.put(
+        "/api/project-targets",
+        headers=headers,
+        json={
+            "site_origin": "https://www.snipers.com.cn",
+            "markets": [],
+            "keywords": [],
+            "competitors": [],
+            "confirm_site_switch": True,
+        },
+    )
+    assert reused.status_code == 200, reused.text
+    assert reused.json()["site_origin"] == "https://www.snipers.com.cn"
+    assert "已恢复" in reused.json()["note"]
+    assert client.get("/api/onsite/board", headers=headers).json()["pages"] == 1
+    assert client.get("/api/geo/summary", headers=headers).json()["prompts"] >= 1
+    assert client.get("/api/execution/items", headers=headers).json()["total_open"] >= 1
+
+    switched_again = client.put(
+        "/api/project-targets",
+        headers=headers,
+        json={
+            "site_origin": "https://example-switch-test.com",
+            "markets": [],
+            "keywords": [],
+            "competitors": [],
+            "confirm_site_switch": True,
+        },
+    )
+    assert switched_again.status_code == 200, switched_again.text
     archives = client.get("/api/site-context/archives", headers=headers)
     assert archives.status_code == 200, archives.text
     archive = next(row for row in archives.json() if row["site_origin"] == "https://www.snipers.com.cn")
@@ -168,6 +213,17 @@ def test_site_context_archive_restore_switches_seo_geo_and_execution(client: Tes
     assert client.get("/api/onsite/board", headers=headers).json()["pages"] == 1
     assert client.get("/api/geo/summary", headers=headers).json()["prompts"] >= 1
     assert client.get("/api/execution/items", headers=headers).json()["total_open"] >= 1
+
+
+def test_project_targets_reject_invalid_origin(client: TestClient, demo_user) -> None:
+    headers = auth_header(client)
+    res = client.put(
+        "/api/project-targets",
+        headers=headers,
+        json={"site_origin": "notaurl", "markets": [], "keywords": [], "competitors": []},
+    )
+    assert res.status_code == 400
+    assert "无效" in res.json()["detail"]
 
 
 def test_onsite_page_and_risk_gates(client: TestClient, demo_user) -> None:
