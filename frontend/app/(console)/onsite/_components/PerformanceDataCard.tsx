@@ -160,17 +160,6 @@ export function PerformanceDataCard({
                   value={integrationForm.brightdata_serp_dataset_id}
                   onChange={(e) => setIntegrationForm({ ...integrationForm, brightdata_serp_dataset_id: e.target.value })}
                 />
-                <Input
-                  placeholder="17CE 账号，一般是注册邮箱，留空则不改"
-                  value={integrationForm.ce17_user}
-                  onChange={(e) => setIntegrationForm({ ...integrationForm, ce17_user: e.target.value })}
-                />
-                <Input
-                  placeholder="17CE api_pwd，留空则不改"
-                  type="password"
-                  value={integrationForm.ce17_api_pwd}
-                  onChange={(e) => setIntegrationForm({ ...integrationForm, ce17_api_pwd: e.target.value })}
-                />
               </div>
               {integrations?.fields.some((field) => field.configured) ? (
                 <div className="mt-3 grid gap-1">
@@ -279,7 +268,7 @@ export function PerformanceDataCard({
             <p className="mt-2 text-xs leading-5 text-slate-500">{performance.speed_latest[0].detail}</p>
           ) : (
             <p className="mt-2 text-xs text-slate-500">
-              {integrations?.ce17_configured ? "用 17CE 海外节点看客户官网打不打得开、要多久。不是 Google 页面分数。" : "还没配置 17CE，按钮已停用。国内服务器访问不了 Google 测速。"}
+              {integrations?.ce17_configured ? "系统已接 17CE 海外节点，客户和客户经理都不用填密钥。" : "服务器还没接 17CE，按钮已停用。"}
             </p>
           )}
         </div>
