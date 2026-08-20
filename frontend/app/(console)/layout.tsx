@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 const nav = [
   { href: "/home", label: "客户总览", note: "能否交付 / 风险 / 下一步", icon: LayoutDashboard },
   { href: "/onsite", label: "网站检查", note: "查看网页 / 给出改法 / 改后复查", icon: SearchCheck },
-  { href: "/geo", label: "AI 搜索可见度", note: "是否被提到 / 是否被引用", icon: Globe2 },
+  { href: "/geo", label: "AI 搜索可见度", note: "有没有被提到 / 有没有给出官网", icon: Globe2 },
   { href: "/execution", label: "处理清单", note: "负责人 / 完成标准 / 复查", icon: SquareCheckBig },
   { href: "/offsite", label: "站外曝光", note: "渠道 / 执行 / 结果核对", icon: ListChecks },
   { href: "/distribution", label: "客户说明", note: "预览 / 下载 / 交付", icon: FileText },

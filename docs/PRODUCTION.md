@@ -200,6 +200,7 @@ powershell -File deploy/sync-from-local.ps1
 | 2026-08-20 | 运维 | 生产目录已是 `57df684` 的 git checkout；`FRONTEND_ORIGIN=https://www.weiyids.com`；发现服务器无法 `git pull` GitHub，发版改走 `deploy/sync-from-local.ps1` |
 | 2026-08-20 | 文档 | 增加换机交接清单 `docs/HANDOVER.md`；本机路径写明公司 E: / 家里 D: |
 | 2026-08-20 | 产品 | 站内链增加当前步骤与一句说明；客户说明/清单改成清楚克制的用词；未发版 |
+| 2026-08-20 | 产品 | GEO 工作台与总览改成同一套话；客户说明页合成「本周说明」预览；未发版 |
 
 ---
 

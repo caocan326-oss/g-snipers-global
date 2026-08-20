@@ -136,10 +136,10 @@ export default function GeoPage() {
     setBusyAction("seed-prompts");
     try {
       const res = await api<{ created: number; skipped: number; prompts: number; note: string }>("/api/geo/prompt-panel/seed", { method: "POST" });
-      setNote(`${res.note} 新增 ${res.created} 条，跳过 ${res.skipped} 条。当前问句 ${res.prompts} 条。`);
+      setNote(`${res.note} 新增 ${res.created} 条，跳过 ${res.skipped} 条。当前买家问题 ${res.prompts} 条。`);
       loadPrompts();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "生成问句失败");
+      setError(e instanceof Error ? e.message : "生成买家问题失败");
     } finally {
       setBusyAction("");
     }
@@ -156,7 +156,7 @@ export default function GeoPage() {
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
-    setNote("GEO 报告已导出。");
+    setNote("AI 搜索说明已下载。");
   }
 
   async function downloadGeoTable() {
@@ -170,7 +170,7 @@ export default function GeoPage() {
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
-    setNote("GEO 采样证据表已导出。");
+    setNote("AI 搜索检查记录已下载。");
   }
 
   async function createEvidenceRun() {
@@ -180,13 +180,13 @@ export default function GeoPage() {
     try {
       const run = await api<GeoSampleRun>("/api/geo/sample-runs/from-observations", {
         method: "POST",
-        body: JSON.stringify({ note: "从当前人工 GEO 观测固化一批可追溯证据。" }),
+        body: JSON.stringify({ note: "从当前人工记录保存一批可追溯的检查结果。" }),
       });
-      setNote(`已固化一批 GEO 证据：${run.results_count} 条记录，批次 ${run.id}，配置指纹 ${run.config_hash}。`);
+      setNote(`已保存一批检查记录：${run.results_count} 条，批次 ${run.id}。`);
       loadPrompts();
       loadRuns();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "固化证据失败");
+      setError(e instanceof Error ? e.message : "保存记录失败");
     } finally {
       setBusyAction("");
     }
@@ -201,7 +201,7 @@ export default function GeoPage() {
       setNote(`${res.note} 新增 ${res.created} 条，跳过 ${res.skipped} 条。`);
       loadTickets();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "生成整改项失败");
+      setError(e instanceof Error ? e.message : "生成待处理项失败");
     } finally {
       setBusyAction("");
     }
@@ -224,11 +224,11 @@ export default function GeoPage() {
           region_hint: selected?.label ?? "API",
         }),
       });
-      setNote(`${selected?.label ?? sampleProvider} 采样完成：run ${run.id}，证据 ${run.results_count} 条。${selected?.web_grounded ? "返回引用来源时可计入联网引用证据。" : "该结果用于分析和品牌提及判断，不计入真实联网引用率。"}`);
+      setNote(`${selected?.label ?? sampleProvider} 检查完成：${run.results_count} 条记录。${selected?.web_grounded ? "返回来源网址时，可算作给出了官网。" : "该结果用于分析和是否被提到，不算给出官网。"}`);
       loadRuns();
       loadPrompts();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "自动采样失败");
+      setError(e instanceof Error ? e.message : "自动检查失败");
     } finally {
       setBusyAction("");
     }
@@ -255,7 +255,7 @@ export default function GeoPage() {
       });
       loadTickets();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "验收失败");
+      setError(e instanceof Error ? e.message : "确认失败");
     }
   }
 
@@ -314,11 +314,11 @@ export default function GeoPage() {
       const status = !provider.configured
         ? "未配置"
         : providerResults.length === 0
-          ? "待采样"
+          ? "待检查"
           : verified > 0
-            ? "有核验证据"
+            ? "已核对来源"
             : citations > 0
-              ? "有来源待核验"
+              ? "有来源待核对"
               : provider.web_grounded
                 ? "无来源"
                 : "分析参考";
@@ -403,7 +403,7 @@ export default function GeoPage() {
         />
       ) : null}
 
-      <Input placeholder="确认 / 验收备注" value={confirmNote} onChange={(e) => setConfirmNote(e.target.value)} />
+      <Input placeholder="确认 / 复查备注" value={confirmNote} onChange={(e) => setConfirmNote(e.target.value)} />
     </div>
   );
 }

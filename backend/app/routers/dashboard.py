@@ -30,7 +30,9 @@ from app.models import (
 )
 from app.llm import status_label
 from app.onsite_analyzer import rank_distribution
+from app.customer_brief import build_customer_brief
 from app.schemas import (
+    CustomerBriefOut,
     DashboardSummary,
     WorkbenchChain,
     WorkbenchItem,
@@ -313,6 +315,11 @@ def summary(user: User = Depends(get_current_user), db: Session = Depends(get_db
     return _summary_for(user, db)
 
 
+@router.get("/customer-brief", response_model=CustomerBriefOut)
+def customer_brief(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> CustomerBriefOut:
+    return build_customer_brief(user, db)
+
+
 @router.get("/workbench", response_model=WorkbenchOut)
 def workbench(
     days: int = Query(default=28, ge=7, le=180),
@@ -358,12 +365,12 @@ def workbench(
         WorkbenchItem(
             id=t.id,
             title=t.title,
-            subtitle=t.prompt.prompt_text if t.prompt else "GEO 问句",
+            subtitle=t.prompt.prompt_text if t.prompt else "买家问题",
             href="/geo",
-            status="待验收" if t.status == "verify" else "待处理",
+            status="待复查" if t.status == "verify" else "待处理",
             tone="red" if t.status == "reopened" else "amber",
             meta=t.diagnosis,
-            action_label="进入 GEO",
+            action_label="去复查",
         )
         for t in tickets
     ]
@@ -423,24 +430,24 @@ def workbench(
         next_actions.append(
             WorkbenchItem(
                 id="geo-sampling",
-                title="补齐 GEO 采样槽位",
-                subtitle=f"还有 {summary.geo_untested} 个引擎槽位保持未测。",
+                title="补齐 AI 搜索检查",
+                subtitle=f"还有 {summary.geo_untested} 个买家问题尚未检查。",
                 href="/geo",
-                status="未测",
+                status="尚未检查",
                 tone="amber",
-                action_label="进入采样",
+                action_label="去检查",
             )
         )
     if summary.geo_tickets_open:
         next_actions.append(
             WorkbenchItem(
                 id="geo-ticket",
-                title="复核 GEO 整改项",
-                subtitle=f"{summary.geo_tickets_open} 个 GEO 整改项未关闭。",
+                title="复核 AI 搜索待处理项",
+                subtitle=f"{summary.geo_tickets_open} 个 AI 搜索待处理项未关闭。",
                 href="/geo",
-                status="待验收",
+                status="待复查",
                 tone="amber",
-                action_label="去复核",
+                action_label="去复查",
             )
         )
     if not next_actions:
@@ -471,13 +478,13 @@ def workbench(
         ),
         WorkbenchChain(
             key="geo",
-            title="GEO 诊断",
+            title="AI 搜索可见度",
             href="/geo",
             primary=summary.geo_tickets_open,
-            secondary=f"{summary.geo_prompts} 个问句 / 未测槽位 {summary.geo_untested}",
+            secondary=f"{summary.geo_prompts} 个买家问题 / 尚未检查 {summary.geo_untested}",
             health=geo_health,
             tone=geo_tone,
-            action_label="进入 GEO",
+            action_label="进入检查",
         ),
     ]
 

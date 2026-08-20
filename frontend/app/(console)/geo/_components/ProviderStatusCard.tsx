@@ -8,9 +8,9 @@ export function ProviderStatusCard({ providers }: { providers: GeoProviderStatus
   return (
     <Card className="rounded-md">
       <CardHeader>
-        <CardTitle>AI 搜索数据源与可信边界</CardTitle>
+        <CardTitle>测试来源与可信边界</CardTitle>
         <p className="mt-1 text-sm text-slate-500">
-          DeepSeek 负责分析和建议；只有联网搜索类数据源返回引用来源时，才计入“真实引用”。
+          DeepSeek 负责分析和建议；只有联网搜索类数据源返回来源网址时，才算作给出了官网。
         </p>
       </CardHeader>
       <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
@@ -24,7 +24,7 @@ export function ProviderStatusCard({ providers }: { providers: GeoProviderStatus
             </div>
             <div className="mt-2 flex flex-wrap gap-2">
               <Badge tone={provider.web_grounded ? "blue" : "default"}>
-                {provider.web_grounded ? "可产生联网引用" : "分析参考"}
+                {provider.web_grounded ? "可给出联网来源" : "分析参考"}
               </Badge>
               <Badge tone={provider.role === "analysis" ? "brand" : "default"}>{providerRoleLabel[provider.role] ?? provider.role}</Badge>
             </div>

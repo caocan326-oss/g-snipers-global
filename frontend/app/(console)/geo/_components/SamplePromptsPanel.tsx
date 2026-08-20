@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import type { GeoPrompt } from "@/lib/api";
 
-import { diagnosisOptions, evidenceLabel, obsLabel, obsTone } from "../_helpers";
+import { diagnosisOptions, displayRate, evidenceLabel, obsLabel, obsTone } from "../_helpers";
 
 function slotGroup(
   p: GeoPrompt,
@@ -29,7 +29,7 @@ function slotGroup(
             <div className="mb-2 flex flex-wrap gap-2 text-[11px] text-slate-500">
               <span>{o.surface || "manual_ai_answer"}</span>
               <span>{o.sample_type || "manual"}</span>
-              <span>{o.evidence_label || evidenceLabel[o.evidence_tier || "none"]}</span>
+              <span>{evidenceLabel[o.evidence_tier || "none"] || o.evidence_label}</span>
               {o.observed_at ? <span>{new Date(o.observed_at).toLocaleString("zh-CN")}</span> : null}
             </div>
             <div className="mt-2 flex flex-wrap gap-1">
@@ -42,12 +42,12 @@ function slotGroup(
             <div className="mt-3 grid gap-2">
               <Textarea
                 className="min-h-[72px]"
-                placeholder="回答摘录：粘贴 AI 答案里提到客户、竞品或引用来源的片段"
+                placeholder="回答摘录：粘贴 AI 答案里提到客户、竞品或官网来源的片段"
                 defaultValue={o.response_excerpt || ""}
                 onBlur={(e) => setObs(o.id, o.status, { response_excerpt: e.target.value })}
               />
               <Input
-                placeholder="引用 URL，一行或逗号分隔"
+                placeholder="来源网址，一行或逗号分隔"
                 defaultValue={o.citation_urls || ""}
                 onBlur={(e) => setObs(o.id, o.status, { citation_urls: e.target.value })}
               />
@@ -64,7 +64,7 @@ function slotGroup(
                 />
               </div>
               <Input
-                placeholder="备注：说明这条证据来自人工记录、AI 回答、搜索结果或其他来源"
+                placeholder="备注：说明这条记录来自人工记下、AI 回答、搜索结果或其他来源"
                 defaultValue={o.interpretation_note || o.notes || ""}
                 onBlur={(e) => setObs(o.id, o.status, { interpretation_note: e.target.value, notes: e.target.value })}
               />
@@ -100,14 +100,14 @@ export function SamplePromptsPanel({
           <CardHeader>
             <CardTitle className="text-base">{p.prompt_text}</CardTitle>
             <p className="text-xs text-slate-500">
-              来源 {p.prompt_key || "自定义"} · 类型 {p.prompt_type || "自定义"} · 问题组 {p.prompt_pack_id || "自定义"} · {p.locale} · 提及 {p.mention_rate ?? "未测"} · 引用 {p.cite_rate ?? "未测"} · 核验 {p.verified_citation_rate ?? "未测"} · 竞品 {p.competitor_rate ?? "未测"}
+              来源 {p.prompt_key || "自定义"} · 类型 {p.prompt_type || "自定义"} · 问题组 {p.prompt_pack_id || "自定义"} · {p.locale} · 被提到 {displayRate(p.mention_rate)} · 给出官网 {displayRate(p.cite_rate)} · 已核对 {displayRate(p.verified_citation_rate)} · 竞品 {displayRate(p.competitor_rate)}
             </p>
             {p.evidence ? <pre className="mt-2 whitespace-pre-wrap text-xs text-slate-500">{p.evidence}</pre> : null}
             <div className="mt-2 flex items-center gap-2">
               <Button size="sm" onClick={() => aiPrompt(p.id)}>
                 AI 诊断
               </Button>
-              <span className="text-xs text-slate-500">诊断</span>
+              <span className="text-xs text-slate-500">判断</span>
               <select
                 className="h-8 rounded-md border border-slate-200 px-2 text-sm"
                 value={p.diagnosis}

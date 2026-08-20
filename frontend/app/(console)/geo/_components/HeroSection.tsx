@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { GeoProviderStatus, GeoProviderStatusList, GeoSummary } from "@/lib/api";
 
-import { providerRoleLabel } from "../_helpers";
+import { displayRate, providerRoleLabel } from "../_helpers";
 
 export function HeroSection({
   summary,
@@ -43,26 +43,26 @@ export function HeroSection({
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <Badge tone="brand">AI 搜索可见度</Badge>
-            <Badge tone={summary?.recorded ? "green" : "amber"}>{summary?.recorded ? "已有观测" : "待采样"}</Badge>
-            <Badge tone="blue">标准买家问题集</Badge>
+            <Badge tone={summary?.recorded ? "green" : "amber"}>{summary?.recorded ? "已有记录" : "待检查"}</Badge>
+            <Badge tone="blue">标准买家问题</Badge>
           </div>
-          <h1 className="mt-3 text-2xl font-semibold text-slate-950">AI 搜索可见度诊断</h1>
+          <h1 className="mt-3 text-2xl font-semibold text-slate-950">AI 搜索可见度</h1>
           <p className="mt-1 max-w-4xl text-sm leading-6 text-slate-500">
-            用买家真实会问的问题测试 AI 回答里有没有提到客户、有没有引用客户官网、是不是只推荐竞品。没有联网来源的数据只作为分析参考。
+            用买家会问的问题，看 AI 回答里有没有提到客户、有没有给出官网、是不是只在推荐竞品。没有联网来源的结果只作分析参考。
           </p>
         </div>
         <div className="grid w-full gap-2 text-sm md:grid-cols-3 xl:w-[560px]">
           <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
-            <div className="flex items-center gap-2 text-xs text-slate-500"><Activity className="h-4 w-4" />最近测试批次</div>
+            <div className="flex items-center gap-2 text-xs text-slate-500"><Activity className="h-4 w-4" />最近一次检查</div>
             <div className="mt-1 truncate font-mono text-xs font-medium text-slate-900">{summary?.latest_run_id ?? "暂无"}</div>
           </div>
           <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
-            <div className="flex items-center gap-2 text-xs text-slate-500"><Database className="h-4 w-4" />证据数量</div>
+            <div className="flex items-center gap-2 text-xs text-slate-500"><Database className="h-4 w-4" />检查记录</div>
             <div className="mt-1 font-medium text-slate-900">{summary?.evidence_results ?? 0}</div>
           </div>
           <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
-            <div className="flex items-center gap-2 text-xs text-slate-500"><ShieldCheck className="h-4 w-4" />已确认引用</div>
-            <div className="mt-1 font-medium text-slate-900">{summary?.verified_citation_rate ?? "未测"}</div>
+            <div className="flex items-center gap-2 text-xs text-slate-500"><ShieldCheck className="h-4 w-4" />已核对官网来源</div>
+            <div className="mt-1 font-medium text-slate-900">{displayRate(summary?.verified_citation_rate)}</div>
           </div>
         </div>
       </div>
@@ -72,10 +72,10 @@ export function HeroSection({
           {busyAction === "seed-prompts" ? "生成中…" : "生成买家问题"}
         </Button>
         <Button size="sm" variant="outline" onClick={createEvidenceRun} disabled={busyAction === "evidence-run"}>
-          {busyAction === "evidence-run" ? "整理中…" : "保存当前证据"}
+          {busyAction === "evidence-run" ? "整理中…" : "保存当前记录"}
         </Button>
         <Button size="sm" variant="outline" onClick={draftTicketsFromEvidence} disabled={busyAction === "draft-tickets"}>
-          {busyAction === "draft-tickets" ? "生成中…" : "生成整改项"}
+          {busyAction === "draft-tickets" ? "生成中…" : "生成待处理项"}
         </Button>
         <div className="flex flex-wrap items-center gap-2 rounded-md border border-slate-200 bg-slate-50 p-1">
           <select
@@ -92,22 +92,22 @@ export function HeroSection({
           </select>
           <Button size="sm" onClick={runAutoSample} disabled={busyAction === "auto-sample" || Boolean(selectedProvider && !selectedProvider.configured)}>
             <Globe2 className="mr-2 h-4 w-4" />
-            {busyAction === "auto-sample" ? "采样中…" : "运行采样"}
+            {busyAction === "auto-sample" ? "检查中…" : "开始测试"}
           </Button>
         </div>
         <Button size="sm" variant="outline" onClick={downloadGeoReport}>
           <FileText className="mr-2 h-4 w-4" />
-          导出 AI 搜索报告
+          下载 AI 搜索说明
         </Button>
         <Button size="sm" variant="outline" onClick={downloadGeoTable}>
           <Download className="mr-2 h-4 w-4" />
-          导出证据表格
+          下载检查记录
         </Button>
       </div>
       {note ? <p className="mt-3 text-sm text-emerald-700">{note}</p> : null}
       {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
       <p className="mt-3 text-xs text-slate-500">
-        当前测试来源：{selectedProvider?.label ?? sampleProvider} · {selectedProvider?.web_grounded ? "联网证据源，返回 URL 时可计入引用率" : "分析参考源，只判断品牌提及和内容方向"}
+        当前测试来源：{selectedProvider?.label ?? sampleProvider} · {selectedProvider?.web_grounded ? "联网来源：返回网址时，可算作给出了官网" : "分析参考：只判断有没有提到品牌，不算给出官网"}
       </p>
     </section>
   );

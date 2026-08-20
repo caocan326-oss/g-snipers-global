@@ -35,7 +35,7 @@ export function AssetsPanel({
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
             <CardTitle>llms.txt 草稿</CardTitle>
-            <p className="mt-1 text-sm text-slate-500">这是给 AI 理解网站用的可引用资产草稿，不会自动发布到客户域名。</p>
+            <p className="mt-1 text-sm text-slate-500">这是给 AI 理解网站用的材料草稿，不会自动发布到客户域名。</p>
           </div>
           <Button variant="outline" onClick={generateLlms}>
             按选题生成
@@ -64,7 +64,7 @@ export function AssetsPanel({
       {cite ? (
         <Card>
           <CardHeader>
-            <CardTitle>可引用性清单（资产）</CardTitle>
+            <CardTitle>可供引用的材料清单</CardTitle>
           </CardHeader>
           <CardContent>
             <Textarea
@@ -78,7 +78,7 @@ export function AssetsPanel({
       ) : null}
       <Card>
         <CardHeader>
-          <CardTitle>内容可引用性检查</CardTitle>
+          <CardTitle>内容是否便于被引用</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <select
@@ -98,12 +98,12 @@ export function AssetsPanel({
               <div>
                 <div className="font-medium">{i.label}</div>
                 <Badge tone={i.status === "untested" ? "amber" : i.status === "pass" ? "green" : "red"}>
-                  {i.status === "untested" ? "未测" : i.status === "pass" ? "通过" : "未通过"}
+                  {i.status === "untested" ? "尚未检查" : i.status === "pass" ? "通过" : "未通过"}
                 </Badge>
               </div>
               <div className="flex gap-1">
                 <Button size="sm" variant="outline" onClick={() => setCheck(i.id, "untested")}>
-                  未测
+                  尚未检查
                 </Button>
                 <Button size="sm" variant="outline" onClick={() => setCheck(i.id, "pass")}>
                   通过

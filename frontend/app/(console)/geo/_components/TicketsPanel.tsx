@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import type { GeoPrompt, GeoTicket } from "@/lib/api";
 
-import { diagnosisOptions, ticketStatus } from "../_helpers";
+import { diagnosisLabel, diagnosisOptions, ticketStatus } from "../_helpers";
 
 export type TicketForm = {
   prompt_id: string;
@@ -44,7 +44,7 @@ export function TicketsPanel({
             <div>
               <CardTitle className="text-base">{t.title}</CardTitle>
               <p className="mt-1 text-xs text-slate-500">
-                诊断 {t.diagnosis_label} · {ticketStatus[t.status] ?? t.status}
+                判断 {diagnosisLabel[t.diagnosis] ?? t.diagnosis_label} · {ticketStatus[t.status] ?? t.status}
               </p>
             </div>
             <Badge tone={t.status === "done" ? "green" : t.status === "reopened" ? "red" : "amber"}>
@@ -53,7 +53,7 @@ export function TicketsPanel({
           </CardHeader>
           <CardContent className="space-y-2">
             <p className="text-sm text-slate-600">理由：{t.rationale}</p>
-            <p className="text-sm text-slate-600">验收：{t.acceptance_criteria}</p>
+            <p className="text-sm text-slate-600">完成标准：{t.acceptance_criteria}</p>
             {t.verified_note ? <p className="text-xs text-slate-500">备注：{t.verified_note}</p> : null}
             {t.evidence ? <pre className="whitespace-pre-wrap text-xs text-slate-500">{t.evidence}</pre> : null}
             {t.ai_review ? <p className="text-sm text-slate-600">初审：{t.ai_review}</p> : null}
@@ -65,10 +65,10 @@ export function TicketsPanel({
                 未确认
               </Button>
               <Button size="sm" onClick={() => verifyTicket(t.id, true)}>
-                确认验收
+                确认完成
               </Button>
               <Button size="sm" variant="ghost" onClick={() => reopenTicket(t.id)}>
-                复测后重开
+                复查后重开
               </Button>
             </div>
           </CardContent>
@@ -76,7 +76,7 @@ export function TicketsPanel({
       ))}
       <Card>
         <CardHeader>
-          <CardTitle>从问题生成整改项</CardTitle>
+          <CardTitle>从问题生成待处理项</CardTitle>
         </CardHeader>
         <CardContent>
           <form className="space-y-3" onSubmit={addTicket}>
@@ -94,7 +94,7 @@ export function TicketsPanel({
               ))}
             </select>
             <Input
-              placeholder="整改任务标题"
+              placeholder="待处理项标题"
               value={ticketForm.title}
               onChange={(e) => setTicketForm({ ...ticketForm, title: e.target.value })}
               required
@@ -111,16 +111,16 @@ export function TicketsPanel({
               ))}
             </select>
             <Textarea
-              placeholder="为什么需要整改"
+              placeholder="为什么需要处理"
               value={ticketForm.rationale}
               onChange={(e) => setTicketForm({ ...ticketForm, rationale: e.target.value })}
             />
             <Textarea
-              placeholder="验收标准，例如：页面已补充可引用信息，并完成复测"
+              placeholder="完成标准，例如：页面已补上可供引用的说明，并完成复查"
               value={ticketForm.acceptance_criteria}
               onChange={(e) => setTicketForm({ ...ticketForm, acceptance_criteria: e.target.value })}
             />
-            <Button type="submit">创建整改项</Button>
+            <Button type="submit">创建待处理项</Button>
           </form>
         </CardContent>
       </Card>

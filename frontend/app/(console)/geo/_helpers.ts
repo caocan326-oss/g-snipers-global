@@ -3,11 +3,11 @@ import type { GeoSampleRun, GeoSummary } from "@/lib/api";
 export type Tab = "sample" | "tickets" | "assets";
 
 export const obsLabel: Record<string, string> = {
-  untested: "未测",
-  mentioned: "出现",
-  not_mentioned: "未出现",
-  cited: "被引用",
-  verified: "引用已核验",
+  untested: "尚未检查",
+  mentioned: "被提到",
+  not_mentioned: "未提到",
+  cited: "给出了官网",
+  verified: "官网来源已核对",
 };
 
 export const obsTone: Record<string, "default" | "amber" | "green" | "red" | "blue"> = {
@@ -19,34 +19,34 @@ export const obsTone: Record<string, "default" | "amber" | "green" | "red" | "bl
 };
 
 export const evidenceLabel: Record<string, string> = {
-  none: "无证据",
-  mentioned: "正文提及",
-  cited: "引用待核验",
-  verified: "引用已核验",
+  none: "尚无记录",
+  mentioned: "正文提到",
+  cited: "给出官网，待核对",
+  verified: "官网来源已核对",
 };
 
 export const diagnosisOptions = [
-  ["untested", "未测"],
-  ["absent", "未出现"],
-  ["mentioned", "被提及"],
-  ["competitor_dominated", "竞品主导"],
-  ["suspected_negative", "疑似负面"],
+  ["untested", "尚未检查"],
+  ["absent", "未提到"],
+  ["mentioned", "被提到"],
+  ["competitor_dominated", "主要在推竞品"],
+  ["suspected_negative", "可能偏负面"],
 ] as const;
 
 export const ticketStatus: Record<string, string> = {
-  open: "待办",
-  in_progress: "执行中",
-  verify: "待验收",
-  done: "已验收",
+  open: "待处理",
+  in_progress: "进行中",
+  verify: "待复查",
+  done: "已完成",
   reopened: "已重开",
 };
 
 export const providerRoleLabel: Record<string, string> = {
   analysis: "分析建议",
   search: "联网搜索",
-  grounded_answer: "联网答案",
-  citation: "引用来源",
-  crawler: "抓取证据",
+  grounded_answer: "联网回答",
+  citation: "来源网址",
+  crawler: "网页记录",
 };
 
 export function geoEvidenceVerdict(summary: GeoSummary | null, runs: GeoSampleRun[]) {
@@ -57,50 +57,57 @@ export function geoEvidenceVerdict(summary: GeoSummary | null, runs: GeoSampleRu
   const thirdPartyOnly = webGrounded.filter((result) => result.third_party_citations.length > 0 && result.owned_citations.length === 0);
   if (!summary?.recorded && runs.length === 0) {
     return {
-      title: "还没有可写入报告的 GEO 证据",
-      text: "先生成买家问题，再用联网 provider 或人工观测记录采样。未采样不能写成 AI 可见性结论。",
+      title: "还没有可写入说明的检查记录",
+      text: "先生成买家问题，再用联网数据源或人工记录回答。尚未检查时，不能写成 AI 已经提到你们。",
       tone: "amber" as const,
-      level: "未采样",
+      level: "尚未检查",
     };
   }
   if (results.length > 0 && webGrounded.length === 0) {
     return {
-      title: "当前主要是分析参考，不是联网引用证据",
-      text: "DeepSeek/普通 LLM 可用于判断表达和生成建议，但没有联网 source URL 时，不能计入真实引用率。",
+      title: "目前只是分析参考，不是联网来源",
+      text: "普通大模型可以判断说法、生成建议；没有联网来源网址时，不能算作给出了官网。",
       tone: "blue" as const,
       level: "分析参考",
     };
   }
   if (verified.length > 0) {
     return {
-      title: "已有可写入报告的核验引用",
-      text: `已有 ${verified.length} 条联网引用通过核验，可以进入报告；未核验 URL 仍应标记为待确认。`,
+      title: "已有可写入说明的核对来源",
+      text: `已有 ${verified.length} 条联网来源通过核对，可以写入说明；未核对的网址仍应标为待确认。`,
       tone: "green" as const,
       level: "可交付",
     };
   }
   if (pendingOwned.length > 0) {
     return {
-      title: "发现官网引用，但还需要核验",
-      text: `已有 ${pendingOwned.length} 条疑似自有引用。请核验 URL 可访问、内容相关、确属客户资产后再写入正式结论。`,
+      title: "发现疑似官网来源，还需核对",
+      text: `已有 ${pendingOwned.length} 条疑似客户自己的网址。请确认能打开、内容相关、确属客户资产后再写入正式结论。`,
       tone: "amber" as const,
-      level: "待核验",
+      level: "待核对",
     };
   }
   if (thirdPartyOnly.length > 0) {
     return {
-      title: "有第三方来源，可转站外机会",
-      text: "当前更适合生成站外来源候选和 GEO 机会，不能直接算作客户官网被引用。",
+      title: "有第三方来源，可转站外跟进",
+      text: "当前更适合记为外部曝光线索，不能直接算作客户官网被给出。",
       tone: "blue" as const,
-      level: "来源发现",
+      level: "发现来源",
     };
   }
   return {
-    title: "证据不足，需要补采样",
-    text: "已有观测记录，但缺少可追溯的联网 URL、品牌提及或引用核验。",
+    title: "记录不足，需要再检查",
+    text: "已有回答记录，但缺少可追溯的联网网址、品牌提及或来源核对。",
     tone: "amber" as const,
-    level: "证据不足",
+    level: "记录不足",
   };
 }
 
 export type GeoEvidenceVerdict = ReturnType<typeof geoEvidenceVerdict>;
+
+export const diagnosisLabel: Record<string, string> = Object.fromEntries(diagnosisOptions);
+
+export function displayRate(value: string | null | undefined) {
+  if (!value || value === "未测") return "尚未检查";
+  return value;
+}

@@ -6,8 +6,8 @@ export function SampleRunsCard({ runs }: { runs: GeoSampleRun[] }) {
   return (
     <Card className="rounded-md">
       <CardHeader>
-        <CardTitle>采样批次记录</CardTitle>
-        <p className="text-sm text-slate-500">正式报告里的引用结论必须能追溯到采样批次、证据编号、配置 hash 和核验状态。</p>
+        <CardTitle>检查批次记录</CardTitle>
+        <p className="text-sm text-slate-500">正式说明里“给出了官网”的结论，必须能对上检查批次、记录编号和核对状态。</p>
       </CardHeader>
       <CardContent className="space-y-3">
         {runs.length ? runs.map((run) => (
@@ -16,7 +16,7 @@ export function SampleRunsCard({ runs }: { runs: GeoSampleRun[] }) {
               <div>
                 <div className="font-mono text-xs text-slate-500">{run.id}</div>
                 <div className="mt-1 text-sm font-medium">
-                  {run.protocol_version} · {run.prompt_set_id} · {run.results_count} 条证据
+                  {run.protocol_version} · {run.prompt_set_id} · {run.results_count} 条记录
                 </div>
               </div>
               <Badge tone={run.status === "done" ? "green" : "amber"}>{run.status}</Badge>
@@ -24,8 +24,8 @@ export function SampleRunsCard({ runs }: { runs: GeoSampleRun[] }) {
             <div className="mt-3 grid gap-2 text-xs text-slate-600 md:grid-cols-4">
               <div>配置指纹：<span className="font-mono">{run.config_hash}</span></div>
               <div>提及：{run.mention_rate}</div>
-              <div>自有引用：{run.cite_rate}</div>
-              <div>核验引用：{run.verified_citation_rate}</div>
+              <div>给出了官网：{run.cite_rate}</div>
+              <div>官网来源已核对：{run.verified_citation_rate}</div>
             </div>
             <div className="mt-2 flex flex-wrap gap-2">
               {run.results.slice(0, 6).map((result) => (
@@ -35,7 +35,7 @@ export function SampleRunsCard({ runs }: { runs: GeoSampleRun[] }) {
               ))}
             </div>
           </div>
-        )) : <p className="text-sm text-slate-500">暂无采样批次。记录一条观测后，可以点击“固化当前证据”。</p>}
+        )) : <p className="text-sm text-slate-500">还没有检查批次。记下一条回答后，可以点击“保存当前记录”。</p>}
       </CardContent>
     </Card>
   );

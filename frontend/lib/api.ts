@@ -155,6 +155,23 @@ export type Workbench = {
   deferred_modules: WorkbenchItem[];
 };
 
+export type CustomerBriefSection = {
+  key: string;
+  title: string;
+  body: string;
+  items: string[];
+};
+
+export type CustomerBrief = {
+  title: string;
+  headline: string;
+  markdown: string;
+  generated_at: string;
+  untested: string[];
+  this_week: string[];
+  sections: CustomerBriefSection[];
+};
+
 export type AiStatus = {
   configured: boolean;
   status: string;

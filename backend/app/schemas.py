@@ -127,6 +127,23 @@ class WorkbenchOut(BaseModel):
     deferred_modules: list[WorkbenchItem] = []
 
 
+class CustomerBriefSection(BaseModel):
+    key: str
+    title: str
+    body: str = ""
+    items: list[str] = []
+
+
+class CustomerBriefOut(BaseModel):
+    title: str
+    headline: str
+    markdown: str
+    generated_at: datetime
+    untested: list[str] = []
+    this_week: list[str] = []
+    sections: list[CustomerBriefSection] = []
+
+
 class MarketCreate(BaseModel):
     name: str
     region: str
