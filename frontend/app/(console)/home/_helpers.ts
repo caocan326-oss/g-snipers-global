@@ -88,21 +88,21 @@ export function reportReadyChecks(data: Workbench, targets: ProjectTargets | nul
     },
     {
       label: "搜索表现",
-      status: perf.data_status === "已导入" || perf.serp_runs > 0 || perf.latest_speed_score !== null ? "有证据" : "未测",
+      status: perf.data_status === "已导入" || perf.serp_runs > 0 || perf.latest_speed_score !== null ? "有记录" : "尚未检查",
       ok: perf.data_status === "已导入" || perf.serp_runs > 0 || perf.latest_speed_score !== null,
-      detail: perf.data_status === "已导入" ? "已有 Google/Bing 搜索表现。" : perf.serp_runs > 0 ? "已有目标词排名检查。" : "建议接入 Google/Bing、网页速度或关键词排名检查。",
+      detail: perf.data_status === "已导入" ? "已有 Google/Bing 搜索表现。" : perf.serp_runs > 0 ? "已有目标词位置检查。" : "建议接入 Google/Bing、网页速度或关键词位置检查。",
     },
     {
-      label: "AI 搜索证据",
-      status: data.summary.geo_recorded > 0 ? "有记录" : "未采样",
+      label: "AI 搜索记录",
+      status: data.summary.geo_recorded > 0 ? "有记录" : "尚未检查",
       ok: data.summary.geo_recorded > 0,
-      detail: data.summary.geo_recorded > 0 ? `已有 ${data.summary.geo_recorded} 条 AI 搜索观测。` : "需要跑联网/人工测试，未测不能写成结论。",
+      detail: data.summary.geo_recorded > 0 ? `已有 ${data.summary.geo_recorded} 条 AI 搜索记录。` : "需要联网或人工检查，尚未检查的不能写成结论。",
     },
     {
-      label: "P0/P1 闭环",
+      label: "紧急 / 优先问题",
       status: highRisk > 0 ? "需说明" : "通过",
       ok: highRisk === 0,
-      detail: highRisk > 0 ? `仍有 ${highRisk} 个高风险问题，报告需列入整改项和复测计划。` : "没有打开的高风险 SEO 问题。",
+      detail: highRisk > 0 ? `仍有 ${highRisk} 个紧急或优先问题，说明里要列入改法和复查。` : "没有打开的紧急或优先网站问题。",
     },
     {
       label: "Google 数据授权",

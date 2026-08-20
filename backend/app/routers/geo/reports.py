@@ -38,7 +38,7 @@ def geo_report(user: User = Depends(get_current_user), db: Session = Depends(get
     summary = geo_summary(user, db)
     generated = datetime.now(timezone.utc)
     lines = [
-        f"# GEO 可见性诊断报告 - {tenant.name if tenant else ''}",
+        f"# AI 搜索说明 - {tenant.name if tenant else ''}",
         "",
         "## 一句话结论",
         "",
@@ -54,9 +54,9 @@ def geo_report(user: User = Depends(get_current_user), db: Session = Depends(get
         "",
         "## 总览",
         "",
-        f"- 问句数：{summary.prompts}",
-        f"- 已记录采样：{summary.recorded}",
-        f"- 未测槽位：{summary.untested}",
+        f"- 买家问题：{summary.prompts}",
+        f"- 已有记录：{summary.recorded}",
+        f"- 尚未检查：{summary.untested}",
         f"- 品牌提及率：{summary.mention_rate}",
         f"- 引用率：{summary.cite_rate}",
         f"- 已核验引用率：{summary.verified_citation_rate}",
@@ -126,12 +126,12 @@ def geo_report(user: User = Depends(get_current_user), db: Session = Depends(get
     lines += [
         "## 下一步建议",
         "",
-        "1. 优先补测未测槽位，保持同一问句、同一地区和同一表面类型。",
-        "2. 对竞品主导问句，回到 SEO 页面补充可引用结论、案例、参数和权威来源。",
-        "3. 对被提及但未引用的问句，检查页面是否有清晰来源、作者、日期、结构化数据和可引用段落。",
-        "4. 每轮内容上线后重新采样，形成 GEO 复测记录。",
+        "1. 优先补齐尚未检查的条目，同一买家问题、同一地区保持同一套问法。",
+        "2. 如果主要在推竞品，回到网站补对照说明、案例、参数和可核对来源。",
+        "3. 如果只被提到、没有给出官网，检查页面是否有清楚来源、作者、日期和可供摘取的结论。",
+        "4. 改完后再查同一批问题，记下有没有被提到、有没有给出官网。",
     ]
-    return GeoReportOut(title=f"GEO 可见性诊断报告 - {tenant.name if tenant else ''}", markdown="\n".join(lines), generated_at=generated)
+    return GeoReportOut(title=f"AI 搜索说明 - {tenant.name if tenant else ''}", markdown="\n".join(lines), generated_at=generated)
 
 
 @router.get("/report-table", response_model=GeoReportTableOut)

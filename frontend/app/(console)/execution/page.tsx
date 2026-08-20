@@ -9,9 +9,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { api, type ExecutionBoard, type ExecutionItem } from "@/lib/api";
 
 const moduleLabel: Record<string, string> = {
-  seo: "SEO",
-  geo: "GEO",
-  offsite: "站外",
+  seo: "网站检查",
+  geo: "AI 搜索",
+  offsite: "站外曝光",
+};
+
+const priorityLabel: Record<string, string> = {
+  P0: "紧急",
+  P1: "优先",
+  P2: "常规",
 };
 
 const statusLabel: Record<string, string> = {
@@ -33,7 +39,7 @@ function ItemCard({ item }: { item: ExecutionItem }) {
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <Badge tone={item.priority === "P0" || item.priority === "P1" ? "red" : item.priority === "P2" ? "amber" : "default"}>{item.priority}</Badge>
+                <Badge tone={item.priority === "P0" || item.priority === "P1" ? "red" : item.priority === "P2" ? "amber" : "default"}>{priorityLabel[item.priority] ?? item.priority}</Badge>
                 <Badge tone="blue">{moduleLabel[item.source_module] ?? item.source_module}</Badge>
                 <Badge tone={item.status === "blocked" ? "red" : item.status.includes("retest") || item.status === "confirmed" ? "amber" : "default"}>
                   {statusLabel[item.status] ?? item.status}
@@ -47,11 +53,11 @@ function ItemCard({ item }: { item: ExecutionItem }) {
                   <p className="mt-1 text-slate-700">{item.owner_hint || "未指定"}</p>
                 </div>
                 <div className="rounded-md bg-slate-50 p-3">
-                  <div className="text-xs font-medium text-slate-500">验收标准</div>
+                  <div className="text-xs font-medium text-slate-500">完成标准</div>
                   <p className="mt-1 line-clamp-2 text-slate-700">{item.acceptance_criteria || "待补充"}</p>
                 </div>
                 <div className="rounded-md bg-slate-50 p-3">
-                  <div className="text-xs font-medium text-slate-500">复测方式</div>
+                  <div className="text-xs font-medium text-slate-500">复查方式</div>
                   <p className="mt-1 line-clamp-2 text-slate-700">{item.retest_method || "待补充"}</p>
                 </div>
               </div>
@@ -92,10 +98,10 @@ export default function ExecutionPage() {
       <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <Badge tone="brand">整改清单</Badge>
-            <h1 className="mt-3 text-2xl font-semibold text-slate-950">本周期整改清单</h1>
+            <Badge tone="brand">处理清单</Badge>
+            <h1 className="mt-3 text-2xl font-semibold text-slate-950">本周期处理清单</h1>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
-              这里汇总网站诊断、AI 搜索可见度和站外曝光中还没关闭的整改项。点击任意一项会回到原模块继续处理、验收和复测。
+              这里汇总网站检查、AI 搜索和站外曝光里还没关闭的事项。点一项会回到原模块继续处理、确认和复查。
             </p>
           </div>
           <div className="grid w-full gap-2 sm:grid-cols-3 lg:w-[520px]">

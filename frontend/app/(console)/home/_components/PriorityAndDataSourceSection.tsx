@@ -29,7 +29,7 @@ export function PriorityAndDataSourceSection({
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <CardTitle>优先处理队列</CardTitle>
-              <p className="mt-1 text-sm text-slate-500">按风险等级、证据缺口和待验收状态排序，告诉交付人员今天优先处理什么。</p>
+              <p className="mt-1 text-sm text-slate-500">按紧急程度、尚未检查的缺口和待复查状态排序，告诉交付人员今天先做什么。</p>
             </div>
             <Badge tone="amber">Top Actions</Badge>
           </div>
@@ -41,7 +41,7 @@ export function PriorityAndDataSourceSection({
 
       <Card className="rounded-md">
         <CardHeader>
-          <CardTitle>数据源与证据状态</CardTitle>
+          <CardTitle>数据源与检查状态</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="rounded-md border border-slate-200 p-3">
@@ -61,7 +61,7 @@ export function PriorityAndDataSourceSection({
             </div>
           </div>
           <div className="grid gap-2 text-sm">
-            <div className="flex items-center justify-between rounded-md bg-slate-50 px-3 py-2"><span className="text-slate-600">未测项</span><span className="font-semibold">{untestedTotal}</span></div>
+            <div className="flex items-center justify-between rounded-md bg-slate-50 px-3 py-2"><span className="text-slate-600">尚未检查</span><span className="font-semibold">{untestedTotal}</span></div>
             <div className="flex items-center justify-between rounded-md bg-slate-50 px-3 py-2"><span className="text-slate-600">关键词排名检查</span><span className="font-semibold">{perf.serp_runs}</span></div>
             <div className="flex items-center justify-between rounded-md bg-slate-50 px-3 py-2"><span className="text-slate-600">AI 可引用资料草稿</span><span className="font-semibold">{data.summary.geo_assets_draft}</span></div>
           </div>

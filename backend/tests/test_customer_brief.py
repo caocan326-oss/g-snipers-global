@@ -67,3 +67,45 @@ def test_customer_brief_merges_onsite_and_geo(client: TestClient, demo_user, db)
     assert any("尚未检查" in item for item in body["untested"])
     assert "网站检查" in markdown
     assert "AI 搜索可见度" in markdown
+    assert "来源核对 尚未检查" in markdown
+
+    workbench = client.get("/api/dashboard/workbench?days=28", headers=headers).json()
+    assert workbench["summary"]["onsite_open_critical"] == 1
+    assert workbench["summary"]["onsite_open_high"] == 0
+    geo_act = next(item for item in workbench["next_actions"] if item["id"] == "geo-sampling")
+    assert "8 条检查" in geo_act["subtitle"]
+    assert "8 个买家问题尚未检查" not in geo_act["subtitle"]
+
+
+def test_seeded_demo_counts_align_across_surfaces(client: TestClient, db) -> None:
+    from app.seed import seed
+
+    seed(db)
+    headers = auth_header(client)
+    workbench = client.get("/api/dashboard/workbench?days=28", headers=headers).json()
+    brief = client.get("/api/dashboard/customer-brief", headers=headers).json()
+    guide = client.get("/api/onsite/guide", headers=headers).json()
+    geo = client.get("/api/geo/summary", headers=headers).json()
+    summary = workbench["summary"]
+
+    assert summary["tenant_name"] == "演示客户 · 智能门锁出海"
+    assert summary["onsite_pages"] == 5
+    assert summary["onsite_open_critical"] == 5
+    assert summary["onsite_open_high"] == 1
+    assert summary["onsite_open_low"] == 3
+    assert summary["onsite_open_critical"] + summary["onsite_open_high"] + summary["onsite_open_low"] == 9
+    assert summary["geo_prompts"] == geo["prompts"] == 2
+    assert summary["geo_untested"] == geo["untested"] == 16
+    assert summary["geo_tickets_open"] == 2
+    assert "待处理 9 个问题" in brief["sections"][1]["body"]
+    assert "紧急 5" in brief["sections"][1]["body"]
+    assert "优先 1" in brief["sections"][1]["body"]
+    assert "常规 3" in brief["sections"][1]["body"]
+    assert guide["open_high"] == 6
+    assert guide["current"] != "collect"
+    assert any(item["id"] == "seo-critical" for item in workbench["next_actions"])
+    geo_act = next(item for item in workbench["next_actions"] if item["id"] == "geo-sampling")
+    assert "16 条检查" in geo_act["subtitle"]
+    assert "16 个买家问题" not in geo_act["subtitle"]
+    assert "采样" not in brief["markdown"]
+    assert "英文安装问题：先记下 AI 怎么回答，再补说明页" in brief["markdown"]

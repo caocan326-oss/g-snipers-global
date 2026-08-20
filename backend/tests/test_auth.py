@@ -36,6 +36,8 @@ def test_dashboard_workbench_prioritizes_seo_geo_diagnosis(client: TestClient, d
         "access_token"
     ]
     headers = {"Authorization": f"Bearer {token}"}
+    saved = client.patch("/api/onsite/settings", headers=headers, json={"site_origin": "https://www.example.com"})
+    assert saved.status_code == 200, saved.text
     market = client.post(
         "/api/markets",
         headers=headers,
@@ -82,7 +84,8 @@ def test_dashboard_workbench_prioritizes_seo_geo_diagnosis(client: TestClient, d
     assert data["seo_performance"]["days"] == 7
     assert data["seo_performance"]["total_impressions"] == 200
     assert data["seo_performance"]["top_keywords"][0]["key"] == "smart lock"
-    assert any(item["id"] == "seo-critical" for item in data["next_actions"])
+    assert any(item["id"] == "fetch-site" for item in data["next_actions"])
+    assert all(item["id"] != "seo-critical" for item in data["next_actions"])
     assert data["seo_items"][0]["href"] == f"/onsite/{page['id']}"
     assert data["recent_signals"][0]["href"] == f"/insights/{market['id']}"
 

@@ -21,7 +21,7 @@ export function DeliveryBoundarySection({
             <ShieldCheck className="h-5 w-5 text-brand-700" />
             <h2 className="text-lg font-semibold text-slate-950">交付边界</h2>
           </div>
-          <p className="mt-1 text-sm text-slate-500">客户看到可追溯的诊断结论，交付人员看到可执行的整改项、站外机会和复测结果。SEM、社媒投放和自动分发仍处于延期阶段，不参与当前报告评分。</p>
+          <p className="mt-1 text-sm text-slate-500">客户看到对得上的检查结论，交付人员看到可执行的改法、站外线索和复查结果。广告投放、社媒和自动分发仍延后，不参与当前说明。</p>
         </div>
         <div className="flex rounded-md border border-slate-200 bg-slate-50 p-1">
           {[7, 28, 90].map((item) => (

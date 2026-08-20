@@ -2,7 +2,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
@@ -30,6 +30,7 @@ from app.models import (
 )
 from app.llm import status_label
 from app.onsite_analyzer import rank_distribution
+from app.routers.onsite.constants import OPENISH
 from app.customer_brief import build_customer_brief
 from app.schemas import (
     CustomerBriefOut,
@@ -101,13 +102,13 @@ def _summary_for(user: User, db: Session) -> DashboardSummary:
     onsite_pages = db.query(func.count(SitePage.id)).filter(SitePage.tenant_id == tid).scalar() or 0
     onsite_open_low = (
         db.query(func.count(OnsiteIssue.id))
-        .filter(OnsiteIssue.tenant_id == tid, OnsiteIssue.risk == "low", OnsiteIssue.status == "open")
+        .filter(OnsiteIssue.tenant_id == tid, OnsiteIssue.severity == "low", OnsiteIssue.status.in_(OPENISH))
         .scalar()
         or 0
     )
     onsite_open_high = (
         db.query(func.count(OnsiteIssue.id))
-        .filter(OnsiteIssue.tenant_id == tid, OnsiteIssue.risk == "high", OnsiteIssue.status.in_(["open", "drafted"]))
+        .filter(OnsiteIssue.tenant_id == tid, OnsiteIssue.severity == "high", OnsiteIssue.status.in_(OPENISH))
         .scalar()
         or 0
     )
@@ -116,7 +117,7 @@ def _summary_for(user: User, db: Session) -> DashboardSummary:
         .filter(
             OnsiteIssue.tenant_id == tid,
             OnsiteIssue.severity == "critical",
-            OnsiteIssue.status.in_(["open", "drafted"]),
+            OnsiteIssue.status.in_(OPENISH),
         )
         .scalar()
         or 0
@@ -401,6 +402,16 @@ def workbench(
         for s in signals
     ]
 
+    fetched_pages = (
+        db.query(func.count(SitePage.id))
+        .filter(
+            SitePage.tenant_id == user.tenant_id,
+            or_(SitePage.crawl_status == "ok", SitePage.fetched_at.isnot(None)),
+        )
+        .scalar()
+        or 0
+    )
+
     next_actions: list[WorkbenchItem] = []
     if not site_origin:
         next_actions.append(
@@ -414,7 +425,19 @@ def workbench(
                 action_label="去登记",
             )
         )
-    if summary.onsite_pages and (summary.onsite_open_critical or summary.onsite_open_high):
+    elif summary.onsite_pages and fetched_pages == 0:
+        next_actions.append(
+            WorkbenchItem(
+                id="fetch-site",
+                title="先查看客户网页",
+                subtitle="页面已登记，但还没打开看过。先查看再写改法。",
+                href="/onsite",
+                status="待查看",
+                tone="amber",
+                action_label="去查看",
+            )
+        )
+    elif summary.onsite_pages and (summary.onsite_open_critical or summary.onsite_open_high):
         next_actions.append(
             WorkbenchItem(
                 id="seo-critical",
@@ -431,7 +454,7 @@ def workbench(
             WorkbenchItem(
                 id="geo-sampling",
                 title="补齐 AI 搜索检查",
-                subtitle=f"还有 {summary.geo_untested} 个买家问题尚未检查。",
+                subtitle=f"还有 {summary.geo_untested} 条检查尚未做（{summary.geo_prompts} 个买家问题）。",
                 href="/geo",
                 status="尚未检查",
                 tone="amber",

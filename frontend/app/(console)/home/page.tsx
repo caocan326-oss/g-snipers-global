@@ -87,17 +87,17 @@ export default function HomePage() {
   const executiveSummary = [
     {
       label: "网站风险",
-      text: highRisk > 0 ? `当前有 ${highRisk} 个高优先级网站问题，先处理影响抓取、收录、页面标题和结构化信息的问题。` : "当前没有打开的高风险网站问题，重点进入复测和报告整理。",
+      text: highRisk > 0 ? `当前有 ${highRisk} 个紧急或优先网站问题，先处理打不开、是否收录、标题和页面说明。` : "当前没有打开的紧急或优先网站问题，重点进入复查和说明整理。",
       tone: technicalTone,
     },
     {
       label: "AI 搜索",
-      text: geoRecorded > 0 ? `已有 ${geoRecorded} 条 AI 搜索观测记录，可整理“是否被提到、是否被引用”的证据。` : `还有 ${data.summary.geo_untested} 个买家问题未测试，报告里必须标记为待补证据。`,
+      text: geoRecorded > 0 ? `已有 ${geoRecorded} 条 AI 搜索记录，可整理有没有被提到、有没有给出官网。` : `还有 ${data.summary.geo_untested} 条检查尚未做（${data.summary.geo_prompts} 个买家问题），说明里只能写尚未检查。`,
       tone: geoStatusTone,
     },
     {
       label: "下一步",
-      text: reviewTotal > 0 ? `本周期先推进 ${reviewTotal} 个动作：高风险整改、AI 搜索测试、站外曝光和改完复测。` : "本周期暂无阻塞动作，可以进入报告交付或复测观察。",
+      text: reviewTotal > 0 ? `本周期先推进 ${reviewTotal} 个动作：紧急网站改法、AI 搜索检查、站外曝光和改完复查。` : "本周期暂无阻塞动作，可以进入客户说明或复查。",
       tone: workTone,
     },
   ];
@@ -180,7 +180,7 @@ export default function HomePage() {
   }
 
   async function deleteArchive(item: SiteArchive) {
-    const confirmText = window.prompt(`删除 ${item.site_origin} 的历史数据？\n会删除该历史快照中的抓取记录、GEO 采样、测速、排名和报告证据。\n请输入网站域名或 DELETE 确认。`);
+    const confirmText = window.prompt(`删除 ${item.site_origin} 的历史数据？\n会删除该历史快照中的抓取记录、AI 搜索检查、测速、排名和说明记录。\n请输入网站域名或 DELETE 确认。`);
     if (!confirmText) return;
     setError("");
     setNote("");

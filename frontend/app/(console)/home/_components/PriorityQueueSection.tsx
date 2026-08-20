@@ -7,9 +7,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { ExecutionBoard, ExecutionItem } from "@/lib/api";
 
 const moduleLabel: Record<string, string> = {
-  seo: "SEO",
-  geo: "GEO",
+  seo: "网站检查",
+  geo: "AI 搜索",
   offsite: "站外曝光",
+};
+
+const priorityLabel: Record<string, string> = {
+  P0: "紧急",
+  P1: "优先",
+  P2: "常规",
 };
 
 const statusLabel: Record<string, string> = {
@@ -41,7 +47,7 @@ function PriorityRow({ item }: { item: ExecutionItem }) {
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge tone={priorityTone(item.priority)}>{item.priority || "P2"}</Badge>
+            <Badge tone={priorityTone(item.priority)}>{priorityLabel[item.priority] ?? item.priority ?? "常规"}</Badge>
             <Badge tone="blue">{moduleLabel[item.source_module] ?? item.source_module}</Badge>
             <Badge tone={statusTone(item)}>{statusLabel[item.status] ?? item.status}</Badge>
           </div>
@@ -90,7 +96,7 @@ export function PriorityQueueSection({
             本周期待处理优先级队列
           </CardTitle>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
-            按 P0/P1、受阻和待复测优先排序，汇总 SEO、GEO 和站外曝光中还没关闭的事项。先处理这里的前几项，再进入各模块查看细节。
+            按紧急、优先、受阻和待复查排序，汇总网站检查、AI 搜索和站外曝光里还没关闭的事项。先处理这里的前几项。
           </p>
         </div>
         <div className="flex gap-2">
@@ -109,7 +115,7 @@ export function PriorityQueueSection({
         {!loading && board && items.length === 0 ? (
           <div className="rounded-md border border-emerald-100 bg-emerald-50 px-4 py-5">
             <h3 className="font-medium text-emerald-900">本周期没有待处理项</h3>
-            <p className="mt-1 text-sm text-emerald-700">SEO、GEO 和站外曝光暂时没有未关闭事项，可以进入复测、报告整理或下一轮诊断。</p>
+            <p className="mt-1 text-sm text-emerald-700">网站检查、AI 搜索和站外曝光暂时没有未关闭事项，可以进入复查或整理客户说明。</p>
           </div>
         ) : null}
         {items.map((item) => <PriorityRow key={`${item.source_module}-${item.id}`} item={item} />)}

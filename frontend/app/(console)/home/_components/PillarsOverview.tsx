@@ -28,27 +28,27 @@ export function PillarsOverview({
     <>
       <section className="grid gap-4 xl:grid-cols-3">
         <PillarCard
-          title="网站 SEO 风险"
-          status={highRisk > 0 ? "需整改" : data.summary.onsite_pages > 0 ? "已审计" : "未抓取"}
+          title="网站检查"
+          status={highRisk > 0 ? "待处理" : data.summary.onsite_pages > 0 ? "已查看" : "未查看"}
           statusTone={technicalTone}
-          primary={`${highRisk} 个 P0/P1`}
-          helper={`${data.summary.onsite_pages} 个页面，检查搜索引擎能不能抓到、看懂、收录，并判断页面质量。`}
+          primary={`${highRisk} 个紧急/优先`}
+          helper={`${data.summary.onsite_pages} 个页面。看能不能打开、搜索有没有收录、标题和说明清不清楚。`}
           href="/onsite"
           icon={SearchCheck}
         >
           <div className="grid grid-cols-3 gap-2 text-sm">
-            <div className="rounded-md bg-slate-50 p-3"><div className="text-xs text-slate-500">P0</div><div className="mt-1 font-semibold">{data.summary.onsite_open_critical}</div></div>
-            <div className="rounded-md bg-slate-50 p-3"><div className="text-xs text-slate-500">P1</div><div className="mt-1 font-semibold">{data.summary.onsite_open_high}</div></div>
-            <div className="rounded-md bg-slate-50 p-3"><div className="text-xs text-slate-500">P2</div><div className="mt-1 font-semibold">{data.summary.onsite_open_low}</div></div>
+            <div className="rounded-md bg-slate-50 p-3"><div className="text-xs text-slate-500">紧急</div><div className="mt-1 font-semibold">{data.summary.onsite_open_critical}</div></div>
+            <div className="rounded-md bg-slate-50 p-3"><div className="text-xs text-slate-500">优先</div><div className="mt-1 font-semibold">{data.summary.onsite_open_high}</div></div>
+            <div className="rounded-md bg-slate-50 p-3"><div className="text-xs text-slate-500">常规</div><div className="mt-1 font-semibold">{data.summary.onsite_open_low}</div></div>
           </div>
         </PillarCard>
 
         <PillarCard
           title="AI 搜索可见度"
-          status={data.summary.geo_untested > 0 ? "存在未测" : geoRecorded > 0 ? "已有证据" : "未采样"}
+          status={data.summary.geo_untested > 0 ? "尚未检查" : geoRecorded > 0 ? "已有记录" : "尚未开始"}
           statusTone={geoStatusTone}
           primary={`${geoRecorded} 条记录`}
-          helper={`${data.summary.geo_prompts} 个买家问题，${data.summary.geo_untested} 个未测。看 AI 回答里有没有提到客户、有没有引用客户官网。`}
+          helper={`${data.summary.geo_prompts} 个买家问题，${data.summary.geo_untested} 条尚未检查。看 AI 回答里有没有提到客户、有没有给出官网。`}
           href="/geo"
           icon={Globe2}
         >
@@ -59,17 +59,17 @@ export function PillarsOverview({
         </PillarCard>
 
         <PillarCard
-          title="站外曝光与整改"
+          title="站外曝光与跟进"
           status={reviewTotal > 0 ? "待处理" : "清爽"}
           statusTone={workTone}
           primary={`${reviewTotal} 个执行项`}
-          helper={`${data.summary.geo_tickets_open} 个 AI 搜索整改项，${data.summary.seo_pending_review} 个网站待复核；站外机会进入曝光工作台跟进。`}
+          helper={`${data.summary.geo_tickets_open} 个 AI 搜索待处理项，${data.summary.seo_pending_review} 个网站待复查；站外线索进曝光台跟进。`}
           href="/offsite"
           icon={ListChecks}
         >
           <div className="grid grid-cols-2 gap-2 text-sm">
-            <div className="rounded-md bg-slate-50 p-3"><div className="text-xs text-slate-500">GEO</div><div className="mt-1 font-semibold">{data.summary.geo_tickets_open}</div></div>
-            <div className="rounded-md bg-slate-50 p-3"><div className="text-xs text-slate-500">人审</div><div className="mt-1 font-semibold">{data.summary.seo_pending_review}</div></div>
+            <div className="rounded-md bg-slate-50 p-3"><div className="text-xs text-slate-500">AI 搜索</div><div className="mt-1 font-semibold">{data.summary.geo_tickets_open}</div></div>
+            <div className="rounded-md bg-slate-50 p-3"><div className="text-xs text-slate-500">待复查</div><div className="mt-1 font-semibold">{data.summary.seo_pending_review}</div></div>
           </div>
         </PillarCard>
       </section>

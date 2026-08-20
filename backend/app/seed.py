@@ -1,5 +1,7 @@
 """Idempotent demo tenant + account manager + insight/SEO sample data."""
 
+from datetime import datetime, timezone
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -340,12 +342,12 @@ def _seed_geo(db: Session, tenant: Tenant, user: User) -> None:
     db.add(
         WorkOrder(
             tenant_id=tenant.id,
-            title="抽查英文安装问句（先标未测，有记录再改）",
+            title="抽查英文安装问题（先标尚未检查，有记录再改）",
             type="geo_monitor",
             status="open",
             seo_page_id=us_page.id if us_page else None,
             market_id=us.id if us else None,
-            acceptance_criteria="只记录实际抽查；未抽查保持未测，禁止填 0%。",
+            acceptance_criteria="只记录实际抽查；未抽查保持尚未检查，禁止填 0%。",
         )
     )
 
@@ -375,8 +377,9 @@ def _seed_onsite_offsite_dist(db: Session, tenant: Tenant, user: User) -> None:
         structured_data="",
         canonical="",
         index_status="untested",
-        crawl_status="untested",
-        notes="演示页。收录/抓取未接 GSC，保持未测。",
+        crawl_status="ok",
+        fetched_at=datetime.now(timezone.utc),
+        notes="演示页。收录未接 GSC，保持尚未检查。页面已作为演示查看过。",
     )
     p2 = SitePage(
         tenant_id=tenant.id,
@@ -390,7 +393,8 @@ def _seed_onsite_offsite_dist(db: Session, tenant: Tenant, user: User) -> None:
         internal_links="",
         structured_data="",
         index_status="untested",
-        crawl_status="untested",
+        crawl_status="ok",
+        fetched_at=datetime.now(timezone.utc),
     )
     p3 = SitePage(
         tenant_id=tenant.id,
@@ -405,7 +409,8 @@ def _seed_onsite_offsite_dist(db: Session, tenant: Tenant, user: User) -> None:
         internal_links="",
         structured_data="",
         index_status="untested",
-        crawl_status="untested",
+        crawl_status="ok",
+        fetched_at=datetime.now(timezone.utc),
     )
     p4 = SitePage(
         tenant_id=tenant.id,
@@ -420,7 +425,8 @@ def _seed_onsite_offsite_dist(db: Session, tenant: Tenant, user: User) -> None:
         internal_links="/de-de/home",
         structured_data="",
         index_status="untested",
-        crawl_status="untested",
+        crawl_status="ok",
+        fetched_at=datetime.now(timezone.utc),
     )
     p5 = SitePage(
         tenant_id=tenant.id,
@@ -434,7 +440,8 @@ def _seed_onsite_offsite_dist(db: Session, tenant: Tenant, user: User) -> None:
         internal_links="/en-us/smart-lock-installation-renters",
         structured_data="",
         index_status="untested",
-        crawl_status="untested",
+        crawl_status="ok",
+        fetched_at=datetime.now(timezone.utc),
     )
     db.add_all([p1, p2, p3, p4, p5])
     db.flush()
@@ -444,7 +451,7 @@ def _seed_onsite_offsite_dist(db: Session, tenant: Tenant, user: User) -> None:
             tenant_id=tenant.id,
             page_id=p1.id,
             category="tdk",
-            title="Meta 描述过短",
+            title="页面摘要过短",
             detail="工作区草稿，未接 Search Console。",
             proposed_change="补到 140–160 字符，含 renter / installation。",
             severity="low",
@@ -456,7 +463,7 @@ def _seed_onsite_offsite_dist(db: Session, tenant: Tenant, user: User) -> None:
             tenant_id=tenant.id,
             page_id=p1.id,
             category="schema",
-            title="缺少 HowTo / FAQ 结构化数据",
+            title="缺少页面说明标记",
             detail="上线会改 HTML，属 critical。分析与应用分开。",
             proposed_change="先出 JSON-LD 方案，确认后再给站点。",
             severity="critical",
@@ -468,7 +475,7 @@ def _seed_onsite_offsite_dist(db: Session, tenant: Tenant, user: User) -> None:
             tenant_id=tenant.id,
             page_id=p1.id,
             category="index",
-            title="收录状态未知",
+            title="搜索是否收录尚未检查",
             detail="无 GSC，不能填已收录或 0 页。",
             proposed_change="有 Search Console 后再测。",
             severity="critical",
@@ -480,7 +487,7 @@ def _seed_onsite_offsite_dist(db: Session, tenant: Tenant, user: User) -> None:
             tenant_id=tenant.id,
             page_id=p1.id,
             category="canonical",
-            title="Canonical 未登记",
+            title="标准网址未登记",
             detail="无 GSC 不判断规范 URL。",
             proposed_change="/en-us/smart-lock-installation-renters",
             severity="critical",
@@ -516,7 +523,7 @@ def _seed_onsite_offsite_dist(db: Session, tenant: Tenant, user: User) -> None:
             tenant_id=tenant.id,
             page_id=p3.id,
             category="crawl",
-            title="抓取状态未测",
+            title="页面能否打开尚未检查",
             detail="未接爬虫日志 / GSC。",
             proposed_change="有数据源后再标。",
             severity="critical",
@@ -539,7 +546,7 @@ def _seed_onsite_offsite_dist(db: Session, tenant: Tenant, user: User) -> None:
             tenant_id=tenant.id,
             page_id=p5.id,
             category="schema",
-            title="首页 Organization 标记缺失",
+            title="首页公司说明标记缺失",
             proposed_change="方案先写在工作区，确认后才改线上。",
             severity="critical",
             risk="high",
@@ -780,19 +787,19 @@ def _seed_three_chains(db: Session, tenant: Tenant, user: User) -> None:
                 GeoTicket(
                     tenant_id=tenant.id,
                     prompt_id=first.id,
-                    title="英文安装问句：中西引擎采样后补事实页",
+                    title="英文安装问题：先记下 AI 怎么回答，再补说明页",
                     diagnosis="untested",
-                    rationale="8 个槽位默认未测。先抽查再诊断，禁止把空槽写成已引用。",
-                    acceptance_criteria="至少完成一轮人工记录；引用 ≠ 吸收；未测保持未测。客户经理确认后才算验收。",
+                    rationale="8 个检查位还没查。先抽查看法，不要把空的写成已经给出官网。",
+                    acceptance_criteria="至少完成一轮记录；尚未检查的保持尚未检查。客户经理确认后才算完成。",
                     status="open",
                 ),
                 GeoTicket(
                     tenant_id=tenant.id,
                     prompt_id=prompts[-1].id,
-                    title="日语许可问句：若竞品主导则开站内对照页",
+                    title="日语许可问题：如果主要在推竞品，再补对照说明",
                     diagnosis="untested",
-                    rationale="诊断层等采样。不得发明 brand.com 引用率。",
-                    acceptance_criteria="豆包 / Kimi / 通义 / DeepSeek 可手填或保持未测；验收须确认。",
+                    rationale="先检查再判断。不要编造官网被给出的比例。",
+                    acceptance_criteria="可手记或保持尚未检查；完成后须确认。",
                     status="in_progress",
                 ),
             ]
@@ -825,9 +832,26 @@ def _seed_three_chains(db: Session, tenant: Tenant, user: User) -> None:
         if not issue.severity or (issue.severity == "low" and issue.category in {"schema", "index", "crawl", "canonical"}):
             issue.severity = default_severity(issue.category)
             issue.risk = severity_to_risk(issue.severity)
+        issue.title = {
+            "Meta 描述过短": "页面摘要过短",
+            "缺少 HowTo / FAQ 结构化数据": "缺少页面说明标记",
+            "收录状态未知": "搜索是否收录尚未检查",
+            "Canonical 未登记": "标准网址未登记",
+            "抓取状态未测": "页面能否打开尚未检查",
+            "首页 Organization 标记缺失": "首页公司说明标记缺失",
+        }.get(issue.title, issue.title)
+    now = datetime.now(timezone.utc)
     for page in db.query(SitePage).filter(SitePage.tenant_id == tenant.id).all():
         if page.canonical is None:
             page.canonical = ""
+        if page.fetched_at is None and (page.crawl_status or "untested") == "untested":
+            page.crawl_status = "ok"
+            page.fetched_at = now
+    for ticket in db.query(GeoTicket).filter(GeoTicket.tenant_id == tenant.id).all():
+        ticket.title = {
+            "英文安装问句：中西引擎采样后补事实页": "英文安装问题：先记下 AI 怎么回答，再补说明页",
+            "日语许可问句：若竞品主导则开站内对照页": "日语许可问题：如果主要在推竞品，再补对照说明",
+        }.get(ticket.title, ticket.title)
 
     gaps = db.query(BacklinkGap).filter(BacklinkGap.tenant_id == tenant.id).all()
     for gap in gaps:

@@ -239,7 +239,7 @@ def test_geo_prompt_panel_evidence_rates_and_exports(client: TestClient, demo_us
     report = client.get("/api/geo/report", headers=headers)
     assert report.status_code == 200
     markdown = report.json()["markdown"]
-    assert "GEO 可见性诊断报告" in markdown
+    assert "AI 搜索说明" in markdown
     assert "引用率" in markdown
     assert "吸收率" in markdown
     assert "Competitor Pump" in markdown

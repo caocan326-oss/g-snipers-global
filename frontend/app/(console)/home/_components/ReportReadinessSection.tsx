@@ -26,13 +26,13 @@ export function ReportReadinessSection({
             <Badge tone={reportReady ? "green" : "amber"}>{passedChecks}/{reportChecks.length} 项通过</Badge>
           </div>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-            报告可以导出，但只有通过这些检查，结论才足够可信。未测项会在报告中标记为未测，不会被写成已验证结果。
+            说明可以下载，但只有通过这些检查，结论才够可信。尚未检查的会标明尚未检查，不会写成已经核对过。
           </p>
         </div>
         <Link href="/distribution">
           <Button type="button" variant={reportReady ? "default" : "outline"}>
             <FileText className="mr-2 h-4 w-4" />
-            查看报告中心
+            查看客户说明
           </Button>
         </Link>
       </div>

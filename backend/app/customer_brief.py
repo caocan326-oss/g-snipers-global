@@ -171,7 +171,7 @@ def build_customer_brief(user: User, db: Session) -> CustomerBriefOut:
             body=(
                 f"买家问题 {geo.prompts} 个，已有记录 {geo.recorded} 条，尚未检查 {geo.untested} 条。"
                 f"品牌被提到 {_display_rate(geo.mention_rate)}，给出官网 {_display_rate(geo.cite_rate)}，"
-                f"官网来源已核对 {_display_rate(geo.verified_citation_rate)}。"
+                f"来源核对 {_display_rate(geo.verified_citation_rate)}。"
             ),
             items=geo_items,
         ),

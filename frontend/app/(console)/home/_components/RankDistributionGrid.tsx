@@ -24,7 +24,7 @@ export function RankDistributionGrid({
           <div className="text-sm font-semibold text-slate-950">{title}</div>
           <div className="mt-1 text-xs text-slate-500">{total > 0 ? `共 ${total} 个关键词/查询样本` : empty}</div>
         </div>
-        <Badge tone={total > 0 ? "blue" : "amber"}>{total > 0 ? "有数据" : "未测"}</Badge>
+        <Badge tone={total > 0 ? "blue" : "amber"}>{total > 0 ? "有数据" : "尚未检查"}</Badge>
       </div>
       <div className="mt-3 grid grid-cols-2 gap-2 lg:grid-cols-4">
         {cells.map((cell) => (
