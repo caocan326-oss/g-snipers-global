@@ -3,6 +3,8 @@
 最后更新：2026-08-20。  
 这份文件是**唯一权威运维记录**。机器、仓库、域名有变动时，先改这里再动手。
 
+换机器开工、日常动作清单：先读 **`docs/HANDOVER.md`**（问「交接文档在哪里」就指这个文件）。
+
 ---
 
 ## 1. 权威源（不要弄混）
@@ -11,7 +13,7 @@
 | --- | --- | --- |
 | **代码权威** | GitHub `origin`：https://github.com/caocan326-oss/g-snipers-global.git | 开发、PR、发版只认这个 |
 | **镜像远端** | GitHub `upstream`：https://github.com/caocan326-oss/g-snipers-overseas.git | 只做同步，不在这里开新分支当主仓 |
-| **本机工作副本** | `D:\workspace\G-snipers海外版` | `main` 跟踪 `origin/main` |
+| **本机工作副本** | 公司 `E:\G-snipers海外版`；家里 `D:\workspace\G-snipers海外版` | 两台不同时改；`main` 跟踪 `origin/main` |
 | **生产工作副本** | 服务器 `/opt/g-snipers-overseas` | `main` 跟踪 `origin/main`，用 git 拉代码 |
 | **空目录（不要当代码）** | 服务器 `/opt/g-snipers-global` | 只剩旧 `.env`，不是在跑的应用 |
 
@@ -139,14 +141,16 @@ compose 会覆盖数据库地址为容器内：
 ## 6. 日常开发
 
 ```bash
-# 本机
-cd D:\workspace\G-snipers海外版
+# 本机（公司 E:\G-snipers海外版，家里 D:\workspace\G-snipers海外版）
+cd <本机仓库根目录>
 git checkout main
 git pull origin main
 # 改代码、测
 git push origin main
 git push upstream main    # 保持镜像同步，避免有人 clone 到旧仓
 ```
+
+逐步动作见 `docs/HANDOVER.md`。
 
 不要在 `upstream` 上单独提交。不要 `git pull upstream` 除非你在修镜像。
 
@@ -194,6 +198,7 @@ powershell -File deploy/sync-from-local.ps1
 | 2026-08-20 | 运维 | 确立 `g-snipers-global` 为权威源；镜像同步 `g-snipers-overseas`；生产目录改为 git；本档案入库 |
 | 2026-08-20 | 代码 | compose 的 `FRONTEND_ORIGIN` 改为读环境变量；`.gitignore` 忽略 `.env.*` |
 | 2026-08-20 | 运维 | 生产目录已是 `57df684` 的 git checkout；`FRONTEND_ORIGIN=https://www.weiyids.com`；发现服务器无法 `git pull` GitHub，发版改走 `deploy/sync-from-local.ps1` |
+| 2026-08-20 | 文档 | 增加换机交接清单 `docs/HANDOVER.md`；本机路径写明公司 E: / 家里 D: |
 
 ---
 
