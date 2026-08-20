@@ -7,7 +7,7 @@
 
 约定：家里和公司**不会同时改**。换机器前必须把这边 push 完。
 
-最后更新：2026-08-21 01:30（家里。中转已提交未发版。排名请求已补 `q=`。域名橙云明天继续）。
+最后更新：2026-08-21 01:34（家里收工。中转 + 排名修复已 push，未发版。域名橙云明天继续）。
 
 ---
 
@@ -206,16 +206,18 @@ git log -1 --oneline
 
 | 项 | 值 |
 | --- | --- |
-| 日期 | 2026-08-21 01:27 |
+| 日期 | 2026-08-21 01:34 |
 | 最后一台 | 家里 `D:\workspace\G-snipers海外版` |
 | 分支 | `main` |
-| 提交 | 本提交：GSC / PageSpeed 走 Cloudflare Worker；未配中转时测速仍用 17CE。生产仍是 `f8b242c`。 |
-| 已 push origin / upstream | 本提交一起推 |
-| 已发版生产 | 没有。Worker 已在 `workers.dev`。服务器 `.env` 已有 `GOOGLE_RELAY_*`，**密钥不在 git**。北京出不去 `workers.dev`，发版无意义。 |
-| 未完成 | 绑 Cloudflare 橙云自定义域名（卡手机验证码）。通了再改 `GOOGLE_RELAY_URL`、测北京、再 `sync-from-local.ps1`。排名请求已改成带 `q=` / `gl` / `hl`，生产还没发这版。 |
-| 下一台先做 | 公司先 `git pull origin main`。不要两边同时改。 |
+| 提交 | `d22b0fe` 排名请求补上 `q=` / `gl` / `hl`。上一笔 `56ddd88` 是 GSC / PageSpeed 走 Worker。生产仍是 `f8b242c`。 |
+| 已 push origin / upstream | 是，两个远端都在 `d22b0fe` |
+| 已发版生产 | **没有，今晚不要发。** 服务器 `.env` 已有 `GOOGLE_RELAY_*`。发上去测速会走 Worker，北京连不上 `workers.dev`，17CE 也不会兜底。 |
+| 未完成 | 手机验证码登录域名 → Worker 绑 Cloudflare **橙云** 自定义域名（不要 CNAME 回 `workers.dev`）→ 只改服务器 `GOOGLE_RELAY_URL` → 北京测通 → 再 `sync-from-local.ps1`。 |
+| 下一台先做 | **明天家里继续。** 公司若先开：`git pull origin main`。不要两边同时改。 |
 
-不要再发密钥。不要开 Google Ads。不要在服务器 `git pull`。
+明天域名登录成功后：`www` 灰云、A 仍 `39.97.52.149`；加 `relay.weiyids.com`（或同类名）绑 Worker `google-relay`，开橙云。新地址发家里这台对话。密钥不用再发。
+
+不要开 Google Ads。不要在服务器 `git pull`。
 
 ---
 
