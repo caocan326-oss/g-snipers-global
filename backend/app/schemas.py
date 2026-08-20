@@ -823,7 +823,8 @@ class IntegrationSettingsIn(BaseModel):
     gsc_oauth_client_secret: str | None = None
     gsc_oauth_redirect_uri: str | None = None
     pagespeed_api_key: str | None = None
-    boce_api_key: str | None = None
+    ce17_user: str | None = None
+    ce17_api_pwd: str | None = None
     brightdata_dataset_api_key: str | None = None
     brightdata_serp_dataset_id: str | None = None
     brightdata_serp_endpoint: str | None = None
@@ -842,7 +843,7 @@ class IntegrationSettingsOut(BaseModel):
     fields: list[IntegrationFieldOut]
     gsc_configured: bool
     pagespeed_configured: bool
-    boce_configured: bool = False
+    ce17_configured: bool = False
     brightdata_serp_configured: bool
     note: str = "密钥只在后端保存；前端只显示是否已配置和掩码。"
 

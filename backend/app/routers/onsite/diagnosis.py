@@ -25,7 +25,7 @@ from app.models import (
     Tenant,
     User,
 )
-from app.boce_speed import BoceError, run_overseas_http_check
+from app.ce17_speed import Ce17Error, run_overseas_http_check
 from app.onsite_analyzer import rank_distribution
 from app.onsite_fetch import normalize_origin
 from app.schemas import (
@@ -451,16 +451,18 @@ def _pagespeed_targets(tenant: Tenant, pages: list[SitePage], requested: list[st
     return urls[:limit]
 
 
-def _speed_api_key(db: Session, tenant_id: str) -> str:
-    return _integration_value(db, tenant_id, "boce_api_key") or settings.boce_api_key
+def _speed_credentials(db: Session, tenant_id: str) -> tuple[str, str]:
+    user = _integration_value(db, tenant_id, "ce17_user") or settings.ce17_user
+    password = _integration_value(db, tenant_id, "ce17_api_pwd") or settings.ce17_api_pwd
+    return user.strip(), password.strip()
 
 
 def _run_pagespeed(db: Session, tenant_id: str, url: str, strategy: str) -> dict:
     del strategy
-    key = _speed_api_key(db, tenant_id)
-    if not key:
-        raise BoceError("国内服务器访问不了 Google 测速。请先配置拨测海外打开 Key。")
-    return run_overseas_http_check(api_key=key, url=url)
+    user, password = _speed_credentials(db, tenant_id)
+    if not user or not password:
+        raise Ce17Error("国内服务器访问不了 Google 测速。请先配置 17CE 账号和 api_pwd。")
+    return run_overseas_http_check(user=user, api_pwd=password, url=url)
 
 
 def _diagnosis_targets(db: Session, user: User) -> dict[str, list]:

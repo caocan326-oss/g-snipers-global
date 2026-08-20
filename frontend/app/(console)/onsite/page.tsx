@@ -81,7 +81,8 @@ export default function OnsiteBoardPage() {
     gsc_oauth_client_secret: "",
     gsc_oauth_redirect_uri: "",
     pagespeed_api_key: "",
-    boce_api_key: "",
+    ce17_user: "",
+    ce17_api_pwd: "",
     brightdata_dataset_api_key: "",
     brightdata_serp_dataset_id: "",
     brightdata_serp_endpoint: "",
@@ -357,7 +358,7 @@ export default function OnsiteBoardPage() {
       const failed = res.filter((item) => item.status !== "ok");
       const ok = res.length - failed.length;
       if (!res.length || failed.length === res.length) {
-        const reason = failed[0]?.detail || "没有测速结果。拨测海外节点可能还没返回。";
+        const reason = failed[0]?.detail || "没有测速结果。17CE 海外节点可能还没返回。";
         setError(`海外打开检查未完成：${reason}`);
         return;
       }
@@ -456,7 +457,8 @@ export default function OnsiteBoardPage() {
         gsc_oauth_client_secret: "",
         gsc_oauth_redirect_uri: "",
         pagespeed_api_key: "",
-        boce_api_key: "",
+        ce17_user: "",
+        ce17_api_pwd: "",
         brightdata_dataset_api_key: "",
         brightdata_serp_dataset_id: "",
         brightdata_serp_endpoint: "",

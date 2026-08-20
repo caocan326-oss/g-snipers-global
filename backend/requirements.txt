@@ -9,6 +9,7 @@ email-validator==2.2.0
 PyJWT==2.10.1
 bcrypt==4.2.1
 httpx==0.28.1
+websockets==15.0.1
 pytest==8.3.4
 python-multipart==0.0.20
 protego==0.6.2

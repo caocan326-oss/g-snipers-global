@@ -19,7 +19,8 @@ type IntegrationForm = {
   gsc_oauth_client_secret: string;
   gsc_oauth_redirect_uri: string;
   pagespeed_api_key: string;
-  boce_api_key: string;
+  ce17_user: string;
+  ce17_api_pwd: string;
   brightdata_dataset_api_key: string;
   brightdata_serp_dataset_id: string;
   brightdata_serp_endpoint: string;
@@ -160,10 +161,15 @@ export function PerformanceDataCard({
                   onChange={(e) => setIntegrationForm({ ...integrationForm, brightdata_serp_dataset_id: e.target.value })}
                 />
                 <Input
-                  placeholder="拨测 HTTP 检测独立 Key，留空则不改"
+                  placeholder="17CE 账号，一般是注册邮箱，留空则不改"
+                  value={integrationForm.ce17_user}
+                  onChange={(e) => setIntegrationForm({ ...integrationForm, ce17_user: e.target.value })}
+                />
+                <Input
+                  placeholder="17CE api_pwd，留空则不改"
                   type="password"
-                  value={integrationForm.boce_api_key}
-                  onChange={(e) => setIntegrationForm({ ...integrationForm, boce_api_key: e.target.value })}
+                  value={integrationForm.ce17_api_pwd}
+                  onChange={(e) => setIntegrationForm({ ...integrationForm, ce17_api_pwd: e.target.value })}
                 />
               </div>
               {integrations?.fields.some((field) => field.configured) ? (
@@ -265,7 +271,7 @@ export function PerformanceDataCard({
               <div className="text-[11px] text-slate-500">最慢节点</div>
             </div>
           </div>
-          <Button type="button" onClick={runPageSpeed} disabled={busyId === "pagespeed" || !integrations?.boce_configured} className="mt-3 w-full">
+          <Button type="button" onClick={runPageSpeed} disabled={busyId === "pagespeed" || !integrations?.ce17_configured} className="mt-3 w-full">
             <Gauge className="mr-2 h-4 w-4" />
             {busyId === "pagespeed" ? "检查中，最多约 1 分钟…" : "从海外节点打开首页"}
           </Button>
@@ -273,7 +279,7 @@ export function PerformanceDataCard({
             <p className="mt-2 text-xs leading-5 text-slate-500">{performance.speed_latest[0].detail}</p>
           ) : (
             <p className="mt-2 text-xs text-slate-500">
-              {integrations?.boce_configured ? "用拨测海外节点看客户官网打不打得开、要多久。不是 Google 页面分数。" : "还没配置拨测 Key，按钮已停用。国内服务器访问不了 Google 测速。"}
+              {integrations?.ce17_configured ? "用 17CE 海外节点看客户官网打不打得开、要多久。不是 Google 页面分数。" : "还没配置 17CE，按钮已停用。国内服务器访问不了 Google 测速。"}
             </p>
           )}
         </div>

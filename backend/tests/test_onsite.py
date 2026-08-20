@@ -870,14 +870,18 @@ def test_brightdata_dataset_serp_request_shape(monkeypatch) -> None:
     assert rows[0]["url"] == "https://example.com/pumps"
 
 
-def test_pagespeed_uses_boce_overseas_check(client: TestClient, demo_user, monkeypatch) -> None:
+def test_pagespeed_uses_ce17_overseas_check(client: TestClient, demo_user, monkeypatch) -> None:
     import app.routers.onsite.diagnosis as diagnosis
 
     headers = auth_header(client)
     client.patch("/api/onsite/settings", headers=headers, json={"site_origin": "https://example.com"})
-    saved = client.patch("/api/onsite/integrations", headers=headers, json={"boce_api_key": "boce-independent-key"})
+    saved = client.patch(
+        "/api/onsite/integrations",
+        headers=headers,
+        json={"ce17_user": "am@example.com", "ce17_api_pwd": "ce17-api-pwd"},
+    )
     assert saved.status_code == 200, saved.text
-    assert saved.json()["boce_configured"] is True
+    assert saved.json()["ce17_configured"] is True
 
     monkeypatch.setattr(
         diagnosis,
@@ -890,7 +894,7 @@ def test_pagespeed_uses_boce_overseas_check(client: TestClient, demo_user, monke
             "lcp_ms": 820,
             "inp_ms": 1400,
             "cls": None,
-            "detail": "拨测海外打开 https://example.com/：通 2/2。",
+            "detail": "17CE 海外打开 https://example.com/：通 2/2。",
         },
     )
     res = client.post("/api/onsite/performance/pagespeed", headers=headers, json={"urls": [], "strategies": ["mobile"], "limit": 2})
@@ -901,13 +905,13 @@ def test_pagespeed_uses_boce_overseas_check(client: TestClient, demo_user, monke
     assert body[0]["strategy"] == "overseas"
     assert body[0]["lcp_ms"] == 820
     assert body[0]["performance_score"] is None
-    assert "拨测海外打开" in body[0]["detail"]
+    assert "17CE 海外打开" in body[0]["detail"]
 
 
-def test_pagespeed_without_boce_key_records_error(client: TestClient, demo_user) -> None:
+def test_pagespeed_without_ce17_key_records_error(client: TestClient, demo_user) -> None:
     headers = auth_header(client)
     client.patch("/api/onsite/settings", headers=headers, json={"site_origin": "https://example.com"})
     res = client.post("/api/onsite/performance/pagespeed", headers=headers, json={"urls": [], "limit": 1})
     assert res.status_code == 200, res.text
     assert res.json()[0]["status"] == "error"
-    assert "拨测" in res.json()[0]["detail"]
+    assert "17CE" in res.json()[0]["detail"]

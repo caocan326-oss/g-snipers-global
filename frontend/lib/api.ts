@@ -392,7 +392,7 @@ export type IntegrationSettings = {
   fields: IntegrationField[];
   gsc_configured: boolean;
   pagespeed_configured: boolean;
-  boce_configured?: boolean;
+  ce17_configured?: boolean;
   brightdata_serp_configured: boolean;
   note: string;
 };
