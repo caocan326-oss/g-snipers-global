@@ -36,6 +36,36 @@ from app.models import (
 SNIPERS_TEST_ORIGIN = "https://www.snipers.com.cn"
 
 
+def ensure_admin(db: Session) -> None:
+    email = (settings.admin_email or "").strip().lower()
+    password = settings.admin_password
+    if not email or not password:
+        return
+    tenant = db.scalar(select(Tenant).where(Tenant.name == "演示客户 · 智能门锁出海"))
+    if tenant is None:
+        tenant = db.scalar(select(Tenant).order_by(Tenant.created_at.asc()))
+    if tenant is None:
+        tenant = Tenant(name="运营", industry="internal")
+        db.add(tenant)
+        db.flush()
+    user = db.scalar(select(User).where(User.email == email))
+    if user is None:
+        db.add(
+            User(
+                tenant_id=tenant.id,
+                email=email,
+                hashed_password=hash_password(password),
+                name=settings.admin_name or "管理员",
+                role="admin",
+            )
+        )
+        return
+    user.role = "admin"
+    user.hashed_password = hash_password(password)
+    if settings.admin_name:
+        user.name = settings.admin_name
+
+
 def seed(db: Session) -> None:
     tenant = db.scalar(select(Tenant).where(Tenant.name == "演示客户 · 智能门锁出海"))
     if tenant is None:
@@ -62,6 +92,7 @@ def seed(db: Session) -> None:
         _seed_geo(db, tenant, user)
         _seed_onsite_offsite_dist(db, tenant, user)
         _seed_three_chains(db, tenant, user)
+        ensure_admin(db)
         db.commit()
         return
 
@@ -255,6 +286,7 @@ def seed(db: Session) -> None:
     _seed_geo(db, tenant, user)
     _seed_onsite_offsite_dist(db, tenant, user)
     _seed_three_chains(db, tenant, user)
+    ensure_admin(db)
     db.commit()
 
 

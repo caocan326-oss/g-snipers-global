@@ -1,5 +1,8 @@
 from fastapi.testclient import TestClient
 
+from app.models import User
+from app.seed import ensure_admin
+
 
 def test_login_and_me(client: TestClient, demo_user) -> None:
     bad = client.post("/api/auth/login", json={"email": "am@demo.gsnipers.com", "password": "wrong"})
@@ -88,6 +91,32 @@ def test_dashboard_workbench_prioritizes_seo_geo_diagnosis(client: TestClient, d
     assert all(item["id"] != "seo-critical" for item in data["next_actions"])
     assert data["seo_items"][0]["href"] == f"/onsite/{page['id']}"
     assert data["recent_signals"][0]["href"] == f"/insights/{market['id']}"
+
+
+def test_admin_can_login_when_env_is_set(client: TestClient, demo_user, db, monkeypatch) -> None:
+    monkeypatch.setattr("app.seed.settings.admin_email", "ops@example.com")
+    monkeypatch.setattr("app.seed.settings.admin_password", "admin-secret")
+    monkeypatch.setattr("app.seed.settings.admin_name", "运营管理员")
+    ensure_admin(db)
+    db.commit()
+
+    admin = db.query(User).filter(User.email == "ops@example.com").one()
+    assert admin.role == "admin"
+
+    ok = client.post("/api/auth/login", json={"email": "ops@example.com", "password": "admin-secret"})
+    assert ok.status_code == 200, ok.text
+    me = client.get("/api/auth/me", headers={"Authorization": f"Bearer {ok.json()['access_token']}"})
+    assert me.status_code == 200
+    assert me.json()["role"] == "admin"
+    assert me.json()["name"] == "运营管理员"
+
+
+def test_demo_login_can_be_disabled(client: TestClient, demo_user, monkeypatch) -> None:
+    monkeypatch.setattr("app.routers.auth.settings.demo_login_enabled", False)
+    monkeypatch.setattr("app.routers.auth.settings.demo_am_email", "am@demo.gsnipers.com")
+    blocked = client.post("/api/auth/login", json={"email": "am@demo.gsnipers.com", "password": "demo1234"})
+    assert blocked.status_code == 401
+    assert "演示账号已关闭" in blocked.json()["detail"]
 
 
 def test_boot_does_not_require_google_ads_env(client: TestClient, monkeypatch) -> None:

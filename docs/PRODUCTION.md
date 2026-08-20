@@ -125,7 +125,9 @@ Docker Compose 项目名：`g-snipers-overseas`
 线上 `.env` 在服务器上，已被 `.gitignore` 排除。  
 `.env.bak-*` 也忽略，不要提交。
 
-必填：`SECRET_KEY`、`DATABASE_URL`、`DEMO_AM_EMAIL`、`DEMO_AM_PASSWORD`、`FRONTEND_ORIGIN`
+必填：`SECRET_KEY`、`DATABASE_URL`、`FRONTEND_ORIGIN`  
+演示：`DEMO_AM_EMAIL`、`DEMO_AM_PASSWORD`、`DEMO_LOGIN_ENABLED`  
+管理员：`ADMIN_EMAIL`、`ADMIN_PASSWORD`、`ADMIN_NAME`（密码只写服务器 `.env`）
 
 compose 会覆盖数据库地址为容器内：
 
@@ -202,6 +204,8 @@ powershell -File deploy/sync-from-local.ps1
 | 2026-08-20 | 产品 | 站内链增加当前步骤与一句说明；客户说明/清单改成清楚克制的用词；未发版 |
 | 2026-08-20 | 产品 | GEO 工作台与总览改成同一套话；客户说明页合成「本周说明」预览；未发版 |
 | 2026-08-20 | 产品 | 总览不再重复计算紧急问题；买家问题与检查条数分开写；演示数据与步骤条对齐；未发版 |
+| 2026-08-20 | 运维 | 生产发到 `9dbf4d0`（`sync-from-local.ps1 -Rebuild`）。公司机补了 SSH Host `g-snipers-server`，私钥用本机 `~/.ssh/g_snipers_deploy` |
+| 2026-08-20 | 产品 | 增加管理员账号（`ADMIN_EMAIL` / `ADMIN_PASSWORD`）；登录页不再预填演示密码；生产可关 `DEMO_LOGIN_ENABLED` |
 
 ---
 

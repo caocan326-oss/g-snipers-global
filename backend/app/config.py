@@ -10,6 +10,10 @@ class Settings(BaseSettings):
     frontend_origin: str = "http://localhost:3000"
     demo_am_email: str = "am@demo.gsnipers.com"
     demo_am_password: str = "demo1234"
+    demo_login_enabled: bool = True
+    admin_email: str = ""
+    admin_password: str = ""
+    admin_name: str = "管理员"
     distribution_directory_api_key: str = ""
     distribution_guest_api_key: str = ""
     distribution_syndication_api_key: str = ""

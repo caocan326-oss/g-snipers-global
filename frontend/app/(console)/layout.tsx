@@ -79,7 +79,10 @@ export default function ConsoleLayout({ children }: { children: ReactNode }) {
         </nav>
         <div className="border-t border-white/10 px-4 py-4">
           <div className="text-sm font-medium text-white">{user?.name ?? "…"}</div>
-          <div className="truncate text-xs text-slate-500">{user?.tenant_name}</div>
+          <div className="truncate text-xs text-slate-500">
+            {user?.role === "admin" ? "管理员" : "客户经理"}
+            {user?.tenant_name ? ` · ${user.tenant_name}` : ""}
+          </div>
           <Button
             variant="ghost"
             size="sm"
