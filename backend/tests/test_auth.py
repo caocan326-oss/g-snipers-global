@@ -77,7 +77,7 @@ def test_dashboard_workbench_prioritizes_seo_geo_diagnosis(client: TestClient, d
     data = res.json()
     assert data["summary"]["onsite_open_critical"] == 1
     assert data["summary"]["geo_tickets_open"] == 1
-    assert data["chains"][0]["title"] == "SEO 诊断"
+    assert data["chains"][0]["title"] == "网站检查"
     assert all(chain["key"] != "insights" for chain in data["chains"])
     assert data["seo_performance"]["days"] == 7
     assert data["seo_performance"]["total_impressions"] == 200

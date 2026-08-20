@@ -19,6 +19,7 @@ import {
   type IndexNowSubmitResult,
   type Market,
   type OnsiteBoard,
+  type OnsiteGuide,
   type OnsiteIssue,
   type ProjectTargets,
   type SeoReport,
@@ -31,7 +32,7 @@ import {
 
 import { DiagnosisSection } from "./_components/DiagnosisSection";
 import { IssueBoard } from "./_components/IssueBoard";
-import { PageHeaderActions } from "./_components/PageHeaderActions";
+import { GuideHeader } from "./_components/GuideHeader";
 import { PagesAndBriefsSection } from "./_components/PagesAndBriefsSection";
 import { PerformanceDataCard } from "./_components/PerformanceDataCard";
 import { RankAuthoritySection } from "./_components/RankAuthoritySection";
@@ -84,6 +85,8 @@ export default function OnsiteBoardPage() {
   const [performanceSource, setPerformanceSource] = useState<"gsc_csv" | "bing_csv">("gsc_csv");
   const [form, setForm] = useState({ path: "/", locale: "en-US", title: "" });
   const [origin, setOrigin] = useState("");
+  const [guide, setGuide] = useState<OnsiteGuide | null>(null);
+  const [voicePending, setVoicePending] = useState(false);
 
   function load() {
     Promise.all([
@@ -101,8 +104,9 @@ export default function OnsiteBoardPage() {
       api<IndexNowStatus>("/api/onsite/indexnow/status"),
       api<DataSyncStatus>("/api/onsite/data-sync/status"),
       api<ProjectTargets>("/api/project-targets"),
+      api<OnsiteGuide>("/api/onsite/guide"),
     ])
-      .then(([b, p, br, s, cs, m, seo, perf, integrationStatus, gscStatus, bingStatus, indexNowStatus, ds, targetConfig]) => {
+      .then(([b, p, br, s, cs, m, seo, perf, integrationStatus, gscStatus, bingStatus, indexNowStatus, ds, targetConfig, nextGuide]) => {
         setBoard(b);
         setPages(p);
         setBriefs(br);
@@ -117,6 +121,16 @@ export default function OnsiteBoardPage() {
         setIndexNow(indexNowStatus);
         setSyncStatus(ds);
         setTargets(targetConfig);
+        setGuide(nextGuide);
+        if (nextGuide.ai_status === "pending" || nextGuide.ai_status === "未配置") {
+          if (nextGuide.ai_status === "pending") {
+            setVoicePending(true);
+            api<OnsiteGuide>("/api/onsite/guide/voice", { method: "POST" })
+              .then((voiced) => setGuide(voiced))
+              .catch(() => undefined)
+              .finally(() => setVoicePending(false));
+          }
+        }
       })
       .catch((e) => setError(e.message));
   }
@@ -224,6 +238,7 @@ export default function OnsiteBoardPage() {
 
   async function saveOrigin() {
     setError("");
+    setBusyId("save-origin");
     try {
       const res = await api<{ site_origin: string }>("/api/onsite/settings", {
         method: "PATCH",
@@ -231,8 +246,11 @@ export default function OnsiteBoardPage() {
       });
       setOrigin(res.site_origin);
       setNote(`已保存客户官网：${res.site_origin}`);
+      load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "保存官网失败");
+    } finally {
+      setBusyId("");
     }
   }
 
@@ -261,12 +279,15 @@ export default function OnsiteBoardPage() {
 
   async function fetchSite() {
     setError("");
+    setBusyId("fetch-site");
     try {
       const res = await api<FetchRegistered>("/api/onsite/fetch-registered", { method: "POST" });
       setNote(`${res.note} 成功 ${res.fetched} · 失败 ${res.failed} · 验收 ${res.verified}`);
       load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "抓取失败");
+    } finally {
+      setBusyId("");
     }
   }
 
@@ -466,7 +487,7 @@ export default function OnsiteBoardPage() {
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
-      setNote("SEO 诊断报告已生成。");
+      setNote("客户说明已生成。");
     } catch (e) {
       setError(e instanceof Error ? e.message : "报告生成失败");
     }
@@ -485,9 +506,42 @@ export default function OnsiteBoardPage() {
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
-      setNote("SEO 诊断表格已生成。");
+      setNote("执行清单已生成。");
     } catch (e) {
       setError(e instanceof Error ? e.message : "表格生成失败");
+    }
+  }
+
+  function focusIssues(nextFilter?: FilterKey) {
+    if (nextFilter) setFilter(nextFilter);
+    document.getElementById("onsite-issues")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  async function runPrimary() {
+    if (!guide) return;
+    if (guide.action_key === "save_origin") {
+      if (!origin.trim()) {
+        setError("请先在下面填上官网地址，再点保存。");
+        document.getElementById("onsite-site-setup")?.scrollIntoView({ behavior: "smooth", block: "start" });
+        return;
+      }
+      await saveOrigin();
+      return;
+    }
+    if (guide.action_key === "fetch_site") {
+      await fetchSite();
+      return;
+    }
+    if (guide.action_key === "generate_drafts") {
+      await analyze();
+      return;
+    }
+    if (guide.action_key === "review_drafts" || guide.action_key === "retest_queue") {
+      focusIssues((guide.filter_key as FilterKey) || undefined);
+      return;
+    }
+    if (guide.action_key === "export_report") {
+      await downloadReport();
     }
   }
 
@@ -500,7 +554,7 @@ export default function OnsiteBoardPage() {
 
   async function analyze() {
     setError("");
-    setNote("正在生成本批 AI 整改建议，请稍等…");
+    setNote("正在生成本批改法，请稍等…");
     setBusyId("ai-batch");
     try {
       const res = await api<AiAssist>("/api/onsite/ai", {
@@ -540,13 +594,13 @@ export default function OnsiteBoardPage() {
   async function saveDraft(issue: OnsiteIssue) {
     const text = drafts[issue.id] ?? issue.proposed_change;
     if (!text?.trim()) {
-      setError("请先填写整改方案。AI 建议只提供参考，仍需要人工确认后执行。");
+      setError("请先填写改法。系统建议只作参考，仍需人工确认后再改网站。");
       return;
     }
     setBusyId(issue.id);
     try {
       await api(`/api/onsite/issues/${issue.id}/draft`, { method: "PATCH", body: JSON.stringify({ proposed_change: text }) });
-      setNote("处理方案已保存，下一步交给执行人上线或进入人审。");
+      setNote("改法已保存。下一步交给执行修改，或进入人工确认。");
       load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "保存方案失败");
@@ -561,13 +615,13 @@ export default function OnsiteBoardPage() {
     try {
       if (issue.severity === "low" && issue.risk === "low") {
         await api(`/api/onsite/issues/${issue.id}/apply-draft`, { method: "POST" });
-        setNote("已标记为交付执行人。执行完成后可回抓复测。");
+        setNote("已交给执行。修改完成后可复查。");
       } else {
         await api(`/api/onsite/issues/${issue.id}/mark-executed`, {
           method: "POST",
           body: JSON.stringify({ confirmed: true, note: "人工确认已在客户网站或执行环境处理，等待系统复测。" }),
         });
-        setNote("已记录人工执行，下一步回抓复测。");
+        setNote("已记录人工修改，下一步重新打开页面核对。");
       }
       load();
     } catch (e) {
@@ -582,10 +636,10 @@ export default function OnsiteBoardPage() {
     setBusyId(issue.id);
     try {
       const row = await api<OnsiteIssue>(`/api/onsite/issues/${issue.id}/retest`, { method: "POST" });
-      setNote(row.status === "verified" ? "复测通过，本条已验收。" : `复测完成，当前状态：${statusLabel[row.status] ?? row.status}`);
+      setNote(row.status === "verified" ? "复查通过，本条已完成。" : `复查完成，当前状态：${statusLabel[row.status] ?? row.status}`);
       load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "复测失败");
+      setError(e instanceof Error ? e.message : "复查失败");
     } finally {
       setBusyId("");
     }
@@ -599,7 +653,7 @@ export default function OnsiteBoardPage() {
         method: "POST",
         body: JSON.stringify({ note: "本轮测试暂不处理。" }),
       });
-      setNote("已忽略本条，不再进入优先处理清单。");
+      setNote("本条已标为不改，不再进入优先清单。");
       if (expandedId === issue.id) setExpandedId("");
       load();
     } catch (e) {
@@ -612,11 +666,11 @@ export default function OnsiteBoardPage() {
   async function copyDraft(issue: OnsiteIssue) {
     const text = drafts[issue.id] ?? issue.proposed_change;
     if (!text?.trim()) {
-      setError("没有可复制的处理方案。");
+      setError("没有可复制的改法。");
       return;
     }
     await navigator.clipboard.writeText(text);
-    setNote("处理方案已复制。");
+    setNote("改法已复制。");
   }
 
   async function create(e: FormEvent) {
@@ -631,10 +685,13 @@ export default function OnsiteBoardPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeaderActions
+      <GuideHeader
+        guide={guide}
+        voicePending={voicePending}
+        busyId={busyId}
+        onPrimary={() => void runPrimary()}
         crawlOrSeed={crawlOrSeed}
         analyze={analyze}
-        busyId={busyId}
         downloadReport={downloadReport}
         downloadReportTable={downloadReportTable}
       />

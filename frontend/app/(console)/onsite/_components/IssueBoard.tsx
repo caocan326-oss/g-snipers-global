@@ -59,12 +59,12 @@ export function IssueBoard({
   ignoreIssue: (issue: OnsiteIssue) => void;
 }) {
   return (
-    <Card className="rounded-md">
+    <Card id="onsite-issues" className="rounded-md">
       <CardHeader className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-        <CardTitle>第五步：优先整改清单</CardTitle>
-            <p className="mt-1 text-sm text-slate-500">默认按风险、执行状态和页面路径排序。点击问题即可查看证据、建议动作和复测方法。</p>
+        <CardTitle>需要处理的问题</CardTitle>
+            <p className="mt-1 text-sm text-slate-500">按紧急程度和进度排列。点开一条即可查看依据、改法和复查方式。</p>
           </div>
           <Badge tone="amber">{visibleIssues.length} / {totalCount} 条</Badge>
         </div>
@@ -73,7 +73,7 @@ export function IssueBoard({
             <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
             <Input
               className="pl-9"
-              placeholder="搜索 URL、页面名、问题类型或整改方案"
+              placeholder="搜索网址、页面名、问题类型或改法"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
@@ -95,7 +95,7 @@ export function IssueBoard({
       <CardContent className="space-y-3">
         {visibleIssues.length === 0 ? (
           <div className="rounded-md border border-dashed border-slate-200 p-5 text-sm text-slate-500">
-            当前筛选下没有待处理问题。
+            当前筛选下没有待处理项。
           </div>
         ) : null}
         {visibleIssues.map((issue) => {
@@ -116,7 +116,7 @@ export function IssueBoard({
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-medium text-slate-900">{issue.title}</span>
                     <Badge>{catLabel[issue.category] ?? issue.category}</Badge>
-                    <Badge tone="amber">{issue.metric_status === "untested" ? "未测" : issue.metric_status}</Badge>
+                    <Badge tone="amber">{issue.metric_status === "untested" ? "尚未检查" : issue.metric_status}</Badge>
                   </div>
                   <div className="mt-1 flex flex-wrap gap-2 text-xs text-slate-500">
                     <span className="text-brand-700">{issue.page_title || issue.page_path}</span>
@@ -125,10 +125,10 @@ export function IssueBoard({
                 </div>
                 <div>
                   <Badge tone={statusTone[issue.status] ?? "default"}>{statusLabel[issue.status] ?? issue.status}</Badge>
-                  <div className="mt-2 truncate text-xs text-slate-500">{issue.owner_hint || (issue.risk === "high" ? "需要人审" : "可交付执行")}</div>
+                  <div className="mt-2 truncate text-xs text-slate-500">{issue.owner_hint || (issue.risk === "high" ? "需人工确认" : "可交给执行")}</div>
                 </div>
                 <div className="text-sm text-slate-600">{nextStep(issue)}</div>
-                <div className="text-right text-xs font-medium text-brand-700">{expanded ? "收起" : "展开处理"}</div>
+                <div className="text-right text-xs font-medium text-brand-700">{expanded ? "收起" : "查看详情"}</div>
               </button>
 
               {expanded ? (
@@ -140,20 +140,20 @@ export function IssueBoard({
                     </div>
                     <div className="rounded-md border border-slate-200 bg-white p-3">
                       <div className="text-xs font-medium text-slate-500">验收标准</div>
-                      <p className="mt-1 line-clamp-2 text-sm text-slate-800">{issue.acceptance_criteria || "按建议修改后，重新抓取并确认问题消失。"}</p>
+                      <p className="mt-1 line-clamp-2 text-sm text-slate-800">{issue.acceptance_criteria || "按改法修改后，重新打开页面，确认问题不再出现。"}</p>
                     </div>
                     <div className="rounded-md border border-slate-200 bg-white p-3">
-                      <div className="text-xs font-medium text-slate-500">复测方式</div>
-                      <p className="mt-1 line-clamp-2 text-sm text-slate-800">{issue.retest_method || "重新抓取页面并比对观察层。"}</p>
+                      <div className="text-xs font-medium text-slate-500">复查方式</div>
+                      <p className="mt-1 line-clamp-2 text-sm text-slate-800">{issue.retest_method || "重新打开页面，对照修改前后的内容。"}</p>
                     </div>
                     <div className="rounded-md border border-slate-200 bg-white p-3">
-                      <div className="text-xs font-medium text-slate-500">复测结果</div>
-                      <p className="mt-1 line-clamp-2 text-sm text-slate-800">{issue.retest_result || "尚未复测"}</p>
+                      <div className="text-xs font-medium text-slate-500">复查结果</div>
+                      <p className="mt-1 line-clamp-2 text-sm text-slate-800">{issue.retest_result || "尚未复查"}</p>
                     </div>
                   </div>
                   <div className="grid gap-4 xl:grid-cols-[1fr_1fr]">
                     <div className="space-y-2">
-                      <div className="text-xs font-medium text-slate-500">诊断证据</div>
+                      <div className="text-xs font-medium text-slate-500">查看依据</div>
                       <p className="text-sm text-slate-700">{issue.detail || "暂无详情。"}</p>
                       {issue.evidence ? (
                         <pre className="max-h-44 overflow-auto whitespace-pre-wrap rounded-md bg-white p-3 text-xs text-slate-500">
@@ -164,7 +164,7 @@ export function IssueBoard({
                       <div className="grid gap-2 pt-2 md:grid-cols-2">
                         <div className="rounded-md border border-slate-200 bg-white p-3">
                           <div className="text-xs font-medium text-slate-500">影响</div>
-                          <p className="mt-1 text-sm text-slate-700">{issue.impact || "影响页面可被理解和复测。"}</p>
+                          <p className="mt-1 text-sm text-slate-700">{issue.impact || "影响页面是否容易被理解和复查。"}</p>
                         </div>
                         <div className="rounded-md border border-slate-200 bg-white p-3">
                           <div className="text-xs font-medium text-slate-500">执行角色</div>
@@ -173,52 +173,52 @@ export function IssueBoard({
                       </div>
                     </div>
                     <div className="space-y-2">
-                      <div className="text-xs font-medium text-slate-500">处理方案</div>
+                      <div className="text-xs font-medium text-slate-500">改法</div>
                       <div className="rounded-md border border-slate-200 bg-white p-3 text-sm text-slate-700">
                         <div className="text-xs font-medium text-slate-500">建议动作</div>
-                        <p className="mt-1">{issue.recommended_action || "结合诊断证据补充处理方案，人工确认后执行。"}</p>
-                        <div className="mt-3 text-xs font-medium text-slate-500">复测方法</div>
-                        <p className="mt-1">{issue.retest_method || "执行后重新抓取页面并比对观察层。"}</p>
+                        <p className="mt-1">{issue.recommended_action || "根据查看依据补充改法，人工确认后再修改网站。"}</p>
+                        <div className="mt-3 text-xs font-medium text-slate-500">复查方法</div>
+                        <p className="mt-1">{issue.retest_method || "修改后重新打开页面，对照是否已经纠正。"}</p>
                       </div>
                       <Textarea
                         className="min-h-[120px] bg-white"
-                        placeholder="填写给客户技术或内容执行人的整改方案。AI 建议不会自动执行。"
+                        placeholder="填写给网站执行人员的改法。系统不会自动改网站。"
                         value={drafts[issue.id] ?? issue.proposed_change}
                         onChange={(e) => setDrafts({ ...drafts, [issue.id]: e.target.value })}
                       />
                       <div className="flex flex-wrap gap-2">
                         <Button asChild size="sm" variant="outline">
-                          <Link href={`/onsite/${issue.page_id}`}>查看单页观察</Link>
+                          <Link href={`/onsite/${issue.page_id}`}>查看该页</Link>
                         </Button>
                         <Button size="sm" onClick={() => aiIssue(issue.id)} disabled={busyId === issue.id}>
                           <Bot className="mr-1.5 h-3.5 w-3.5" />
-                          生成处理建议
+                          生成改法
                         </Button>
                         <Button size="sm" variant="outline" onClick={() => saveDraft(issue)} disabled={busyId === issue.id}>
-                          保存整改方案
+                          保存改法
                         </Button>
                         <Button size="sm" variant="outline" onClick={() => copyDraft(issue)}>
                           <Copy className="mr-1.5 h-3.5 w-3.5" />
-                          复制整改方案
+                          复制改法
                         </Button>
                         {issue.status === "confirmed" || issue.status === "draft_applied" ? (
                           <Button size="sm" variant="outline" onClick={() => retestIssue(issue)} disabled={busyId === issue.id}>
                             <RefreshCcw className="mr-1.5 h-3.5 w-3.5" />
-                            复测本条
+                            复查本条
                           </Button>
                         ) : issue.severity === "low" && issue.risk === "low" ? (
                           <Button size="sm" variant="outline" onClick={() => apply(issue)} disabled={busyId === issue.id}>
-                            交付执行人
+                            交给执行
                           </Button>
                         ) : (
                           <Button size="sm" onClick={() => apply(issue)} disabled={busyId === issue.id}>
                             <Wrench className="mr-1.5 h-3.5 w-3.5" />
-                            标记已执行
+                            标记已修改
                           </Button>
                         )}
                         <Button size="sm" variant="outline" onClick={() => ignoreIssue(issue)} disabled={busyId === issue.id}>
                           <XCircle className="mr-1.5 h-3.5 w-3.5" />
-                          忽略
+                          本轮不改
                         </Button>
                       </div>
                     </div>

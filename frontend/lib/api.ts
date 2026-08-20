@@ -739,16 +739,18 @@ export type FetchRegistered = {
 };
 
 export const crawlStatusLabel: Record<string, string> = {
-  untested: "未抓取",
-  ok: "已抓取",
-  robots_disallow: "robots 禁止",
+  untested: "尚未查看",
+  ok: "可正常访问",
+  robots_disallow: "网站规则禁止",
+  robots_blocked: "网站规则阻止",
   timeout: "超时",
-  ssl_error: "SSL 失败",
-  http_4xx: "HTTP 4xx",
-  http_5xx: "HTTP 5xx",
-  host_rejected: "主机名拒绝",
-  needs_js: "需要 JS",
-  error: "抓取失败",
+  ssl_error: "安全证书失败",
+  http_4xx: "页面不存在或打不开",
+  http_5xx: "服务器错误",
+  host_rejected: "网址不被接受",
+  needs_js: "需浏览器才能显示",
+  fetch_error: "查看失败",
+  error: "查看失败",
 };
 
 export type OnsiteIssue = {
@@ -790,6 +792,24 @@ export type OnsiteBoard = {
   status_counts: Record<string, number>;
   workflow_counts: Record<string, number>;
   groups: { critical: OnsiteIssue[]; high: OnsiteIssue[]; low: OnsiteIssue[] };
+};
+
+export type OnsiteGuide = {
+  current: string;
+  complete: boolean;
+  action_key: string;
+  action_label: string;
+  filter_key: string;
+  narrative: string;
+  ai_status: string;
+  origin: string;
+  pages: number;
+  fetched: number;
+  needs_draft: number;
+  ready_to_execute: number;
+  waiting_retest: number;
+  open_high: number;
+  steps: { key: string; label: string; status: string }[];
 };
 
 export type CrawlSession = {

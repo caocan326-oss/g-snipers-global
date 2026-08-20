@@ -81,23 +81,23 @@ def seo_report(user: User = Depends(get_current_user), db: Session = Depends(get
     gsc_needed = [i for i in active if i.category == "index"]
     b2b_issues = [i for i in active if i.category == "b2b"]
     lines = [
-        f"# SEO 诊断报告 - {tenant.name}",
+        f"# 网站检查说明 - {tenant.name}",
         "",
         "## 一句话结论",
         "",
-        f"本次诊断共检查 {len(pages)} 个页面，发现 {len(active)} 个待处理问题，其中紧急 {len(critical)} 个、重要 {len(high)} 个、一般 {len(low)} 个。"
-        "建议先处理影响抓取、收录确认、规范 URL、结构化数据和 B2B 转化信息的问题，再进入内容优化。",
+        f"本次共查看 {len(pages)} 个页面，发现 {len(active)} 个待处理问题，其中紧急 {len(critical)} 个、优先 {len(high)} 个、常规 {len(low)} 个。"
+        "建议先处理打不开、搜索是否收录、标准网址、页面说明和询盘信息，再优化正文。",
         "",
-        "## 本次诊断范围",
+        "## 本次检查范围",
         "",
-        f"- 客户站点：{tenant.site_origin or '未设置'}",
-        f"- 报告时间：{generated.strftime('%Y-%m-%d %H:%M')}",
+        f"- 客户网站：{tenant.site_origin or '未设置'}",
+        f"- 说明时间：{generated.strftime('%Y-%m-%d %H:%M')}",
         f"- 已发现页面：{len(pages)} 个",
-        f"- sitemap 覆盖：{len(sitemap_pages)} 个页面",
+        f"- 网站地图覆盖：{len(sitemap_pages)} 个页面",
         f"- 产品/方案类页面：{len(product_pages)} 个",
-        f"- GSC 状态：{performance.gsc_status}。Bing 状态：{performance.bing_status}。",
-        f"- SERP 市场表现：{serp.status if serp else '未配置'}，已查询 {serp.total_runs if serp else 0} 轮。",
-        f"- 测速状态：PageSpeed Insights {performance.pagespeed_status}。",
+        f"- Google 搜索数据：{performance.gsc_status}。Bing 数据：{performance.bing_status}。",
+        f"- 关键词位置检查：{serp.status if serp else '未配置'}，已查询 {serp.total_runs if serp else 0} 轮。",
+        f"- 测速状态：网页速度 {performance.pagespeed_status}。",
         "",
         "## 诊断目标",
         "",
@@ -108,7 +108,7 @@ def seo_report(user: User = Depends(get_current_user), db: Session = Depends(get
         for market in target_markets:
             lines.append(f"- {market.name}（{market.country_code} / {market.primary_locale}）：{market.status}，机会分 {market.opportunity_score}")
     else:
-        lines.append("- 未设置目标国家。建议先在洞察模块登记目标市场，再进行 SEO 诊断。")
+        lines.append("- 未设置目标国家。建议先登记目标市场，再做网站检查。")
     lines += [
         "",
         "### 目标关键词 / 选题",
@@ -120,87 +120,87 @@ def seo_report(user: User = Depends(get_current_user), db: Session = Depends(get
         if len(target_keywords) > 12:
             lines.append(f"- 另有 {len(target_keywords) - 12} 个关键词/需求信号未在摘要中展开。")
     else:
-        lines.append("- 未设置目标关键词。建议先登记核心产品词、行业词、采购意图词，再跑诊断。")
+        lines.append("- 未设置目标关键词。建议先登记核心产品词、行业词和采购意图词，再做检查。")
     lines += [
         "",
-        "### 诊断口径",
+        "### 检查口径",
         "",
-        "- 技术 SEO 问题会优先服务目标国家和目标关键词对应页面。",
-        "- 未绑定目标关键词的页面仍会诊断，但在整改优先级上应低于核心产品/方案页。",
-        "- 速度体验使用 PageSpeed Insights；搜索表现优先使用 GSC/Bing CSV 或后续授权 API。",
+        "- 技术问题优先对应目标国家和目标关键词页面。",
+        "- 未绑定关键词的页面仍会检查，但优先级低于核心产品/方案页。",
+        "- 速度用网页测速；搜索表现优先用 Google / Bing 表格或授权同步。",
         "",
     ]
     lines += [
-        "## SEO 表现",
+        "## 搜索表现",
         "",
     ]
     if performance.total_impressions:
         lines += [
-            f"- 总曝光：{performance.total_impressions}，总点击：{performance.total_clicks}，平均 CTR：{performance.avg_ctr if performance.avg_ctr is not None else '未测'}%，平均排名：{performance.avg_position if performance.avg_position is not None else '未测'}。",
-            "- 重点国家：" + "；".join(f"{item.key} 曝光 {item.impressions} / 点击 {item.clicks}" for item in performance.by_country[:5]),
-            "- 重点关键词：" + "；".join(f"{item.key} 曝光 {item.impressions} / 点击 {item.clicks} / 排名 {item.position or '未测'}" for item in performance.by_query[:5]),
+            f"- 总展示：{performance.total_impressions}，总点击：{performance.total_clicks}，平均点开率：{performance.avg_ctr if performance.avg_ctr is not None else '尚未检查'}%，平均位置：{performance.avg_position if performance.avg_position is not None else '尚未检查'}。",
+            "- 重点国家：" + "；".join(f"{item.key} 展示 {item.impressions} / 点击 {item.clicks}" for item in performance.by_country[:5]),
+            "- 重点关键词：" + "；".join(f"{item.key} 展示 {item.impressions} / 点击 {item.clicks} / 位置 {item.position or '尚未检查'}" for item in performance.by_query[:5]),
             "",
         ]
     else:
         lines += [
-            "- 暂未导入 GSC/Bing 搜索表现数据，无法判断真实曝光、点击、CTR 和平均排名。",
-            "- 当前收录相关结论仍按“需授权核验”处理，不能直接判定已收录或未收录。",
+            "- 尚未导入 Google / Bing 搜索数据，无法判断真实展示、点击和平均位置。",
+            "- 是否被搜索收录，在授权核验前不能直接下结论。",
             "",
         ]
-    lines += ["### SERP 竞争表现", ""]
+    lines += ["### 搜索结果位置", ""]
     if serp and serp.latest_runs:
         lines += [
-            f"- Bright Data SERP 状态：{serp.status}。已记录 {serp.total_runs} 轮关键词查询。",
-            f"- 我方可见：{serp.own_visible_runs} 轮；竞品可见：{serp.competitor_visible_runs} 轮；我方平均最佳排名：{serp.avg_own_position if serp.avg_own_position is not None else '未出现'}。",
+            f"- 关键词位置检查：{serp.status}。已记录 {serp.total_runs} 轮。",
+            f"- 我方出现：{serp.own_visible_runs} 轮；竞品出现：{serp.competitor_visible_runs} 轮；我方最好位置：{serp.avg_own_position if serp.avg_own_position is not None else '未出现'}。",
             "",
         ]
         for run in serp.latest_runs[:8]:
             own = run.own_best_position if run.own_best_position is not None else "未出现"
             comp = run.competitor_best_position if run.competitor_best_position is not None else "未出现"
-            lines.append(f"- {run.keyword}（{run.country}/{run.device}）：我方 {own}，竞品 {comp}，前 {run.result_count} 条第三方 {run.third_party_count} 个。")
+            lines.append(f"- {run.keyword}（{run.country}/{run.device}）：我方 {own}，竞品 {comp}，前 {run.result_count} 条中第三方 {run.third_party_count} 个。")
         if serp.top_third_party_domains:
-            lines.append("- 高频第三方域名：" + "；".join(f"{item['domain']}({item['count']})" for item in serp.top_third_party_domains[:6]))
+            lines.append("- 常见第三方网站：" + "；".join(f"{item['domain']}({item['count']})" for item in serp.top_third_party_domains[:6]))
         lines.append("")
     else:
         lines += [
-            "- 暂未运行 SERP 查询。建议用目标国家和核心关键词查询 Google 前 10/20，判断我方、竞品和第三方平台占位。",
-            "- SERP 查询结果是市场可见度证据，不等同 GSC 点击/曝光，也不等同真实外链权重。",
+            "- 尚未查询目标词在 Google 前几页的位置。建议用目标国家和核心词核对我方、竞品和第三方平台。",
+            "- 位置检查说明“有没有出现”，不等于点击、展示，也不等于外链质量。",
             "",
         ]
     if performance.speed_latest:
-        lines += ["### 速度体验", ""]
+        lines += ["### 打开速度", ""]
         for audit in performance.speed_latest[:6]:
             lines.append(
-                f"- {audit.strategy} · {audit.url}：性能 {_score_text(audit.performance_score)}，SEO {_score_text(audit.seo_score)}，LCP {audit.lcp_ms or '未测'}ms，状态 {audit.status}。"
+                f"- {audit.strategy} · {audit.url}：性能 {_score_text(audit.performance_score)}，搜索友好度 {_score_text(audit.seo_score)}，最大内容绘制 {audit.lcp_ms or '尚未检查'}ms，状态 {audit.status}。"
             )
         lines.append("")
     else:
         lines += [
-            "### 速度体验",
+            "### 打开速度",
             "",
-            "- 暂未运行 PageSpeed Insights 测速。建议先测首页、核心产品页、核心方案页的移动端和桌面端。",
+            "- 尚未测速。建议先测首页、核心产品页和方案页的手机端与电脑端。",
             "",
         ]
     if sessions:
         s = sessions[0]
         lines += [
-            "## 抓取概况",
+            "## 查看概况",
             "",
-            f"- 本次最多抓取 {s.max_urls} 个 URL，最大深度 {s.max_depth}。",
-            f"- 实际发现 {s.discovered} 个 URL，成功读取 {s.fetched} 个，失败 {s.failed} 个。",
-            f"- robots 阻止 {s.robots_blocked} 个，疑似需要浏览器渲染 {s.needs_js} 个。",
+            f"- 本次最多查看 {s.max_urls} 个网址，最大深度 {s.max_depth}。",
+            f"- 实际发现 {s.discovered} 个网址，成功读取 {s.fetched} 个，失败 {s.failed} 个。",
+            f"- 网站规则阻止 {s.robots_blocked} 个，疑似需要浏览器才能显示 {s.needs_js} 个。",
             f"- 备注：{s.note or '无'}",
             "",
         ]
     lines += [
         "## 主要风险",
         "",
-        f"1. 抓取与访问风险：{len(inaccessible)} 个页面存在访问失败、404、服务器错误或 robots 阻止。",
-        f"2. 收录确认风险：{len(gsc_needed)} 个页面需要接入 GSC 后确认真实索引状态。",
-        f"3. 结构与规范风险：{sum(1 for i in active if i.category in {'canonical', 'schema', 'heading'})} 个问题影响搜索引擎和 AI 对页面的理解。",
-        f"4. B2B 获客风险：{len(b2b_issues)} 个问题影响海外买家判断供应商能力和发起询盘。",
-        f"5. JS 渲染风险：{len(needs_js)} 个页面疑似需要浏览器渲染，普通 HTML 抓取可能读不到完整内容。",
-        f"6. SERP 可见度风险：{(serp.total_runs - serp.own_visible_runs) if serp else '未测'} 个关键词查询轮次未观察到我方自然结果。",
+        f"1. 打不开：{len(inaccessible)} 个页面访问失败、不存在、服务器错误或被网站规则阻止。",
+        f"2. 是否收录：{len(gsc_needed)} 个页面需要接入 Google 后才能确认真实收录。",
+        f"3. 页面结构：{sum(1 for i in active if i.category in {'canonical', 'schema', 'heading'})} 个问题影响搜索和 AI 理解页面。",
+        f"4. 询盘转化：{len(b2b_issues)} 个问题影响海外买家判断能力和发起询盘。",
+        f"5. 需浏览器显示：{len(needs_js)} 个页面普通打开可能读不到完整内容。",
+        f"6. 搜索结果位置：{(serp.total_runs - serp.own_visible_runs) if serp else '尚未检查'} 轮关键词查询未看到我方结果。",
         "",
         "## 问题汇总",
         "",
@@ -212,7 +212,7 @@ def seo_report(user: User = Depends(get_current_user), db: Session = Depends(get
         lines.append("- 当前没有待处理问题。")
     lines += [
         "",
-        "## 优先整改清单",
+        "## 优先处理清单",
         "",
     ]
     for idx, issue in enumerate(priority[:20], start=1):
@@ -226,32 +226,32 @@ def seo_report(user: User = Depends(get_current_user), db: Session = Depends(get
             f"- 问题类型：{_category_label(issue.category)}",
             f"- 当前状态：{_status_name(issue.status)}",
             f"- 为什么重要：{_issue_impact(issue)}",
-            f"- 诊断依据：{issue.detail or '暂无详细证据'}",
+            f"- 查看依据：{issue.detail or '暂无详细依据'}",
             f"- 建议动作：{_issue_action(issue)}",
             f"- 建议负责人：{_issue_owner(issue)}",
-            f"- 复测方式：{_issue_retest(issue)}",
+            f"- 复查方式：{_issue_retest(issue)}",
             "",
         ]
     if not priority:
-        lines.append("当前没有诊断问题。")
+        lines.append("当前没有待处理问题。")
     lines += [
         "",
         "## 需要客户配合",
         "",
-        "1. 提供 Google Search Console / Bing Webmaster Tools 授权，用于确认真实收录、曝光和点击。",
-        "2. 确认产品参数、认证、应用行业、MOQ、交期、质保、案例等 B2B 事实，避免 AI 或执行人员误写。",
-        "3. 指定客户网站技术联系人，处理 404、canonical、schema、sitemap、robots、页面模板等技术项。",
-        "4. 每轮修改上线后，回到系统执行复测，形成“发现问题 - 整改 - 复测”的闭环。",
+        "1. 提供 Google / Bing 搜索数据授权，用于确认真实收录、展示和点击。",
+        "2. 确认产品参数、认证、应用行业、起订量、交期、质保和案例等事实，避免误写。",
+        "3. 指定网站技术联系人，处理打不开、标准网址、页面说明、网站地图和模板问题。",
+        "4. 每轮修改上线后，回到系统复查，形成“发现问题 - 修改 - 复查”。",
         "",
         "## 下一步建议",
         "",
-        "1. 第一优先级：处理无法访问、noindex、canonical、schema、重复 URL 等基础问题。",
-        "2. 第二优先级：补齐产品/方案页的 B2B 转化信息，包括参数、应用场景、认证、案例和询盘入口。",
-        "3. 第三优先级：优化文章、图片 alt、内链和页面深度，提升搜索引擎与 AI 系统的可理解性。",
-        "4. 报告中的 AI 建议均为草案，客户业务事实必须人工确认后再上线。",
+        "1. 先处理打不开、不让收录、标准网址错误、页面说明缺失和重复网址。",
+        "2. 再补齐产品/方案页的参数、应用场景、认证、案例和询盘入口。",
+        "3. 然后优化文章、图片说明、站内链接和页面层级，让搜索和 AI 更容易理解。",
+        "4. 说明中的系统建议均为草案，业务事实须人工确认后再上线。",
         "",
     ]
-    return SeoReportOut(title=f"SEO 诊断报告 - {tenant.name}", markdown="\n".join(lines), generated_at=generated)
+    return SeoReportOut(title=f"网站检查说明 - {tenant.name}", markdown="\n".join(lines), generated_at=generated)
 
 
 @router.get("/report-table", response_model=SeoReportTableOut)
@@ -284,10 +284,10 @@ def seo_report_table(user: User = Depends(get_current_user), db: Session = Depen
         "当前状态",
         "客户能理解的问题",
         "为什么影响获客",
-        "建议整改动作",
+        "建议改法",
         "建议负责人",
-        "复测方式",
-        "抓取状态",
+        "复查方式",
+        "查看状态",
         "HTTP状态",
         "sitemap状态",
         "页面类型",
@@ -371,4 +371,4 @@ def seo_report_table(user: User = Depends(get_current_user), db: Session = Depen
             page_perf.position if page_perf and page_perf.position is not None else "未导入",
             "；".join(evidence_bits) or issue.detail,
         ])
-    return SeoReportTableOut(filename=f"seo整改执行表-{generated.date().isoformat()}.csv", csv=out.getvalue(), generated_at=generated)
+    return SeoReportTableOut(filename=f"网站改法执行表-{generated.date().isoformat()}.csv", csv=out.getvalue(), generated_at=generated)

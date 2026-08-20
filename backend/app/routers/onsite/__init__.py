@@ -14,6 +14,7 @@ from . import diagnosis  # noqa: E402,F401
 from . import crawl  # noqa: E402,F401
 from . import issue_actions  # noqa: E402,F401
 from . import reports  # noqa: E402,F401
+from . import guide  # noqa: E402,F401
 
 # Backward-compatible re-exports so `app.routers.onsite.<name>` keeps
 # working exactly like it did when this was a single module (tests rely on

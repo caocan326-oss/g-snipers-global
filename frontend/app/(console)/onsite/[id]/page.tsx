@@ -12,29 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { api, crawlStatusLabel, type AiAssist, type FetchRegistered, type OnsiteIssue, type SitePageDetail } from "@/lib/api";
 
-const catLabel: Record<string, string> = {
-  tdk: "TDK",
-  heading: "标题",
-  internal_link: "内链",
-  schema: "JSON-LD",
-  index: "收录",
-  crawl: "抓取",
-  canonical: "Canonical",
-  image: "图片",
-  content: "内容",
-  b2b: "B2B",
-};
-
-const sevLabel: Record<string, string> = { critical: "Critical", high: "High", low: "Low" };
-const sevTone: Record<string, "red" | "amber" | "green"> = { critical: "red", high: "amber", low: "green" };
-const statusLabel: Record<string, string> = {
-  open: "已分析，待改稿",
-  drafted: "已有改稿，未上线",
-  draft_applied: "改稿已交付站点",
-  confirmed: "已确认上线，待回抓",
-  verified: "观察已验收",
-  wont_fix: "不做",
-};
+import { catLabel, sevLabel, sevTone, statusLabel } from "../_helpers";
 
 export default function OnsiteEditorPage() {
   const params = useParams<{ id: string }>();
@@ -152,15 +130,15 @@ export default function OnsiteEditorPage() {
     <div className="space-y-6">
       <div>
         <Link href="/onsite" className="text-sm text-brand-700">
-          ← SEO 诊断看板
+          ← 返回网站检查
         </Link>
         <h1 className="mt-2 text-2xl font-semibold">{page.title}</h1>
         <p className="text-sm text-slate-500">
-          {page.path} · 抓取 {crawlStatusLabel[page.crawl_status] ?? page.crawl_status}
+          {page.path} · 查看 {crawlStatusLabel[page.crawl_status] ?? page.crawl_status}
           {page.http_status ? ` ${page.http_status}` : ""} ·{" "}
-          {page.fetched_at ? new Date(page.fetched_at).toLocaleString("zh-CN") : "尚未抓取"}
+          {page.fetched_at ? new Date(page.fetched_at).toLocaleString("zh-CN") : "尚未查看"}
           {page.final_url ? ` · ${page.final_url}` : ""} · 收录{" "}
-          {page.index_status === "untested" ? "未测" : page.index_status}
+          {page.index_status === "untested" ? "尚未检查" : page.index_status}
         </p>
         <p className="mt-1 text-xs text-slate-500">
           {page.priority_hint || "P2"} · {page.page_type || "other"} · 深度 {page.url_depth ?? 0} · 来源 {page.discovery_source || "manual"} · sitemap {page.is_in_sitemap || "未测"} · 字数 {page.word_count ?? 0} · 图片缺 alt {page.images_missing_alt ?? 0}/{page.image_count ?? 0} · 外链 {page.external_link_count ?? 0}

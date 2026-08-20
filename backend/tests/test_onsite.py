@@ -195,7 +195,7 @@ def test_onsite_page_and_risk_gates(client: TestClient, demo_user) -> None:
     assert low.json()["metric_status"] == "untested"
     assert low.json()["review_required"] is False
     assert low.json()["owner_hint"] == "内容运营 / 客户经理"
-    assert "Title" in low.json()["recommended_action"]
+    assert "标题" in low.json()["recommended_action"]
 
     high = client.post(
         f"/api/onsite/pages/{page_id}/issues",
@@ -378,12 +378,12 @@ def test_seo_report_exports_customer_report_and_execution_table(client: TestClie
     table = client.get("/api/onsite/report-table", headers=headers)
     assert table.status_code == 200
     data = table.json()
-    assert data["filename"].startswith("seo整改执行表-")
+    assert data["filename"].startswith("网站改法执行表-")
     csv_text = data["csv"]
     assert "优先级,严重程度,问题类型,目标国家/地区,关联关键词,页面" in csv_text
     assert "为什么影响获客" in csv_text
-    assert "建议整改动作" in csv_text
-    assert "复测方式" in csv_text
+    assert "建议改法" in csv_text
+    assert "复查方式" in csv_text
     assert "测速状态" in csv_text
     assert "产品页缺少询盘入口" in csv_text
     assert "page_type" not in csv_text
@@ -428,8 +428,8 @@ def test_seo_performance_csv_feeds_summary_report_and_table(client: TestClient, 
     assert any(item["key"] == "industrial pump" for item in body["by_query"])
 
     report = client.get("/api/onsite/report", headers=headers).json()["markdown"]
-    assert "SEO 表现" in report
-    assert "总曝光：420" in report
+    assert "搜索表现" in report
+    assert "总展示：420" in report
     assert "industrial pump" in report
 
     table = client.get("/api/onsite/report-table", headers=headers).json()["csv"]

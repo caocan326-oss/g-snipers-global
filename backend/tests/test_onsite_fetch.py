@@ -478,5 +478,5 @@ def test_crawl_site_discovers_sitemap_links_and_report(client: TestClient, demo_
 
     report = client.get("/api/onsite/report", headers=headers)
     assert report.status_code == 200
-    assert "SEO" in report.json()["markdown"]
+    assert "网站检查说明" in report.json()["markdown"]
     assert "/product" in report.json()["markdown"]

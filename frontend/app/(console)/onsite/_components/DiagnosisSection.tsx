@@ -36,32 +36,32 @@ export function DiagnosisSection({
         <CardHeader>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <CardTitle>第三步：判断诊断是否完整</CardTitle>
-              <p className="mt-1 text-sm text-slate-500">用于判断这份网站诊断能不能进入客户测试和报告导出。</p>
+              <CardTitle>检查是否完整</CardTitle>
+              <p className="mt-1 text-sm text-slate-500">判断现在的材料够不够写给客户看，以及下一步该补什么。</p>
             </div>
-            <Badge tone={diagnosisReadiness.ready ? "green" : "amber"}>{diagnosisReadiness.ready ? "可测试" : "证据待补"}</Badge>
+            <Badge tone={diagnosisReadiness.ready ? "green" : "amber"}>{diagnosisReadiness.ready ? "可以继续" : "材料待补"}</Badge>
           </div>
         </CardHeader>
         <CardContent className="grid gap-3 sm:grid-cols-2">
           <div className="rounded-md bg-slate-50 p-3">
-            <div className="text-xs text-slate-500">页面抓取覆盖</div>
+            <div className="text-xs text-slate-500">已查看页面</div>
             <div className="mt-1 text-xl font-semibold text-slate-950">{diagnosisReadiness.pageCoverage}%</div>
-            <p className="mt-1 text-xs text-slate-500">{fetched}/{totalPages} 个登记页面已抓取</p>
+            <p className="mt-1 text-xs text-slate-500">{fetched}/{totalPages} 个已登记页面已查看</p>
           </div>
           <div className="rounded-md bg-slate-50 p-3">
-            <div className="text-xs text-slate-500">待推进问题</div>
+            <div className="text-xs text-slate-500">未完成问题</div>
             <div className="mt-1 text-xl font-semibold text-slate-950">{diagnosisReadiness.unresolved}</div>
-            <p className="mt-1 text-xs text-slate-500">P0/P1/P2 未关闭问题</p>
+            <p className="mt-1 text-xs text-slate-500">紧急 / 优先 / 常规尚未关闭</p>
           </div>
           <div className="rounded-md bg-slate-50 p-3">
-            <div className="text-xs text-slate-500">搜索表现证据</div>
+            <div className="text-xs text-slate-500">搜索数据</div>
             <div className="mt-1 text-sm font-semibold text-slate-950">{diagnosisReadiness.hasSearchData ? "已接入" : "未接入"}</div>
-            <p className="mt-1 text-xs text-slate-500">Google/Bing 表格导入或自动同步</p>
+            <p className="mt-1 text-xs text-slate-500">Google / Bing 导入或自动同步</p>
           </div>
           <div className="rounded-md bg-slate-50 p-3">
-            <div className="text-xs text-slate-500">速度 / 关键词排名</div>
-            <div className="mt-1 text-sm font-semibold text-slate-950">{diagnosisReadiness.hasSpeed ? "已测速" : "未测速"} / {diagnosisReadiness.hasSerp ? "已查排名" : "未查排名"}</div>
-            <p className="mt-1 text-xs text-slate-500">用于支撑页面体验和搜索可见度</p>
+            <div className="text-xs text-slate-500">速度 / 关键词位置</div>
+            <div className="mt-1 text-sm font-semibold text-slate-950">{diagnosisReadiness.hasSpeed ? "已测速" : "未测速"} / {diagnosisReadiness.hasSerp ? "已查位置" : "未查位置"}</div>
+            <p className="mt-1 text-xs text-slate-500">用来说明打开速度和搜索结果位置</p>
           </div>
         </CardContent>
       </Card>
@@ -70,8 +70,8 @@ export function DiagnosisSection({
         <CardHeader>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <CardTitle>客户能看懂的结论</CardTitle>
-              <p className="mt-1 text-sm text-slate-500">把搜索数据翻译成客户能理解的下一步，而不是只展示原始字段。</p>
+              <CardTitle>给客户的结论</CardTitle>
+              <p className="mt-1 text-sm text-slate-500">把搜索数据转成下一步建议，而不是只列原始数字。</p>
             </div>
             <Badge tone={searchVerdict.tone}>{performance?.gsc_status ?? "读取中"}</Badge>
           </div>

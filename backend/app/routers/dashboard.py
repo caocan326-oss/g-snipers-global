@@ -400,7 +400,7 @@ def workbench(
             WorkbenchItem(
                 id="set-origin",
                 title="先登记客户官网",
-                subtitle="SEO 诊断需要站点 origin，系统只抓已登记页面。",
+                subtitle="网站检查需要网址，系统只查看已登记页面。",
                 href="/onsite",
                 status="待配置",
                 tone="amber",
@@ -411,12 +411,12 @@ def workbench(
         next_actions.append(
             WorkbenchItem(
                 id="seo-critical",
-                title="优先处理高风险 SEO 诊断项",
-                subtitle=f"Critical {summary.onsite_open_critical} / High {summary.onsite_open_high}",
+                title="优先处理紧急网站问题",
+                subtitle=f"紧急 {summary.onsite_open_critical} / 优先 {summary.onsite_open_high}",
                 href="/onsite",
-                status="需要人审",
+                status="需确认",
                 tone="red" if summary.onsite_open_critical else "amber",
-                action_label="处理 SEO",
+                action_label="去处理",
             )
         )
     if summary.geo_untested:
@@ -447,12 +447,12 @@ def workbench(
         next_actions.append(
             WorkbenchItem(
                 id="diagnosis-ready",
-                title="查看 SEO 表现并安排下一轮复测",
-                subtitle="按曝光、点击、CTR、排名和页面速度判断下一批优化优先级。",
+                title="查看搜索数据并安排下一轮复查",
+                subtitle="按展示、点击、点开率和打开速度判断下一批优先项。",
                 href="/onsite",
                 status="可复盘",
                 tone="green",
-                action_label="进入 SEO",
+                action_label="进入检查",
             )
         )
 
@@ -461,13 +461,13 @@ def workbench(
     chains = [
         WorkbenchChain(
             key="seo",
-            title="SEO 诊断",
+            title="网站检查",
             href="/onsite",
             primary=summary.onsite_open_critical + summary.onsite_open_high,
-            secondary=f"{summary.onsite_pages} 个页面 / Low {summary.onsite_open_low}",
+            secondary=f"{summary.onsite_pages} 个页面 / 常规 {summary.onsite_open_low}",
             health=seo_health,
             tone=seo_tone,
-            action_label="进入 SEO",
+            action_label="进入检查",
         ),
         WorkbenchChain(
             key="geo",

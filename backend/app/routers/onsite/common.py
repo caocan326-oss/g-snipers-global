@@ -220,12 +220,12 @@ def _crawl_session_out(row: CrawlSession) -> CrawlSessionOut:
 
 def _status_name(status: str) -> str:
     return {
-        "open": "待方案",
-        "drafted": "待人审/执行",
-        "draft_applied": "待复测",
-        "confirmed": "已执行待复测",
-        "verified": "已解决",
-        "wont_fix": "已忽略",
+        "open": "待写改法",
+        "drafted": "改法已写，待上线",
+        "draft_applied": "已交给执行",
+        "confirmed": "已修改，待复查",
+        "verified": "复查通过",
+        "wont_fix": "本轮不改",
     }.get(status, status)
 
 

@@ -5,18 +5,18 @@ BOARD_ACTIONABLE = {"open", "drafted", "draft_applied", "confirmed"}
 AI_BATCH_DEFAULT_LIMIT = 5
 AI_BATCH_MAX_LIMIT = 10
 SEVERITY_RANK = {"critical": 0, "high": 1, "low": 2}
-SEVERITY_LABELS = {"critical": "紧急", "high": "重要", "low": "一般"}
+SEVERITY_LABELS = {"critical": "紧急", "high": "优先", "low": "常规"}
 CATEGORY_LABELS = {
-    "tdk": "标题/描述",
-    "heading": "页面标题结构",
-    "internal_link": "内链入口",
-    "schema": "结构化数据",
-    "index": "收录确认",
-    "crawl": "抓取访问",
-    "canonical": "规范 URL",
+    "tdk": "标题与摘要",
+    "heading": "页面标题",
+    "internal_link": "站内链接",
+    "schema": "页面说明标记",
+    "index": "搜索是否收录",
+    "crawl": "页面能否打开",
+    "canonical": "标准网址",
     "image": "图片说明",
-    "content": "内容质量",
-    "b2b": "B2B 转化信息",
+    "content": "正文",
+    "b2b": "询盘页",
 }
 PAGE_TYPE_LABELS = {
     "home": "首页",
@@ -44,7 +44,7 @@ CRAWL_LABELS = {
     "robots_blocked": "robots 阻止抓取",
     "needs_js": "疑似需要浏览器渲染",
     "fetch_error": "抓取失败",
-    "untested": "未抓取",
+    "untested": "尚未查看",
 }
 
 PERFORMANCE_SOURCE_LABELS = {"gsc_csv": "Google Search Console CSV", "bing_csv": "Bing Webmaster CSV"}
@@ -70,63 +70,63 @@ CSV_ALIASES = {
 
 CATEGORY_GUIDANCE = {
     "tdk": {
-        "impact": "影响搜索结果标题/摘要表达和买家点击判断。",
-        "action": "检查页面主题、目标市场和品牌表达，补齐或改写 Title / Description。",
-        "retest": "回抓页面后比对 title、description 与处理方案是否一致。",
+        "impact": "影响搜索结果里的标题、摘要，以及买家是否愿意点开。",
+        "action": "按页面主题和目标市场，补齐或改写标题与摘要。",
+        "retest": "重新打开页面，核对标题、摘要是否已按改法更新。",
         "owner": "内容运营 / 客户经理",
     },
     "heading": {
         "impact": "影响页面主题识别、内容层级和用户阅读路径。",
         "action": "补齐 H1 或调整冲突标题，让页面主题和正文结构一致。",
-        "retest": "回抓页面后检查 H1 与 headings 是否已更新。",
+        "retest": "重新打开页面，检查主标题和层级是否已更新。",
         "owner": "内容运营 / 网站编辑",
     },
     "internal_link": {
         "impact": "影响核心页面发现、页面权重传递和买家继续浏览路径。",
-        "action": "在相关页面加入可抓取的真实 href 内链，并使用清晰锚文本。",
-        "retest": "回抓页面后检查目标 URL 是否出现在内链列表。",
+        "action": "在相关页面加入可点击的站内链接，并用清楚的文字说明去向。",
+        "retest": "重新打开页面，检查目标网址是否出现在站内链接中。",
         "owner": "内容运营 / 网站编辑",
     },
     "schema": {
-        "impact": "影响搜索引擎和 AI 系统理解公司、产品、文章或面包屑信息。",
-        "action": "生成 JSON-LD 草案，人工核实公司、产品、认证、价格等事实后上线。",
-        "retest": "回抓页面后检查 JSON-LD 类型和语法；关键页再人工用 Rich Results Test 复核。",
+        "impact": "影响搜索和 AI 是否能正确理解公司、产品和文章信息。",
+        "action": "起草页面说明标记（JSON-LD），人工核实公司、产品、认证等事实后再上线。",
+        "retest": "重新打开页面，检查说明标记是否已更新；关键页再人工复核。",
         "owner": "技术执行 / 客户网站负责人",
     },
     "index": {
-        "impact": "影响是否能确认 Google/Bing 真实索引状态；无授权时只能保持未测。",
-        "action": "接入 GSC/Bing 后复核真实索引状态；未授权前不要编造已收录或未收录。",
-        "retest": "授权平台数据后复查 URL Inspection 或搜索平台状态。",
+        "impact": "影响能否确认 Google / Bing 是否真正收录该页；未授权时只能写尚未检查。",
+        "action": "接入 Google / Bing 后再核真实收录。未授权前不要写成已收录或未收录。",
+        "retest": "授权后对照平台里的网址检查结果。",
         "owner": "客户经理 / 客户授权人",
     },
     "crawl": {
-        "impact": "影响系统能否读取页面事实，抓取失败时不能继续判断内容质量。",
-        "action": "排查 HTTP 状态、robots、跳转、TLS、超时或 JS 空壳问题。",
-        "retest": "修复后重新抓取页面，确认状态码、最终 URL 和正文可读取。",
+        "impact": "影响系统能否读到页面内容；打不开时无法继续判断正文质量。",
+        "action": "排查打不开、跳转、安全证书、超时或需浏览器才能显示的问题。",
+        "retest": "修复后重新打开页面，确认能读到最终网址和正文。",
         "owner": "技术执行 / 客户网站负责人",
     },
     "canonical": {
-        "impact": "影响搜索引擎判断规范 URL，错误 canonical 可能让核心页被合并到错误页面。",
-        "action": "确认页面规范版本，修正 canonical 指向；高风险项必须人工确认。",
-        "retest": "回抓页面后检查 canonical 是否指向预期 URL。",
+        "impact": "影响搜索把哪一个网址当作正式页面；指错会导致核心页被合并到错误地址。",
+        "action": "确认正式网址，修正标准网址指向；优先项必须人工确认。",
+        "retest": "重新打开页面，检查标准网址是否指向预期地址。",
         "owner": "技术执行 / 客户网站负责人",
     },
     "image": {
         "impact": "影响图片内容理解、图片搜索和无障碍体验。",
         "action": "为关键产品图、认证图、应用图补充准确 alt，无法确认图片内容时人工核对。",
-        "retest": "回抓页面后检查图片数量和缺失 alt 数是否下降。",
+        "retest": "重新打开页面，检查缺说明的图片是否减少。",
         "owner": "内容运营 / 网站编辑",
     },
     "content": {
         "impact": "影响买家理解产品价值，也影响搜索和 AI 系统抽取可引用内容。",
         "action": "补充产品参数、应用场景、FAQ、案例、认证或询盘入口，业务事实必须人工确认。",
-        "retest": "回抓页面后检查正文可抽取字数、标题结构和关键内容是否已补齐。",
+        "retest": "重新打开页面，检查正文、标题和关键内容是否已补齐。",
         "owner": "内容运营 / 客户经理",
     },
     "b2b": {
         "impact": "影响海外 B2B 买家判断供应商能力、产品适配度和是否发起询盘。",
         "action": "补齐产品参数、应用行业、认证、案例、MOQ/交期/质保等需确认信息，并强化询盘入口。",
-        "retest": "回抓页面后检查正文、内链、CTA 和结构化信息是否覆盖关键 B2B 决策字段。",
+        "retest": "重新打开页面，检查正文、链接和询盘入口是否覆盖买家决策信息。",
         "owner": "客户经理 / 内容运营",
     },
 }

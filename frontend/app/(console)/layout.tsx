@@ -11,12 +11,12 @@ import { api, clearToken, getToken, type AiStatus, type User } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const nav = [
-  { href: "/home", label: "客户诊断总览", note: "能否交付 / 风险 / 下一步", icon: LayoutDashboard },
-  { href: "/onsite", label: "网站 SEO 诊断", note: "抓取网站 / 找问题 / 改完复测", icon: SearchCheck },
+  { href: "/home", label: "客户总览", note: "能否交付 / 风险 / 下一步", icon: LayoutDashboard },
+  { href: "/onsite", label: "网站检查", note: "查看网页 / 给出改法 / 改后复查", icon: SearchCheck },
   { href: "/geo", label: "AI 搜索可见度", note: "是否被提到 / 是否被引用", icon: Globe2 },
-  { href: "/execution", label: "整改清单", note: "负责人 / 验收 / 复测", icon: SquareCheckBig },
-  { href: "/offsite", label: "站外曝光", note: "资源库 / 执行 / 结果核验", icon: ListChecks },
-  { href: "/distribution", label: "客户报告", note: "预览 / 导出 / 交付", icon: FileText },
+  { href: "/execution", label: "处理清单", note: "负责人 / 完成标准 / 复查", icon: SquareCheckBig },
+  { href: "/offsite", label: "站外曝光", note: "渠道 / 执行 / 结果核对", icon: ListChecks },
+  { href: "/distribution", label: "客户说明", note: "预览 / 下载 / 交付", icon: FileText },
 ];
 
 export default function ConsoleLayout({ children }: { children: ReactNode }) {

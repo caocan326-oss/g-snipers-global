@@ -17,43 +17,43 @@ export function StatsGrid({ board, stats }: { board: OnsiteBoard; stats: Stats }
       <Card className="rounded-md">
         <CardContent className="py-4">
           <div className="text-2xl font-semibold">{board.pages}</div>
-          <div className="text-xs text-slate-500">登记页面</div>
+          <div className="text-xs text-slate-500">已登记页面</div>
         </CardContent>
       </Card>
       <Card className="rounded-md">
         <CardContent className="py-4">
           <div className="text-2xl font-semibold">{stats.fetched}</div>
-          <div className="text-xs text-slate-500">已抓取</div>
+          <div className="text-xs text-slate-500">已查看</div>
         </CardContent>
       </Card>
       <Card className="rounded-md border-red-200">
         <CardContent className="py-4">
           <div className="text-2xl font-semibold text-red-700">{board.counts.critical}</div>
-          <div className="text-xs text-slate-500">Critical</div>
+          <div className="text-xs text-slate-500">紧急</div>
         </CardContent>
       </Card>
       <Card className="rounded-md border-amber-200">
         <CardContent className="py-4">
           <div className="text-2xl font-semibold text-amber-700">{board.counts.high}</div>
-          <div className="text-xs text-slate-500">High</div>
+          <div className="text-xs text-slate-500">优先</div>
         </CardContent>
       </Card>
       <Card className="rounded-md border-emerald-200">
         <CardContent className="py-4">
           <div className="text-2xl font-semibold text-emerald-700">{board.counts.low}</div>
-          <div className="text-xs text-slate-500">Low</div>
+          <div className="text-xs text-slate-500">常规</div>
         </CardContent>
       </Card>
       <Card className="rounded-md">
         <CardContent className="py-4">
           <div className="text-2xl font-semibold">{stats.waitingDraft}</div>
-          <div className="text-xs text-slate-500">待方案</div>
+          <div className="text-xs text-slate-500">待写改法</div>
         </CardContent>
       </Card>
       <Card className="rounded-md">
         <CardContent className="py-4">
           <div className="text-2xl font-semibold">{stats.needsReview}</div>
-          <div className="text-xs text-slate-500">需人审</div>
+          <div className="text-xs text-slate-500">需确认</div>
         </CardContent>
       </Card>
       <Card className="rounded-md">
@@ -65,7 +65,7 @@ export function StatsGrid({ board, stats }: { board: OnsiteBoard; stats: Stats }
       <Card className="rounded-md">
         <CardContent className="py-4">
           <div className="text-2xl font-semibold">{stats.waitingRetest}</div>
-          <div className="text-xs text-slate-500">待回抓</div>
+          <div className="text-xs text-slate-500">待复查</div>
         </CardContent>
       </Card>
       <Card className="rounded-md">

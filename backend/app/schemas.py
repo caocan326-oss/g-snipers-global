@@ -750,6 +750,30 @@ class OnsiteBoardOut(BaseModel):
     groups: dict[str, list[OnsiteIssueOut]]
 
 
+class OnsiteGuideStepOut(BaseModel):
+    key: str
+    label: str
+    status: str
+
+
+class OnsiteGuideOut(BaseModel):
+    current: str
+    complete: bool = False
+    action_key: str
+    action_label: str
+    filter_key: str = ""
+    narrative: str
+    ai_status: str
+    origin: str = ""
+    pages: int = 0
+    fetched: int = 0
+    needs_draft: int = 0
+    ready_to_execute: int = 0
+    waiting_retest: int = 0
+    open_high: int = 0
+    steps: list[OnsiteGuideStepOut]
+
+
 class ContentBriefOut(BaseModel):
     id: str
     title: str

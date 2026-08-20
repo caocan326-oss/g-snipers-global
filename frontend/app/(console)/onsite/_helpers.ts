@@ -1,27 +1,27 @@
 import type { OnsiteIssue, SeoPerformanceSummary } from "@/lib/api";
 
 export const catLabel: Record<string, string> = {
-  tdk: "TDK",
-  heading: "标题",
-  internal_link: "内链",
-  schema: "JSON-LD",
-  index: "收录",
-  crawl: "抓取",
-  canonical: "Canonical",
+  tdk: "标题与摘要",
+  heading: "页面标题",
+  internal_link: "站内链接",
+  schema: "页面说明标记",
+  index: "搜索是否收录",
+  crawl: "页面能否打开",
+  canonical: "标准网址",
   image: "图片",
-  content: "内容",
-  b2b: "B2B",
+  content: "正文",
+  b2b: "询盘页",
 };
 
-export const sevLabel: Record<string, string> = { critical: "Critical", high: "High", low: "Low" };
+export const sevLabel: Record<string, string> = { critical: "紧急", high: "优先", low: "常规" };
 export const sevTone: Record<string, "red" | "amber" | "green"> = { critical: "red", high: "amber", low: "green" };
 export const statusLabel: Record<string, string> = {
-  open: "待写处理方案",
-  drafted: "已有方案，待人工上线",
-  draft_applied: "已交付执行人",
-  confirmed: "已人工上线，待回抓",
-  verified: "观察已验收",
-  wont_fix: "不做",
+  open: "待写改法",
+  drafted: "改法已写，待上线",
+  draft_applied: "已交给执行",
+  confirmed: "已修改，待复查",
+  verified: "复查通过",
+  wont_fix: "本轮不改",
 };
 
 export const statusTone: Record<string, "default" | "amber" | "green" | "blue" | "red"> = {
@@ -35,14 +35,14 @@ export const statusTone: Record<string, "default" | "amber" | "green" | "blue" |
 
 export const filters = [
   { key: "all", label: "全部" },
-  { key: "needs_review", label: "需人审" },
-  { key: "critical", label: "Critical" },
-  { key: "high", label: "High" },
-  { key: "low", label: "Low" },
-  { key: "needs_draft", label: "待方案" },
-  { key: "ready_to_execute", label: "待人工上线" },
-  { key: "waiting_retest", label: "待回抓验收" },
-  { key: "untested", label: "未测" },
+  { key: "needs_review", label: "需确认" },
+  { key: "critical", label: "紧急" },
+  { key: "high", label: "优先" },
+  { key: "low", label: "常规" },
+  { key: "needs_draft", label: "待写改法" },
+  { key: "ready_to_execute", label: "待上线" },
+  { key: "waiting_retest", label: "待复查" },
+  { key: "untested", label: "尚未检查" },
 ] as const;
 
 export const SNIPERS_TEST_ORIGIN = "https://www.snipers.com.cn";
@@ -56,10 +56,10 @@ export const SNIPERS_TEST_PAGES = [
 export type FilterKey = (typeof filters)[number]["key"];
 
 export function priorityLabel(issue: OnsiteIssue) {
-  if (issue.severity === "critical") return "P0";
-  if (issue.severity === "high" || issue.risk === "high") return "P1";
-  if (issue.status === "confirmed") return "P1";
-  return "P2";
+  if (issue.severity === "critical") return "紧急";
+  if (issue.severity === "high" || issue.risk === "high") return "优先";
+  if (issue.status === "confirmed") return "优先";
+  return "常规";
 }
 
 export function priorityRank(issue: OnsiteIssue) {
@@ -69,39 +69,39 @@ export function priorityRank(issue: OnsiteIssue) {
 }
 
 export function nextStep(issue: OnsiteIssue) {
-  if (issue.status === "confirmed") return "回抓验收";
-  if (issue.status === "draft_applied") return "等待执行后复测";
-  if (issue.status === "drafted") return issue.risk === "high" ? "交给技术/客户上线" : "交付执行";
-  if (!issue.proposed_change.trim()) return "生成或填写处理方案";
-  return "保存方案并推进";
+  if (issue.status === "confirmed") return "重新打开页面核对";
+  if (issue.status === "draft_applied") return "等待修改后再复查";
+  if (issue.status === "drafted") return issue.risk === "high" ? "确认后交给网站执行" : "交给执行修改";
+  if (!issue.proposed_change.trim()) return "先写改法";
+  return "保存改法并继续";
 }
 
 export function performanceVerdict(performance: SeoPerformanceSummary | null) {
-  if (!performance) return { title: "搜索表现读取中", text: "正在读取 Google/Bing 搜索表现、网页速度和关键词排名检查状态。", tone: "default" as const };
+  if (!performance) return { title: "正在读取搜索数据", text: "正在读取 Google / Bing 的展示、点击和页面速度。", tone: "default" as const };
   if (performance.gsc_status !== "已导入" && performance.bing_status !== "已导入") {
     return {
-      title: "缺少真实搜索表现",
-      text: "当前只有网站抓取结果，还不能判断客户在目标国家有没有曝光、点击和排名机会。请先授权 Google 搜索表现数据，或导入 Google/Bing 导出的表格。",
+      title: "还没有真实搜索数据",
+      text: "目前只看过网站页面，还不能判断在目标国家有没有被搜到、有没有人点进来。请先接入 Google 搜索数据，或导入表格。",
       tone: "amber" as const,
     };
   }
   if (performance.total_impressions > 0 && performance.total_clicks === 0) {
     return {
-      title: "有曝光但没有点击",
-      text: "建议优先优化高曝光关键词对应页面的 Title、Description、首屏承诺和采购意图匹配。",
+      title: "有人看到，但没有点进来",
+      text: "优先改这些词对应页面的标题、摘要和首页承诺，让看得到的人愿意点开。",
       tone: "red" as const,
     };
   }
   if (performance.avg_ctr !== null && performance.avg_ctr < 1) {
     return {
-      title: "CTR 偏低",
-      text: "已有搜索展示，但搜索摘要吸引力不足。先处理高曝光低点击词，再复测 28 天表现。",
+      title: "点开率偏低",
+      text: "搜索结果里已经出现，但标题或摘要不够吸引。先处理展示多、点击少的词，再过一段时间对照。",
       tone: "amber" as const,
     };
   }
   return {
-    title: "搜索表现已有证据",
-    text: "可以把关键词、国家、页面和排名检查结果一起纳入整改优先级，形成更像客户报告的结论。",
+    title: "已有搜索数据可作依据",
+    text: "可以按国家、关键词和页面对齐改法，优先处理能带来访问的页面。",
     tone: "green" as const,
   };
 }
