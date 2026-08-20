@@ -350,23 +350,25 @@ export default function OnsiteBoardPage() {
     setError("");
     setBusyId("pagespeed");
     try {
+      const usingGoogle = Boolean(integrations?.google_relay_configured);
       const res = await api<{ status: string; performance_score: number | null; detail?: string }[]>("/api/onsite/performance/pagespeed", {
         method: "POST",
         body: JSON.stringify({ urls: [], strategies: ["mobile"], limit: 2 }),
-        timeoutMs: 80000,
+        timeoutMs: 120000,
       });
       const failed = res.filter((item) => item.status !== "ok");
       const ok = res.length - failed.length;
+      const label = usingGoogle ? "Google 测速" : "海外打开检查";
       if (!res.length || failed.length === res.length) {
-        const reason = failed[0]?.detail || "没有测速结果。17CE 海外节点可能还没返回。";
-        setError(`海外打开检查未完成：${reason}`);
+        const reason = failed[0]?.detail || (usingGoogle ? "没有测速结果。中转或 PageSpeed 可能超时。" : "没有测速结果。17CE 海外节点可能还没返回。");
+        setError(`${label}未完成：${reason}`);
         return;
       }
-      setNote(`海外打开检查完成：成功 ${ok} 项，失败 ${failed.length} 项。`);
-      if (failed.length) setError(failed[0]?.detail || "部分页面海外打开检查失败。");
+      setNote(`${label}完成：成功 ${ok} 项，失败 ${failed.length} 项。`);
+      if (failed.length) setError(failed[0]?.detail || `部分页面${label}失败。`);
       load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "海外打开检查失败");
+      setError(e instanceof Error ? e.message : "测速失败");
     } finally {
       setBusyId("");
     }

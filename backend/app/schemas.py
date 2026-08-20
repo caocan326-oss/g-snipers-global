@@ -843,6 +843,7 @@ class IntegrationSettingsOut(BaseModel):
     fields: list[IntegrationFieldOut]
     gsc_configured: bool
     pagespeed_configured: bool
+    google_relay_configured: bool = False
     ce17_configured: bool = False
     brightdata_serp_configured: bool
     note: str = "密钥只在后端保存；前端只显示是否已配置和掩码。"
@@ -1033,6 +1034,7 @@ class SeoPerformanceSummaryOut(BaseModel):
 class GscStatusOut(BaseModel):
     configured: bool
     connected: bool
+    relay_configured: bool = False
     status: str
     site_url: str = ""
     last_sync_at: datetime | None = None

@@ -7,7 +7,7 @@
 
 约定：家里和公司**不会同时改**。换机器前必须把这边 push 完。
 
-最后更新：2026-08-20（家里开工，已 push）。
+最后更新：2026-08-21 01:27（家里。中转代码已提交未发版。域名橙云明天继续）。
 
 ---
 
@@ -206,16 +206,16 @@ git log -1 --oneline
 
 | 项 | 值 |
 | --- | --- |
-| 日期 | 2026-08-20 |
+| 日期 | 2026-08-21 01:27 |
 | 最后一台 | 家里 `D:\workspace\G-snipers海外版` |
 | 分支 | `main` |
-| 提交 | 家里已 `git pull` 对齐 `f8b242c`。早上未提交改动已丢。服务器 Nginx 多出来的 `proxy_read_timeout 180s` 已按仓库档案撤掉。现从家里继续开发。 |
+| 提交 | 本提交：GSC / PageSpeed 走 Cloudflare Worker；未配中转时测速仍用 17CE。生产仍是 `f8b242c`。 |
 | 已 push origin / upstream | 本提交一起推 |
-| 已发版生产 | 代码仍是 `f8b242c`（与仓库一致）。今晚只对齐，没有发新版。 |
-| 未完成 | 关键词排名仍走 Bright Data，容易超时。Serper 国内可通、更快，但不支持支付宝，先没换。GSC 现场同步从北京出不去。 |
-| 下一台先做 | 公司 `E:\G-snipers海外版` 开工前必须 `git pull origin main`。不要再让人填 17CE。排名等 can 决定是否换 Serper；换了只写服务器 `.env`，不进 git。 |
+| 已发版生产 | 没有。Worker 已在 `workers.dev`。服务器 `.env` 已有 `GOOGLE_RELAY_*`，**密钥不在 git**。北京出不去 `workers.dev`，发版无意义。 |
+| 未完成 | 绑 Cloudflare 橙云自定义域名（卡手机验证码）。通了再改 `GOOGLE_RELAY_URL`、测北京、再 `sync-from-local.ps1`。今晚接着修排名 0 条。 |
+| 下一台先做 | 公司先 `git pull origin main`。不要两边同时改。 |
 
-真人测：https://www.weiyids.com/onsite 点「从海外节点打开首页」。17CE 要 WebSocket 账户有积分。排名按钮仍是 Bright Data，可能超时。管理员只在服务器 `.env`。密钥不要提交。
+不要再发密钥。不要开 Google Ads。不要在服务器 `git pull`。
 
 ---
 

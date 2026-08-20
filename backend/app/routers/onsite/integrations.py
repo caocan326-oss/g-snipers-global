@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.auth import get_current_user
 from app.config import settings
 from app.database import get_db
+from app import google_relay
 from app.models import (
     DataSyncRun,
     GscConnection,
@@ -80,9 +81,14 @@ def _gsc_status(db: Session, user: User) -> GscStatusOut:
     note = "已连接，可同步 Google Search Console 数据。" if connected else "需要客户授权 Google Search Console。"
     if not configured:
         note = "服务器未配置 GSC OAuth Client ID / Secret。"
+    elif not google_relay.configured():
+        note = f"{note} 服务端未配 Google 中转（GOOGLE_RELAY_URL / GOOGLE_RELAY_KEY）。北京同步会直连 Google 并失败。"
+    else:
+        note = f"{note} 换 token 与同步走 Cloudflare Worker，不直连 Google。"
     return GscStatusOut(
         configured=configured,
         connected=connected,
+        relay_configured=google_relay.configured(),
         status=conn.status if conn else "disconnected",
         site_url=conn.site_url if conn else "",
         last_sync_at=conn.last_sync_at if conn else None,
@@ -103,20 +109,21 @@ def _gsc_site_url(tenant: Tenant, raw: str) -> str:
 
 
 def _exchange_gsc_code(db: Session, user: User, code: str) -> dict:
-    with httpx.Client(timeout=30) as client:
-        response = client.post(
-            GSC_TOKEN_ENDPOINT,
-            data={
-                "code": code,
-                "client_id": _integration_value(db, user.tenant_id, "gsc_oauth_client_id"),
-                "client_secret": _integration_value(db, user.tenant_id, "gsc_oauth_client_secret"),
-                "redirect_uri": _gsc_redirect_uri(db, user.tenant_id),
-                "grant_type": "authorization_code",
-            },
-        )
-        if response.status_code >= 400:
-            raise HTTPException(status_code=400, detail=f"GSC 授权失败：{response.text[:500]}")
-        return response.json()
+    response = google_relay.request(
+        "POST",
+        GSC_TOKEN_ENDPOINT,
+        data={
+            "code": code,
+            "client_id": _integration_value(db, user.tenant_id, "gsc_oauth_client_id"),
+            "client_secret": _integration_value(db, user.tenant_id, "gsc_oauth_client_secret"),
+            "redirect_uri": _gsc_redirect_uri(db, user.tenant_id),
+            "grant_type": "authorization_code",
+        },
+        timeout=30,
+    )
+    if response.status_code >= 400:
+        raise HTTPException(status_code=400, detail=f"GSC 授权失败：{response.text[:500]}")
+    return response.json()
 
 
 def _refresh_gsc_token(db: Session, conn: GscConnection) -> str:
@@ -124,21 +131,22 @@ def _refresh_gsc_token(db: Session, conn: GscConnection) -> str:
         return conn.access_token
     if not conn.refresh_token:
         raise HTTPException(status_code=400, detail="GSC refresh token 缺失，请重新授权。")
-    with httpx.Client(timeout=30) as client:
-        response = client.post(
-            GSC_TOKEN_ENDPOINT,
-            data={
-                "client_id": _integration_value(db, conn.tenant_id, "gsc_oauth_client_id"),
-                "client_secret": _integration_value(db, conn.tenant_id, "gsc_oauth_client_secret"),
-                "refresh_token": conn.refresh_token,
-                "grant_type": "refresh_token",
-            },
-        )
-        if response.status_code >= 400:
-            conn.status = "error"
-            conn.last_error = response.text[:1000]
-            raise HTTPException(status_code=400, detail=f"GSC token 刷新失败：{response.text[:500]}")
-        data = response.json()
+    response = google_relay.request(
+        "POST",
+        GSC_TOKEN_ENDPOINT,
+        data={
+            "client_id": _integration_value(db, conn.tenant_id, "gsc_oauth_client_id"),
+            "client_secret": _integration_value(db, conn.tenant_id, "gsc_oauth_client_secret"),
+            "refresh_token": conn.refresh_token,
+            "grant_type": "refresh_token",
+        },
+        timeout=30,
+    )
+    if response.status_code >= 400:
+        conn.status = "error"
+        conn.last_error = response.text[:1000]
+        raise HTTPException(status_code=400, detail=f"GSC token 刷新失败：{response.text[:500]}")
+    data = response.json()
     conn.access_token = data.get("access_token", "")
     expires_in = int(data.get("expires_in") or 3600)
     conn.token_expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
@@ -231,6 +239,7 @@ def _integration_settings_out(db: Session, tenant_id: str) -> IntegrationSetting
             and _integration_value(db, tenant_id, "gsc_oauth_client_secret")
         ),
         pagespeed_configured=bool(_integration_value(db, tenant_id, "pagespeed_api_key")),
+        google_relay_configured=google_relay.configured(),
         ce17_configured=bool(
             _integration_value(db, tenant_id, "ce17_user")
             and _integration_value(db, tenant_id, "ce17_api_pwd")
@@ -273,8 +282,13 @@ def _sync_gsc_rows(db: Session, user: User, conn: GscConnection, body: GscSyncIn
         "rowLimit": body.row_limit,
     }
     try:
-        with httpx.Client(timeout=60) as client:
-            response = client.post(url, headers={"Authorization": f"Bearer {token}"}, json=payload)
+        response = google_relay.request(
+            "POST",
+            url,
+            headers={"Authorization": f"Bearer {token}"},
+            json=payload,
+            timeout=60,
+        )
         if response.status_code >= 400:
             raise HTTPException(status_code=400, detail=f"GSC 同步失败：{response.text[:500]}")
         data = response.json()
@@ -420,11 +434,14 @@ def gsc_auth_url(user: User = Depends(get_current_user), db: Session = Depends(g
         "prompt": "consent",
         "state": user.tenant_id,
     }
+    note = "打开授权链接后，Google 会回到诊断页并带上 code。浏览器授权不走中转。"
+    if not google_relay.configured():
+        note += " 服务端未配 GOOGLE_RELAY_*，北京换 token / 同步仍会直连 Google。"
     return GscAuthUrlOut(
         configured=True,
         auth_url=f"{GSC_AUTH_ENDPOINT}?{urlencode(params)}",
         redirect_uri=_gsc_redirect_uri(db, user.tenant_id),
-        note="打开授权链接后，Google 会回到诊断页并带上 code。",
+        note=note,
     )
 
 

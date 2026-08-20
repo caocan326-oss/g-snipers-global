@@ -1,6 +1,6 @@
 import hashlib
 from collections import defaultdict
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urlencode, urljoin, urlparse
 
 import httpx
 from fastapi import Depends, HTTPException
@@ -25,6 +25,7 @@ from app.models import (
     Tenant,
     User,
 )
+from app import google_relay
 from app.ce17_speed import Ce17Error, run_overseas_http_check
 from app.onsite_analyzer import rank_distribution
 from app.onsite_fetch import normalize_origin
@@ -45,7 +46,7 @@ import app.routers.onsite as _onsite_pkg
 
 from . import router
 from .common import _parse_float, _tenant
-from .constants import BRIGHTDATA_SERP_INPUT_URL
+from .constants import BRIGHTDATA_SERP_INPUT_URL, PAGESPEED_ENDPOINT
 from .integrations import _finish_data_sync, _integration_value
 
 
@@ -457,11 +458,63 @@ def _speed_credentials(db: Session, tenant_id: str) -> tuple[str, str]:
     return user.strip(), password.strip()
 
 
+def _extract_pagespeed_score(category: dict) -> int | None:
+    score = category.get("score")
+    if score is None:
+        return None
+    try:
+        return int(round(float(score) * 100))
+    except (TypeError, ValueError):
+        return None
+
+
+def _audit_numeric(audits: dict, key: str) -> int | None:
+    value = (audits.get(key) or {}).get("numericValue")
+    if value is None:
+        return None
+    try:
+        return int(round(float(value)))
+    except (TypeError, ValueError):
+        return None
+
+
+def _run_google_pagespeed(db: Session, tenant_id: str, url: str, strategy: str) -> dict:
+    query = [
+        ("url", url),
+        ("strategy", strategy),
+        ("category", "performance"),
+        ("category", "seo"),
+        ("category", "accessibility"),
+        ("category", "best-practices"),
+    ]
+    pagespeed_key = _integration_value(db, tenant_id, "pagespeed_api_key") or settings.pagespeed_api_key
+    if pagespeed_key:
+        query.append(("key", pagespeed_key))
+    response = google_relay.request("GET", f"{PAGESPEED_ENDPOINT}?{urlencode(query)}", timeout=90)
+    if response.status_code >= 400:
+        raise RuntimeError(f"PageSpeed 返回 HTTP {response.status_code}：{response.text[:300]}")
+    data = response.json()
+    lighthouse = data.get("lighthouseResult") or {}
+    categories = lighthouse.get("categories") or {}
+    audits = lighthouse.get("audits") or {}
+    return {
+        "performance_score": _extract_pagespeed_score(categories.get("performance") or {}),
+        "seo_score": _extract_pagespeed_score(categories.get("seo") or {}),
+        "accessibility_score": _extract_pagespeed_score(categories.get("accessibility") or {}),
+        "best_practices_score": _extract_pagespeed_score(categories.get("best-practices") or {}),
+        "lcp_ms": _audit_numeric(audits, "largest-contentful-paint"),
+        "inp_ms": _audit_numeric(audits, "interaction-to-next-paint") or _audit_numeric(audits, "max-potential-fid"),
+        "cls": _parse_float(str((audits.get("cumulative-layout-shift") or {}).get("numericValue", ""))),
+        "detail": "Google PageSpeed Insights（经 Cloudflare 中转）。",
+    }
+
+
 def _run_pagespeed(db: Session, tenant_id: str, url: str, strategy: str) -> dict:
-    del strategy
+    if google_relay.configured():
+        return _run_google_pagespeed(db, tenant_id, url, strategy if strategy in {"mobile", "desktop"} else "mobile")
     user, password = _speed_credentials(db, tenant_id)
     if not user or not password:
-        raise Ce17Error("国内服务器访问不了 Google 测速。请先配置 17CE 账号和 api_pwd。")
+        raise Ce17Error("未配 Google 中转，也未配 17CE。北京请先配 GOOGLE_RELAY_URL / GOOGLE_RELAY_KEY。")
     return run_overseas_http_check(user=user, api_pwd=password, url=url)
 
 
@@ -590,18 +643,19 @@ def run_pagespeed_audits(
     urls = _pagespeed_targets(tenant, pages, body.urls, min(body.limit, 1))
     if not urls:
         raise HTTPException(status_code=400, detail="没有可测速的页面。请先登记官网或加入诊断页。")
+    strategy = "mobile" if google_relay.configured() else "overseas"
     audits: list[PageSpeedAudit] = []
     for url in urls:
         try:
-            metrics = _run_pagespeed(db, user.tenant_id, url, "overseas")
-            audit = PageSpeedAudit(tenant_id=user.tenant_id, url=url, strategy="overseas", status="ok", **metrics)
+            metrics = _run_pagespeed(db, user.tenant_id, url, strategy)
+            audit = PageSpeedAudit(tenant_id=user.tenant_id, url=url, strategy=strategy, status="ok", **metrics)
         except Exception as exc:
             audit = PageSpeedAudit(
                 tenant_id=user.tenant_id,
                 url=url,
-                strategy="overseas",
+                strategy=strategy,
                 status="error",
-                detail=f"海外打开检查失败：{exc}",
+                detail=f"测速失败：{exc}",
             )
         db.add(audit)
         audits.append(audit)

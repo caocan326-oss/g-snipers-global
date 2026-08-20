@@ -529,36 +529,27 @@ def test_gsc_oauth_connect_and_sync_feeds_performance(client: TestClient, demo_u
 
     monkeypatch.setattr(onsite_router, "_refresh_gsc_token", lambda db, conn: "access-2")
 
-    class FakeGscClient:
-        def __init__(self, *args, **kwargs) -> None:
-            pass
+    def fake_google_request(method, url, *, headers=None, data=None, json=None, timeout=30):
+        assert method == "POST"
+        assert "searchAnalytics/query" in url
+        assert headers["Authorization"] == "Bearer access-2"
+        assert json["dimensions"] == ["date", "query", "page", "country", "device"]
+        return httpx.Response(
+            200,
+            json={
+                "rows": [
+                    {
+                        "keys": ["2026-08-01", "industrial pump", "https://example.com/products/pump", "usa", "DESKTOP"],
+                        "clicks": 4,
+                        "impressions": 100,
+                        "ctr": 0.04,
+                        "position": 8.2,
+                    }
+                ]
+            },
+        )
 
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc, tb) -> None:
-            return None
-
-        def post(self, url, headers=None, json=None, data=None):
-            assert "searchAnalytics/query" in url
-            assert headers["Authorization"] == "Bearer access-2"
-            assert json["dimensions"] == ["date", "query", "page", "country", "device"]
-            return httpx.Response(
-                200,
-                json={
-                    "rows": [
-                        {
-                            "keys": ["2026-08-01", "industrial pump", "https://example.com/products/pump", "usa", "DESKTOP"],
-                            "clicks": 4,
-                            "impressions": 100,
-                            "ctr": 0.04,
-                            "position": 8.2,
-                        }
-                    ]
-                },
-            )
-
-    monkeypatch.setattr(onsite_router.httpx, "Client", FakeGscClient)
+    monkeypatch.setattr("app.google_relay.request", fake_google_request)
     synced = client.post("/api/onsite/gsc/sync", headers=headers, json={"days": 28, "row_limit": 100})
     assert synced.status_code == 200, synced.text
     assert synced.json()["rows_imported"] == 1
@@ -657,36 +648,26 @@ def test_data_sync_run_due_executes_gsc_once(client: TestClient, demo_user, monk
 
     calls = {"count": 0}
 
-    class FakeGscClient:
-        def __init__(self, *args, **kwargs) -> None:
-            pass
+    def fake_google_request(method, url, *, headers=None, data=None, json=None, timeout=30):
+        calls["count"] += 1
+        assert "searchAnalytics/query" in url
+        assert json["rowLimit"] == 25000
+        return httpx.Response(
+            200,
+            json={
+                "rows": [
+                    {
+                        "keys": ["2026-08-01", "industrial pump exporter", "https://example.com/products/pump", "usa", "MOBILE"],
+                        "clicks": 6,
+                        "impressions": 180,
+                        "ctr": 0.0333,
+                        "position": 11.4,
+                    }
+                ]
+            },
+        )
 
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc, tb) -> None:
-            return None
-
-        def post(self, url, headers=None, json=None, data=None):
-            calls["count"] += 1
-            assert "searchAnalytics/query" in url
-            assert json["rowLimit"] == 25000
-            return httpx.Response(
-                200,
-                json={
-                    "rows": [
-                        {
-                            "keys": ["2026-08-01", "industrial pump exporter", "https://example.com/products/pump", "usa", "MOBILE"],
-                            "clicks": 6,
-                            "impressions": 180,
-                            "ctr": 0.0333,
-                            "position": 11.4,
-                        }
-                    ]
-                },
-            )
-
-    monkeypatch.setattr(onsite_router.httpx, "Client", FakeGscClient)
+    monkeypatch.setattr("app.google_relay.request", fake_google_request)
     due = client.post("/api/onsite/data-sync/run-due", headers=headers, json={"force": False, "sources": ["gsc"]})
     assert due.status_code == 200, due.text
     assert due.json()["status"] == "ok"
@@ -868,6 +849,51 @@ def test_brightdata_dataset_serp_request_shape(monkeypatch) -> None:
     )
     assert rows[0]["position"] == 1
     assert rows[0]["url"] == "https://example.com/pumps"
+
+
+def test_pagespeed_uses_google_relay_when_configured(client: TestClient, demo_user, monkeypatch) -> None:
+    import httpx
+
+    import app.routers.onsite.diagnosis as diagnosis
+    from app.config import settings
+
+    headers = auth_header(client)
+    client.patch("/api/onsite/settings", headers=headers, json={"site_origin": "https://example.com"})
+    monkeypatch.setattr(settings, "google_relay_url", "https://g-snipers-google-relay.example.workers.dev")
+    monkeypatch.setattr(settings, "google_relay_key", "relay-secret")
+
+    def fake_google_request(method, url, *, headers=None, data=None, json=None, timeout=30):
+        assert method == "GET"
+        assert "pagespeedonline/v5/runPagespeed" in url
+        assert "example.com" in url
+        return httpx.Response(
+            200,
+            json={
+                "lighthouseResult": {
+                    "categories": {
+                        "performance": {"score": 0.82},
+                        "seo": {"score": 0.9},
+                        "accessibility": {"score": 0.88},
+                        "best-practices": {"score": 0.77},
+                    },
+                    "audits": {
+                        "largest-contentful-paint": {"numericValue": 2100},
+                        "interaction-to-next-paint": {"numericValue": 180},
+                        "cumulative-layout-shift": {"numericValue": 0.04},
+                    },
+                }
+            },
+        )
+
+    monkeypatch.setattr(diagnosis.google_relay, "request", fake_google_request)
+    res = client.post("/api/onsite/performance/pagespeed", headers=headers, json={"urls": [], "strategies": ["mobile"], "limit": 2})
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert body[0]["status"] == "ok", body[0].get("detail")
+    assert body[0]["strategy"] == "mobile"
+    assert body[0]["performance_score"] == 82
+    assert body[0]["lcp_ms"] == 2100
+    assert "PageSpeed" in body[0]["detail"]
 
 
 def test_pagespeed_uses_ce17_overseas_check(client: TestClient, demo_user, monkeypatch) -> None:

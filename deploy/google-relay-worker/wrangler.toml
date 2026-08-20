@@ -1,0 +1,7 @@
+name = "g-snipers-google-relay"
+main = "src/index.js"
+compatibility_date = "2026-08-20"
+
+# 密钥只在 Cloudflare 控制台 / `wrangler secret put RELAY_KEY` 里设。
+# 可选：只允许北京机访问。
+# RELAY_ALLOW_IPS = "39.97.52.149"

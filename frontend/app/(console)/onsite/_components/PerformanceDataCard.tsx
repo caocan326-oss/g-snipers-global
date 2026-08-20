@@ -96,6 +96,10 @@ export function PerformanceDataCard({
               <span>客户授权</span>
               <Badge tone={gsc?.connected ? "green" : "amber"}>{gsc?.connected ? "已连接" : "未连接"}</Badge>
             </div>
+            <div className="flex items-center justify-between gap-3">
+              <span>Google 中转</span>
+              <Badge tone={gsc?.relay_configured ? "green" : "amber"}>{gsc?.relay_configured ? "走 Worker" : "未配（北京会失败）"}</Badge>
+            </div>
             <div className="truncate text-xs text-slate-500">{gsc?.site_url || gsc?.note || "读取中"}</div>
             {gsc?.last_sync_at ? <div className="text-xs text-slate-500">最近同步 {new Date(gsc.last_sync_at).toLocaleString("zh-CN")}</div> : null}
             {gsc?.last_error ? <div className="text-xs text-red-600">{gsc.last_error}</div> : null}
@@ -244,7 +248,7 @@ export function PerformanceDataCard({
         <div className="rounded-md border border-slate-200 p-4">
           <div className="flex items-center gap-2 text-sm font-medium text-slate-800">
             <Gauge className="h-4 w-4" />
-            海外打开检查
+            {integrations?.google_relay_configured ? "Google 测速" : "海外打开检查"}
           </div>
           <div className="mt-3 grid grid-cols-3 gap-2 text-center">
             <div className="rounded-md bg-slate-50 p-2">
@@ -252,23 +256,33 @@ export function PerformanceDataCard({
               <div className="text-[11px] text-slate-500">检查记录</div>
             </div>
             <div className="rounded-md bg-slate-50 p-2">
-              <div className="text-lg font-semibold">{performance?.speed_latest[0]?.lcp_ms != null ? `${performance.speed_latest[0].lcp_ms}ms` : "-"}</div>
-              <div className="text-[11px] text-slate-500">平均打开</div>
+              <div className="text-lg font-semibold">
+                {integrations?.google_relay_configured
+                  ? (performance?.speed_latest[0]?.performance_score != null ? performance.speed_latest[0].performance_score : "-")
+                  : (performance?.speed_latest[0]?.lcp_ms != null ? `${performance.speed_latest[0].lcp_ms}ms` : "-")}
+              </div>
+              <div className="text-[11px] text-slate-500">{integrations?.google_relay_configured ? "性能分" : "平均打开"}</div>
             </div>
             <div className="rounded-md bg-slate-50 p-2">
-              <div className="text-lg font-semibold">{performance?.speed_latest[0]?.inp_ms != null ? `${performance.speed_latest[0].inp_ms}ms` : "-"}</div>
-              <div className="text-[11px] text-slate-500">最慢节点</div>
+              <div className="text-lg font-semibold">{performance?.speed_latest[0]?.lcp_ms != null ? `${performance.speed_latest[0].lcp_ms}ms` : "-"}</div>
+              <div className="text-[11px] text-slate-500">{integrations?.google_relay_configured ? "LCP" : "最慢节点"}</div>
             </div>
           </div>
-          <Button type="button" onClick={runPageSpeed} disabled={busyId === "pagespeed" || !integrations?.ce17_configured} className="mt-3 w-full">
+          <Button type="button" onClick={runPageSpeed} disabled={busyId === "pagespeed" || !(integrations?.google_relay_configured || integrations?.ce17_configured)} className="mt-3 w-full">
             <Gauge className="mr-2 h-4 w-4" />
-            {busyId === "pagespeed" ? "检查中，最多约 1 分钟…" : "从海外节点打开首页"}
+            {busyId === "pagespeed"
+              ? (integrations?.google_relay_configured ? "测速中，可能要 1 分钟…" : "检查中，最多约 1 分钟…")
+              : (integrations?.google_relay_configured ? "测首页（Google PageSpeed）" : "从海外节点打开首页")}
           </Button>
           {performance?.speed_latest[0]?.detail ? (
             <p className="mt-2 text-xs leading-5 text-slate-500">{performance.speed_latest[0].detail}</p>
           ) : (
             <p className="mt-2 text-xs text-slate-500">
-              {integrations?.ce17_configured ? "系统已接 17CE 海外节点，客户和客户经理都不用填密钥。" : "服务器还没接 17CE，按钮已停用。"}
+              {integrations?.google_relay_configured
+                ? "走 Cloudflare 中转调用免费的 Google PageSpeed。中转通了就不再用 17CE。"
+                : integrations?.ce17_configured
+                  ? "中转还没配，暂时用 17CE 海外节点看打不打得开。"
+                  : "先配 Google 中转（GOOGLE_RELAY_*）。配好后测速走 Google，不用 17CE。"}
             </p>
           )}
         </div>

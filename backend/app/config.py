@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     gsc_oauth_client_id: str = ""
     gsc_oauth_client_secret: str = ""
     gsc_oauth_redirect_uri: str = ""
+    google_relay_url: str = ""
+    google_relay_key: str = ""
     gsc_auto_sync_days: int = 28
     gsc_auto_sync_min_interval_hours: int = 24
     bing_webmaster_api_key: str = ""

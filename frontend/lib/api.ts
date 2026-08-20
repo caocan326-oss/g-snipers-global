@@ -332,6 +332,7 @@ export type SerpRunBatch = {
 export type GscStatus = {
   configured: boolean;
   connected: boolean;
+  relay_configured?: boolean;
   status: string;
   site_url: string;
   last_sync_at: string | null;
@@ -392,6 +393,7 @@ export type IntegrationSettings = {
   fields: IntegrationField[];
   gsc_configured: boolean;
   pagespeed_configured: boolean;
+  google_relay_configured?: boolean;
   ce17_configured?: boolean;
   brightdata_serp_configured: boolean;
   note: string;
