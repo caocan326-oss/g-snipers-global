@@ -137,6 +137,8 @@ compose 会覆盖数据库地址为容器内：
 
 北京访问不了 Google。GSC 换 token / 同步、以及 Google PageSpeed，必须走 Cloudflare Worker（`deploy/google-relay-worker/`）。生产中转地址是橙云 `https://relay.weiyids.com`，不要再用 `workers.dev`。`GOOGLE_RELAY_KEY` 只写服务器 `.env` 和 Cloudflare Secret。中转配上后测速不再走 17CE。
 
+排名走 Bright Data **SERP API 区**（生产 `BRIGHTDATA_SERP_ZONE=serp_api1`，`BRIGHTDATA_SERP_ENDPOINT=https://api.brightdata.com/request`）。不要用浏览器区 `scraping_browser1`，不要再用 Dataset scrape。`BING_*`、`INDEXNOW_*` 可空，不挡交付。
+
 禁止：`GOOGLE_ADS_*`。  
 禁止：把真实 Key、连接串、密码写进仓库或这份档案。
 
@@ -213,6 +215,7 @@ powershell -File deploy/sync-from-local.ps1
 | 2026-08-20 | 代码 | 中转配上后，测速改走 Google PageSpeed（经 Worker）。未配中转时仍用 17CE。PageSpeed 可能超过 Nginx 默认 60s，发版时要把 `/api/` `proxy_read_timeout` 调到 180s。 |
 | 2026-08-21 | 运维 | `relay.weiyids.com` 橙云已通。生产 `.env` 的 `GOOGLE_RELAY_URL` 改为该地址（密钥未动）。`sync-from-local.ps1 -Rebuild` 发到 `6dad00d`。线上 Nginx `/api/` 超时已 180s。 |
 | 2026-08-21 | 运维 | 排名改走 Bright Data SERP API 区 `serp_api1`（`/request`）。不要用浏览器区 `scraping_browser1` 或 Dataset scrape。密钥未动。发到 `bacb349`，`excavator` 实测有自然结果。 |
+| 2026-08-21 | 产品 | 测速、GSC、SERP 区均已生产实测。Bing Webmaster / IndexNow 暂不配，可等。 |
 
 ---
 
