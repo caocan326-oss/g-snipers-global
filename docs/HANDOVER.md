@@ -7,7 +7,7 @@
 
 约定：家里和公司**不会同时改**。换机器前必须把这边 push 完。
 
-最后更新：2026-08-21 12:12（公司收工。中转、GSC、SERP 区已发版实测。Bing / IndexNow 可等）。
+最后更新：2026-08-21 17:48（公司。GEO 按最近一次抽查说话；分发改成一渠道一卡片，官方接口客户自己跳转或自己发）。
 
 ---
 
@@ -206,14 +206,14 @@ git log -1 --oneline
 
 | 项 | 值 |
 | --- | --- |
-| 日期 | 2026-08-21 14:50 |
+| 日期 | 2026-08-21 17:48 |
 | 最后一台 | 公司 `E:\G-snipers海外版` |
 | 分支 | `main` |
-| 提交 | 生产代码 `9b3ef2c`（登录落到客户说明、清单人话标题、收录未测标本轮不改）。 |
+| 提交 | 生产代码 `4cf902c`（GEO 用最近一次联网抽查；分发一渠道一卡片；官方接口只给跳转和客户自己的钥匙，不代发）。文档本条。 |
 | 已 push origin / upstream | 是。 |
-| 已发版生产 | **是。** 镜像已 `--build`。演示客户仍是门锁站 `snipers.com.cn`。`DEMO_LOGIN_ENABLED` 线上仍关，网站登录要用管理员，不是 `am@demo…`。 |
-| 接口实测 | 测速 / GSC / SERP 区未改。GEO 16 条尚未联网抽查，要在 GEO 页用已配置的 Bocha/Dashscope 真跑一轮。 |
-| 未完成 | Bing / IndexNow 可以等。不要把 `scraping_browser1` 填进 SERP 区。不要编询盘或 AI 引用。 |
+| 已发版生产 | **是。** `sync-from-local.ps1 -Rebuild`。演示客户仍是门锁站 `snipers.com.cn`。`DEMO_LOGIN_ENABLED` 线上仍关，网站登录要用管理员，不是 `am@demo…`。 |
+| 接口实测 | 测速 / GSC / SERP 区未改。后端测试 104 通过。官方 Graph / LinkedIn 真发还没接，只挂了跳转和文档。 |
+| 未完成 | Bing / IndexNow 可以等。不要把 `scraping_browser1` 填进 SERP 区。不要编询盘或 AI 引用。不要自动群发。 |
 | 下一台先做 | 家里先 `git pull origin main`。不要两边同时改。 |
 
 `www` 灰云、A 仍 `39.97.52.149`。`relay.weiyids.com` 橙云，不要 CNAME 回 `workers.dev`。不要开 Google Ads。不要在服务器 `git pull`。
