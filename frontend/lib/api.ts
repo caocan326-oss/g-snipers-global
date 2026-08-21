@@ -102,6 +102,9 @@ export type DashboardSummary = {
   geo_recorded: number;
   geo_assets_draft: number;
   geo_tickets_open: number;
+  geo_evidence_results?: number;
+  geo_latest_sampled?: number;
+  geo_latest_mentioned?: number;
   onsite_pages: number;
   onsite_open_low: number;
   onsite_open_high: number;
@@ -603,6 +606,10 @@ export type GeoSummary = {
   evidence_results?: number;
   latest_run_id?: string | null;
   latest_run_at?: string | null;
+  latest_sampled?: number;
+  latest_mentioned?: number;
+  latest_owned?: number;
+  latest_third_party?: number;
 };
 
 export type GeoReport = {
@@ -681,6 +688,14 @@ export type GeoProviderStatus = {
 export type GeoProviderStatusList = {
   providers: GeoProviderStatus[];
   note: string;
+};
+
+export type GeoGroundedBatch = {
+  providers: string[];
+  results_count: number;
+  failed: string[];
+  note: string;
+  runs: GeoSampleRun[];
 };
 
 export type GeoTicketDraft = {
@@ -1059,6 +1074,10 @@ export type SourcePlatform = {
   notes: string;
   accounts_count: number;
   connectors_count: number;
+  compose_url?: string;
+  docs_url?: string;
+  api_endpoint?: string;
+  api_auth_mode?: string;
 };
 
 export type SourcePlatformSeed = {

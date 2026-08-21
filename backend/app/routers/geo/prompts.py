@@ -41,6 +41,7 @@ from . import router
 from .common import (
     _create_untested_slots,
     _evidence_tier,
+    _json_list,
     _load_prompt,
     _obs_out,
     _prompt_key,
@@ -99,10 +100,12 @@ def geo_summary(user: User = Depends(get_current_user), db: Session = Depends(ge
     evidence_results = db.query(func.count(GeoSampleResult.id)).filter(GeoSampleResult.tenant_id == tid).scalar() or 0
     latest_run = (
         db.query(GeoSampleRun)
+        .options(selectinload(GeoSampleRun.results))
         .filter(GeoSampleRun.tenant_id == tid)
         .order_by(GeoSampleRun.started_at.desc())
         .first()
     )
+    latest_results = latest_run.results if latest_run else []
     return GeoSummary(
         prompts=prompts,
         untested=untested,
@@ -120,6 +123,10 @@ def geo_summary(user: User = Depends(get_current_user), db: Session = Depends(ge
         evidence_results=evidence_results,
         latest_run_id=latest_run.id if latest_run else None,
         latest_run_at=latest_run.started_at if latest_run else None,
+        latest_sampled=len(latest_results),
+        latest_mentioned=sum(1 for row in latest_results if row.mentioned),
+        latest_owned=sum(1 for row in latest_results if _json_list(row.owned_citations_json)),
+        latest_third_party=sum(1 for row in latest_results if _json_list(row.third_party_citations_json)),
     )
 
 

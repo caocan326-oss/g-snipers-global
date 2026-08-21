@@ -78,15 +78,15 @@ export function OpportunitiesTab({
             <div>
               <div className="flex items-center gap-2 text-sm font-semibold text-slate-950">
                 <Wand2 className="h-4 w-4 text-brand-700" />
-                从 SEO / GEO / 站内诊断生成站外执行机会
+                从检查记录里捡线索
               </div>
               <p className="mt-1 text-sm leading-6 text-slate-600">
-                系统只整理已有诊断证据，不自动发布。生成后每条机会仍需人工判断、准备材料、选择平台并回填结果页面。
+                这里不是发帖入口。要发新媒体，回「渠道卡片」。这里只把检查里看到的站外缺口记下来。
               </p>
             </div>
             <Button onClick={generateOpportunitiesFromSignals} disabled={generatingOpportunities}>
               <RefreshCw className={`mr-1.5 h-4 w-4 ${generatingOpportunities ? "animate-spin" : ""}`} />
-              {generatingOpportunities ? "正在生成" : "生成站外执行机会"}
+              {generatingOpportunities ? "正在整理" : "整理线索"}
             </Button>
           </CardContent>
         </Card>

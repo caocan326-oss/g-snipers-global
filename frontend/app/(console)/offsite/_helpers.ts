@@ -82,4 +82,4 @@ export const submissionLabel: Record<string, string> = {
   api_none: "只读/监控",
 };
 
-export type Tab = "opportunities" | "distribution" | "placements" | "content" | "platforms";
+export type Tab = "channels" | "opportunities" | "distribution" | "placements" | "content" | "platforms";

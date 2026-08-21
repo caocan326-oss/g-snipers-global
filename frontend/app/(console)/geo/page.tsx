@@ -8,6 +8,7 @@ import {
   type AiAssist,
   type GeoAsset,
   type GeoChecklistItem,
+  type GeoGroundedBatch,
   type GeoPrompt,
   type GeoProviderStatusList,
   type GeoReport,
@@ -56,7 +57,8 @@ export default function GeoPage() {
   const [confirmNote, setConfirmNote] = useState("");
   const [note, setNote] = useState("");
   const [busyAction, setBusyAction] = useState("");
-  const [sampleProvider, setSampleProvider] = useState("deepseek");
+  const [sampleProvider, setSampleProvider] = useState("");
+  const [providerPicked, setProviderPicked] = useState(false);
 
   function loadPrompts() {
     Promise.all([api<GeoPrompt[]>("/api/geo/prompts"), api<GeoSummary>("/api/geo/summary")])
@@ -87,15 +89,15 @@ export default function GeoPage() {
   }, []);
 
   useEffect(() => {
+    if (providerPicked) return;
     const rows = providers?.providers ?? [];
     if (!rows.length) return;
-    if (rows.some((provider) => provider.key === sampleProvider)) return;
-    const preferred = rows.find((provider) => provider.configured && provider.role === "grounded_answer")
-      ?? rows.find((provider) => provider.configured && provider.web_grounded)
+    const preferred =
+      rows.find((provider) => provider.configured && provider.web_grounded)
       ?? rows.find((provider) => provider.configured)
       ?? rows[0];
     setSampleProvider(preferred.key);
-  }, [providers, sampleProvider]);
+  }, [providers, providerPicked]);
 
   async function aiPrompt(id: string) {
     setError("");
@@ -207,6 +209,26 @@ export default function GeoPage() {
     }
   }
 
+  async function runGroundedBatch() {
+    setError("");
+    setNote("");
+    setBusyAction("grounded-batch");
+    try {
+      const batch = await api<GeoGroundedBatch>("/api/geo/sample-runs/auto-grounded", {
+        method: "POST",
+        timeoutMs: 180000,
+        body: JSON.stringify({ trials: 1, limit: 8, web_grounded: "true" }),
+      });
+      setNote(batch.note);
+      loadRuns();
+      loadPrompts();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "联网源抽查失败");
+    } finally {
+      setBusyAction("");
+    }
+  }
+
   async function runAutoSample() {
     setError("");
     setNote("");
@@ -311,17 +333,20 @@ export default function GeoPage() {
       const providerResults = providerRuns.flatMap((run) => run.results);
       const verified = providerResults.filter((result) => result.verification_status === "passed").length;
       const citations = providerResults.filter((result) => result.citations.length > 0).length;
+      const owned = providerResults.filter((result) => result.owned_citations.length > 0).length;
       const status = !provider.configured
         ? "未配置"
         : providerResults.length === 0
-          ? "待检查"
+          ? "这次没选"
           : verified > 0
             ? "已核对来源"
-            : citations > 0
+            : owned > 0
               ? "有来源待核对"
-              : provider.web_grounded
-                ? "无来源"
-                : "分析参考";
+              : citations > 0
+                ? "有外来网址"
+                : provider.web_grounded
+                  ? "无来源"
+                  : "分析参考";
       return { provider, providerRuns, providerResults, verified, citations, status };
     });
   }, [providers?.providers, runs]);
@@ -336,9 +361,13 @@ export default function GeoPage() {
         draftTicketsFromEvidence={draftTicketsFromEvidence}
         providers={providers}
         sampleProvider={sampleProvider}
-        setSampleProvider={setSampleProvider}
+        setSampleProvider={(value) => {
+          setProviderPicked(true);
+          setSampleProvider(value);
+        }}
         selectedProvider={selectedProvider}
         runAutoSample={runAutoSample}
+        runGroundedBatch={runGroundedBatch}
         downloadGeoReport={downloadGeoReport}
         downloadGeoTable={downloadGeoTable}
         note={note}

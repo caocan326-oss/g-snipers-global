@@ -77,9 +77,10 @@ export default function HomePage() {
   const passedChecks = reportChecks.filter((item) => item.ok).length;
   const reportReady = reportChecks.every((item) => item.ok);
   const highRisk = data.summary.onsite_open_critical + data.summary.onsite_open_high;
-  const untestedTotal = data.summary.geo_untested + (data.summary.onsite_pages === 0 ? 1 : 0);
+  const geoSampled = data.summary.geo_latest_sampled ?? 0;
+  const untestedTotal = (geoSampled > 0 ? 0 : data.summary.geo_prompts) + (data.summary.onsite_pages === 0 ? 1 : 0);
   const geoRecorded = data.summary.geo_recorded;
-  const geoStatusTone = data.summary.geo_untested > 0 ? "amber" : geoRecorded > 0 ? "green" : "default";
+  const geoStatusTone = geoSampled > 0 ? "green" : data.summary.geo_prompts > 0 ? "amber" : "default";
   const technicalTone = highRisk > 0 ? "red" : data.summary.onsite_pages > 0 ? "green" : "amber";
   const workTone = reviewTotal > 0 ? "amber" : "green";
   const executiveSummary = [
@@ -90,7 +91,11 @@ export default function HomePage() {
     },
     {
       label: "AI 搜索",
-      text: geoRecorded > 0 ? `已有 ${geoRecorded} 条 AI 搜索记录，可整理有没有被提到、有没有给出官网。` : `还有 ${data.summary.geo_untested} 条检查尚未做（${data.summary.geo_prompts} 个买家问题），说明里只能写尚未检查。`,
+      text: geoSampled > 0
+        ? `最近联网抽查了 ${geoSampled} 个买家问题。ChatGPT 等引擎空位不是这周的缺口。`
+        : data.summary.geo_prompts > 0
+          ? `${data.summary.geo_prompts} 个买家问题还没联网抽查。`
+          : "还没有买家问题。",
       tone: geoStatusTone,
     },
     {

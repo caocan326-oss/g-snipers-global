@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.auth import get_current_user
 from app.database import get_db
 from app.models import BacklinkGap, ContentAsset, DistributionAttempt, DistributionJob, PlatformAccount, SourcePlatform, User
+from app.official_apis import official_api_for, official_api_payload
 from app.providers import all_providers, get_provider
 from app.risk import require_confirm
 from app.schemas import (
@@ -18,6 +19,7 @@ from app.schemas import (
     DistributionJobOut,
     DistributionJobUpdate,
     DistributionSubmitResultIn,
+    OfficialPayloadOut,
     PlacementCheckOut,
     ProviderOut,
     SendResultOut,
@@ -396,6 +398,29 @@ def check_placement(
         link_attr=link_attr,
         note=note,
     )
+
+
+@router.get("/jobs/{job_id}/official-payload", response_model=OfficialPayloadOut)
+def job_official_payload(
+    job_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> OfficialPayloadOut:
+    job = db.get(DistributionJob, job_id)
+    if job is None or job.tenant_id != user.tenant_id:
+        raise HTTPException(status_code=404, detail="执行任务不存在")
+    platform = _platform_for_job(db, job)
+    key = platform.platform_key if platform else ""
+    spec = official_api_for(key)
+    if spec is None:
+        raise HTTPException(status_code=400, detail="这个渠道还没有挂官方接口。先去官网发，或登记自己的接口。")
+    body = job.payload_summary or ""
+    if job.content_asset_id:
+        asset = db.get(ContentAsset, job.content_asset_id)
+        if asset is not None and asset.tenant_id == user.tenant_id:
+            body = asset.body_md or body
+    payload = official_api_payload(platform_key=key, title=job.title, body=body, target_url=job.target_url)
+    return OfficialPayloadOut(sent=False, **payload)
 
 
 @router.post("/jobs/{job_id}/send", response_model=SendResultOut)

@@ -625,3 +625,63 @@ def test_geo_bocha_and_bailian_provider_adapters(client: TestClient, demo_user, 
     assert bailian_result["engine"] == "bailian"
     assert "https://www.sulzer.com/en" in bailian_result["owned_citations"]
     assert "https://industry.example/report" in bailian_result["third_party_citations"]
+
+
+def test_geo_grounded_batch_runs_each_configured_source(client: TestClient, demo_user, monkeypatch) -> None:
+    from app import geo_providers
+
+    headers = auth_header(client)
+    prompt = client.post(
+        "/api/geo/prompts",
+        headers=headers,
+        json={"prompt_text": "How do renters install a smart lock?", "locale": "en-US"},
+    ).json()
+    monkeypatch.setattr(geo_providers.settings, "bocha_api_key", "test-bocha")
+    monkeypatch.setattr(geo_providers.settings, "dashscope_api_key", "test-dashscope")
+
+    def fake_sample(provider, prompt_text, **kwargs):
+        return SimpleNamespace(
+            provider=provider,
+            engine=provider,
+            model="fake",
+            answer=f"{provider} found https://other.example/{provider}",
+            citations=[f"https://other.example/{provider}"],
+            web_grounded=True,
+            surface="api_search",
+        )
+
+    monkeypatch.setattr("app.routers.geo.sample_with_provider", fake_sample)
+    batch = client.post(
+        "/api/geo/sample-runs/auto-grounded",
+        headers=headers,
+        json={"prompt_ids": [prompt["id"]], "trials": 1, "limit": 1},
+    )
+    assert batch.status_code == 201, batch.text
+    body = batch.json()
+    assert set(body["providers"]) == {"bocha", "bailian"}
+    assert body["results_count"] == 2
+    assert body["failed"] == []
+    assert "DeepSeek" in body["note"]
+    engines = {run["engines"][0] for run in body["runs"]}
+    assert engines == {"bocha", "bailian"}
+    summary = client.get("/api/geo/summary", headers=headers).json()
+    assert summary["latest_sampled"] == 1
+    assert summary["latest_mentioned"] == 0
+    assert summary["latest_owned"] == 0
+    assert summary["latest_third_party"] == 1
+
+
+def test_geo_grounded_batch_requires_a_live_source(client: TestClient, demo_user, monkeypatch) -> None:
+    from app import geo_providers
+
+    headers = auth_header(client)
+    client.post(
+        "/api/geo/prompts",
+        headers=headers,
+        json={"prompt_text": "smart lock for renters", "locale": "en-US"},
+    )
+    monkeypatch.setattr(geo_providers.settings, "bocha_api_key", "")
+    monkeypatch.setattr(geo_providers.settings, "dashscope_api_key", "")
+    res = client.post("/api/geo/sample-runs/auto-grounded", headers=headers, json={"limit": 1, "trials": 1})
+    assert res.status_code == 400, res.text
+    assert "DeepSeek" in res.json()["detail"]

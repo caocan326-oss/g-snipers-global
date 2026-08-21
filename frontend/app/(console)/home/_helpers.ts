@@ -94,9 +94,14 @@ export function reportReadyChecks(data: Workbench, targets: ProjectTargets | nul
     },
     {
       label: "AI 搜索记录",
-      status: data.summary.geo_recorded > 0 ? "有记录" : "尚未检查",
-      ok: data.summary.geo_recorded > 0,
-      detail: data.summary.geo_recorded > 0 ? `已有 ${data.summary.geo_recorded} 条 AI 搜索记录。` : "需要联网或人工检查，尚未检查的不能写成结论。",
+      status: (data.summary.geo_latest_sampled ?? 0) > 0 || data.summary.geo_recorded > 0 ? "有记录" : "尚未检查",
+      ok: (data.summary.geo_latest_sampled ?? 0) > 0 || data.summary.geo_recorded > 0,
+      detail:
+        (data.summary.geo_latest_sampled ?? 0) > 0
+          ? `最近联网抽查了 ${data.summary.geo_latest_sampled} 个买家问题。`
+          : data.summary.geo_recorded > 0
+            ? `已有 ${data.summary.geo_recorded} 条 AI 搜索记录。`
+            : "需要联网或人工检查。引擎空位不算已经抽查。",
     },
     {
       label: "紧急 / 优先问题",

@@ -19,6 +19,7 @@ import {
   type SourcePlatformSeed,
 } from "@/lib/api";
 
+import { ChannelCards } from "./_components/ChannelCards";
 import { ContentTab } from "./_components/ContentTab";
 import { DistributionTab } from "./_components/DistributionTab";
 import { OpportunitiesTab } from "./_components/OpportunitiesTab";
@@ -29,7 +30,8 @@ import { TabNav } from "./_components/TabNav";
 import type { Tab } from "./_helpers";
 
 export default function OffsitePage() {
-  const [tab, setTab] = useState<Tab>("opportunities");
+  const [tab, setTab] = useState<Tab>("channels");
+  const [writingId, setWritingId] = useState("");
   const [filter, setFilter] = useState<"all" | "unverified" | "valid" | "dead" | "spam">("all");
   const [platformQuery, setPlatformQuery] = useState("");
   const [platformTypeFilter, setPlatformTypeFilter] = useState("all");
@@ -353,8 +355,10 @@ export default function OffsitePage() {
     setError("");
     setNote("");
     const res = await api<SourcePlatformSeed>("/api/offsite/platforms/seed-b2b", { method: "POST" });
+    const apis = await api<{ created: number; updated: number }>("/api/offsite/platforms/seed-official-apis", { method: "POST" });
     setPlatforms(res.platforms);
-    setNote(`已导入 ${res.created} 个主流平台和 B2B 权威源，跳过 ${res.skipped} 个已有平台。`);
+    loadPlatforms();
+    setNote(`已导入 ${res.created} 个渠道，跳过 ${res.skipped} 个。官方接口挂上 ${apis.created + apis.updated} 处：客户自己跳转发，或用自己的钥匙调接口。`);
   }
 
   async function saveFactPack(e: FormEvent) {
@@ -384,6 +388,55 @@ export default function OffsitePage() {
     setAssetForm({ ...assetForm, title: "", body_md: "", keywords: "", entities: "" });
     setNote("对外提交文案已保存为草稿。");
     loadContent();
+  }
+
+  async function writeForChannel(platform: SourcePlatform) {
+    const fact = factPacks.find((row) => row.status === "approved") ?? factPacks[0];
+    if (!fact || fact.status !== "approved") {
+      setError("先到「对外稿」填好客户事实并批准，才能让 AI 按这个渠道写一篇。");
+      setTab("content");
+      return;
+    }
+    setError("");
+    setNote("");
+    setWritingId(platform.id);
+    try {
+      await api("/api/offsite/content-assets/generate", {
+        method: "POST",
+        timeoutMs: 90000,
+        body: JSON.stringify({
+          fact_pack_id: fact.id,
+          asset_type: platform.source_type === "social_profile" ? "social_snippet" : "company_blurb",
+          title: `${platform.name} 发布稿`,
+          locale: "en",
+        }),
+      });
+      setNote(`已为 ${platform.name} 写了一篇草稿。人看过再发，软件不会自己登号发出去。`);
+      loadContent();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "写稿失败");
+    } finally {
+      setWritingId("");
+    }
+  }
+
+  function queueOnChannel(platform: SourcePlatform) {
+    const draft = assets.find((asset) => asset.title.includes(platform.name));
+    setDistForm({
+      gap_id: "",
+      platform_id: platform.id,
+      account_id: accounts.find((row) => row.platform_id === platform.id)?.id || "",
+      content_asset_id: draft?.id || "",
+      title: `在 ${platform.name} 发一篇`,
+      target_url: "/",
+      provider_key: connectors.find((row) => row.platform_id === platform.id)?.provider_key || providers[0]?.key || "directory",
+      task_type: platform.source_type === "social_profile" ? "social_post_plan" : "profile_update",
+      payload_summary: draft ? draft.body_md.slice(0, 400) : `用 AI 稿在 ${platform.name} 发出。人登号或走接口，不自动群发。`,
+      owner_hint: "客户经理",
+      result_url: "",
+    });
+    setTab("distribution");
+    setNote(`已把 ${platform.name} 带到执行记录。发出去后把结果链接填上。`);
   }
 
   async function generateAsset() {
@@ -504,9 +557,23 @@ export default function OffsitePage() {
 
   return (
     <div className="space-y-6">
-      <SummaryHeader stats={stats} platformStats={platformStats} platformsCount={platforms.length} />
+      <SummaryHeader stats={stats} platformsCount={platforms.length} />
 
       <TabNav tab={tab} setTab={setTab} />
+
+      {tab === "channels" ? (
+        <ChannelCards
+          platforms={platforms}
+          accounts={accounts}
+          connectors={connectors}
+          jobs={jobs}
+          assets={assets}
+          seedPlatforms={seedPlatforms}
+          writeForChannel={writeForChannel}
+          queueOnChannel={queueOnChannel}
+          writingId={writingId}
+        />
+      ) : null}
 
       {tab === "opportunities" ? (
         <OpportunitiesTab

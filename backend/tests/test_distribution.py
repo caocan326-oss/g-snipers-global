@@ -296,3 +296,47 @@ def test_placement_check_writes_back_to_offsite_issue(client: TestClient, demo_u
     assert refreshed["status"] == "won"
     assert refreshed["verify_status"] == "valid"
     assert "结果页面核验" in refreshed["evidence"]
+
+
+def test_official_apis_are_customer_owned_not_auto_sent(client: TestClient, demo_user) -> None:
+    headers = auth_header(client)
+    catalog = client.get("/api/offsite/official-apis", headers=headers)
+    assert catalog.status_code == 200
+    keys = {row["platform_key"] for row in catalog.json()}
+    assert {"linkedin_company", "x_twitter", "facebook_page", "youtube_channel"} <= keys
+
+    seeded = client.post("/api/offsite/platforms/seed-b2b", headers=headers)
+    assert seeded.status_code == 200
+    linkedin = next(row for row in seeded.json()["platforms"] if row["platform_key"] == "linkedin_company")
+    assert linkedin["has_official_api"] is True
+    assert linkedin["compose_url"].startswith("https://")
+    assert linkedin["api_endpoint"].startswith("https://")
+
+    wired = client.post("/api/offsite/platforms/seed-official-apis", headers=headers)
+    assert wired.status_code == 200, wired.text
+    assert wired.json()["created"] >= 1
+    again = client.post("/api/offsite/platforms/seed-official-apis", headers=headers)
+    assert again.status_code == 200
+    assert again.json()["created"] == 0
+
+    job = client.post(
+        "/api/distribution/jobs",
+        headers=headers,
+        json={
+            "platform_id": linkedin["id"],
+            "title": "LinkedIn company update",
+            "target_url": "https://www.snipers.com.cn/",
+            "provider_key": "directory",
+            "task_type": "social_post_plan",
+            "payload_summary": "Smart lock for renters. https://www.snipers.com.cn/",
+        },
+    )
+    assert job.status_code == 201, job.text
+    payload = client.get(f"/api/distribution/jobs/{job.json()['id']}/official-payload", headers=headers)
+    assert payload.status_code == 200, payload.text
+    body = payload.json()
+    assert body["sent"] is False
+    assert body["compose_url"].startswith("https://")
+    assert "api.linkedin.com" in body["api_endpoint"]
+    assert body["customer_body"]["link"] == "https://www.snipers.com.cn/"
+    assert "代登" not in body["note"] or "不代登" in body["note"]

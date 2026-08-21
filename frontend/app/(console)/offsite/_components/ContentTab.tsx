@@ -156,6 +156,7 @@ export function ContentTab({
                 <option value="faq">FAQ</option>
                 <option value="listicle_pitch">榜单 Pitch</option>
                 <option value="pr_draft">PR 草稿</option>
+                <option value="social_snippet">社媒短稿</option>
               </select>
               <Input placeholder="标题" value={assetForm.title} onChange={(e) => setAssetForm({ ...assetForm, title: e.target.value })} required />
               <textarea className="min-h-32 w-full rounded-md border border-slate-200 px-3 py-2 text-sm" placeholder="正文，手工粘贴或点击下方生成草稿" value={assetForm.body_md} onChange={(e) => setAssetForm({ ...assetForm, body_md: e.target.value })} />

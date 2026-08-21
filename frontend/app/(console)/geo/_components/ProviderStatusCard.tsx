@@ -10,7 +10,7 @@ export function ProviderStatusCard({ providers }: { providers: GeoProviderStatus
       <CardHeader>
         <CardTitle>测试来源与可信边界</CardTitle>
         <p className="mt-1 text-sm text-slate-500">
-          DeepSeek 负责分析和建议；只有联网搜索类数据源返回来源网址时，才算作给出了官网。
+          DeepSeek 负责分析和建议，不算给出官网。已配置只表示钥匙在；要有数据，得在上面选中再点「只测这一源」。
         </p>
       </CardHeader>
       <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">

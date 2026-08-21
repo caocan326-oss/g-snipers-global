@@ -45,16 +45,20 @@ export function PillarsOverview({
 
         <PillarCard
           title="AI 搜索可见度"
-          status={data.summary.geo_untested > 0 ? "尚未检查" : geoRecorded > 0 ? "已有记录" : "尚未开始"}
+          status={(data.summary.geo_latest_sampled ?? 0) > 0 ? "已抽查" : data.summary.geo_prompts > 0 ? "还没抽查" : "尚未开始"}
           statusTone={geoStatusTone}
-          primary={`${geoRecorded} 条记录`}
-          helper={`${data.summary.geo_prompts} 个买家问题，${data.summary.geo_untested} 条尚未检查。看 AI 回答里有没有提到客户、有没有给出官网。`}
+          primary={(data.summary.geo_latest_sampled ?? 0) > 0 ? `${data.summary.geo_latest_sampled} 条抽查` : `${geoRecorded} 条记录`}
+          helper={
+            (data.summary.geo_latest_sampled ?? 0) > 0
+              ? `${data.summary.geo_prompts} 个买家问题。看抽查记录，不要看引擎空位。`
+              : `${data.summary.geo_prompts} 个买家问题还没联网抽查。`
+          }
           href="/geo"
           icon={Globe2}
         >
           <div className="grid grid-cols-2 gap-2 text-sm">
             <div className="rounded-md bg-slate-50 p-3"><div className="text-xs text-slate-500">买家问题</div><div className="mt-1 font-semibold">{data.summary.geo_prompts}</div></div>
-            <div className="rounded-md bg-slate-50 p-3"><div className="text-xs text-slate-500">证据待补</div><div className="mt-1 font-semibold">{data.summary.geo_untested}</div></div>
+            <div className="rounded-md bg-slate-50 p-3"><div className="text-xs text-slate-500">最近抽查</div><div className="mt-1 font-semibold">{data.summary.geo_latest_sampled ?? 0}</div></div>
           </div>
         </PillarCard>
 

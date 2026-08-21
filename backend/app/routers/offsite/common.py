@@ -1,6 +1,7 @@
 import re
 
 from app.models import BacklinkGap, ContentAsset, FactPack, PlatformAccount, PlatformConnector, SourcePlatform
+from app.official_apis import official_api_for
 from app.schemas import (
     BacklinkGapOut,
     ContentAssetOut,
@@ -13,6 +14,7 @@ from app.schemas import (
 
 
 def _platform_out(row: SourcePlatform) -> SourcePlatformOut:
+    spec = official_api_for(row.platform_key)
     return SourcePlatformOut(
         id=row.id,
         platform_key=row.platform_key,
@@ -24,12 +26,16 @@ def _platform_out(row: SourcePlatform) -> SourcePlatformOut:
         base_url=row.base_url,
         listing_model=row.listing_model,
         submission_mode=row.submission_mode,
-        has_official_api=row.has_official_api,
+        has_official_api=row.has_official_api or bool(spec),
         risk_level=row.risk_level,
         status=row.status,
         notes=row.notes,
         accounts_count=len(row.accounts),
         connectors_count=len(row.connectors),
+        compose_url=spec.compose_url if spec else "",
+        docs_url=spec.docs_url if spec else "",
+        api_endpoint=spec.api_endpoint if spec else "",
+        api_auth_mode=spec.auth_mode if spec else "",
     )
 
 
@@ -135,6 +141,13 @@ def _generate_asset_body(fact: FactPack, asset_type: str) -> str:
                 f"Public contact: {contact}",
                 f"Company description: {boilerplate or '[NEED_INPUT: approved English boilerplate]'}",
             ]
+        )
+    if asset_type == "social_snippet":
+        return (
+            f"{brand} | {categories}\n"
+            f"{boilerplate or '[NEED_INPUT: approved English boilerplate]'}\n"
+            f"Learn more: {website}\n"
+            f"Keywords: {categories}."
         )
     if asset_type == "listicle_pitch":
         return (

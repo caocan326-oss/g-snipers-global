@@ -27,11 +27,28 @@ export function SampleRunsCard({ runs }: { runs: GeoSampleRun[] }) {
               <div>给出了官网：{run.cite_rate}</div>
               <div>官网来源已核对：{run.verified_citation_rate}</div>
             </div>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {run.results.slice(0, 6).map((result) => (
-                <Badge key={result.id} tone={result.verification_status === "passed" ? "green" : "default"}>
-                  {result.evidence_id} · {result.engine_label ?? result.engine}
-                </Badge>
+            <div className="mt-3 space-y-3">
+              {run.results.map((result) => (
+                <div key={result.id} className="rounded-md bg-slate-50 p-3 text-sm">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge tone={result.mentioned ? "blue" : "default"}>{result.mentioned ? "被提到" : "未提到"}</Badge>
+                    <Badge tone={result.owned_citations.length ? "green" : "default"}>
+                      {result.owned_citations.length ? "有官网链接" : "没有官网链接"}
+                    </Badge>
+                    <span className="text-xs text-slate-500">{result.engine_label ?? result.engine}</span>
+                  </div>
+                  {result.answer_excerpt ? (
+                    <p className="mt-2 whitespace-pre-wrap text-slate-700">{result.answer_excerpt}</p>
+                  ) : (
+                    <p className="mt-2 text-xs text-slate-400">这条没有回答摘录，看导出记录。</p>
+                  )}
+                  {result.third_party_citations.length ? (
+                    <p className="mt-2 text-xs text-slate-500">外来网址：{result.third_party_citations.join("；")}</p>
+                  ) : null}
+                  {result.owned_citations.length ? (
+                    <p className="mt-2 text-xs text-slate-500">疑似官网：{result.owned_citations.join("；")}</p>
+                  ) : null}
+                </div>
               ))}
             </div>
           </div>

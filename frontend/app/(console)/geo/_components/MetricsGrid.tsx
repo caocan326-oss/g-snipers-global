@@ -15,20 +15,24 @@ export function MetricsGrid({ summary }: { summary: GeoSummary | null }) {
         </Card>
         <Card className="rounded-md">
           <CardContent className="py-4">
-            <div className="text-2xl font-semibold">{summary?.recorded ?? 0}</div>
-            <div className="text-xs text-slate-500">已记录槽位</div>
+            <div className="text-2xl font-semibold">{summary?.latest_sampled ?? 0}</div>
+            <div className="text-xs text-slate-500">最近抽查</div>
           </CardContent>
         </Card>
         <Card className="rounded-md">
           <CardContent className="py-4">
-            <div className="text-2xl font-semibold">{displayRate(summary?.mention_rate)}</div>
-            <div className="text-xs text-slate-500">品牌被提到</div>
+            <div className="text-2xl font-semibold">
+              {summary?.latest_sampled ? `${summary.latest_mentioned ?? 0} / ${summary.latest_sampled}` : displayRate(summary?.mention_rate)}
+            </div>
+            <div className="text-xs text-slate-500">抽查里被提到</div>
           </CardContent>
         </Card>
         <Card className="rounded-md">
           <CardContent className="py-4">
-            <div className="text-2xl font-semibold">{displayRate(summary?.cite_rate)}</div>
-            <div className="text-xs text-slate-500">给出了官网</div>
+            <div className="text-2xl font-semibold">
+              {summary?.latest_sampled ? `${summary.latest_owned ?? 0} / ${summary.latest_sampled}` : displayRate(summary?.cite_rate)}
+            </div>
+            <div className="text-xs text-slate-500">抽查里给出官网</div>
           </CardContent>
         </Card>
         <Card className="rounded-md">

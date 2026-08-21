@@ -38,6 +38,9 @@ class DashboardSummary(BaseModel):
     geo_recorded: int
     geo_assets_draft: int
     geo_tickets_open: int
+    geo_evidence_results: int = 0
+    geo_latest_sampled: int = 0
+    geo_latest_mentioned: int = 0
     onsite_pages: int
     onsite_open_low: int
     onsite_open_high: int
@@ -553,6 +556,10 @@ class GeoSummary(BaseModel):
     evidence_results: int = 0
     latest_run_id: str | None = None
     latest_run_at: datetime | None = None
+    latest_sampled: int = 0
+    latest_mentioned: int = 0
+    latest_owned: int = 0
+    latest_third_party: int = 0
 
 
 class GeoSeedOut(BaseModel):
@@ -590,6 +597,14 @@ class GeoAutoSampleIn(BaseModel):
     limit: int = Field(default=8, ge=1, le=30)
     region_hint: str = ""
     web_grounded: str = "false"
+
+
+class GeoGroundedBatchOut(BaseModel):
+    providers: list[str]
+    results_count: int
+    failed: list[str] = []
+    note: str
+    runs: list["GeoSampleRunOut"] = []
 
 
 class GeoProviderStatusOut(BaseModel):
@@ -1458,6 +1473,42 @@ class SourcePlatformOut(SourcePlatformCreate):
     id: str
     accounts_count: int = 0
     connectors_count: int = 0
+    compose_url: str = ""
+    docs_url: str = ""
+    api_endpoint: str = ""
+    api_auth_mode: str = ""
+
+
+class OfficialApiOut(BaseModel):
+    platform_key: str
+    label: str
+    compose_url: str
+    docs_url: str
+    api_endpoint: str
+    http_method: str
+    auth_mode: str
+    env_hint: str
+    note: str
+
+
+class OfficialApiSeedOut(BaseModel):
+    created: int
+    updated: int
+    apis: list[OfficialApiOut] = []
+
+
+class OfficialPayloadOut(BaseModel):
+    sent: bool = False
+    platform_key: str
+    label: str
+    compose_url: str
+    docs_url: str
+    api_endpoint: str
+    http_method: str
+    auth_mode: str
+    env_hint: str
+    note: str
+    customer_body: dict = {}
 
 
 class SourcePlatformSeedOut(BaseModel):

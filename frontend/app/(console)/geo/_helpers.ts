@@ -55,7 +55,7 @@ export function geoEvidenceVerdict(summary: GeoSummary | null, runs: GeoSampleRu
   const verified = webGrounded.filter((result) => result.verification_status === "passed");
   const pendingOwned = webGrounded.filter((result) => result.owned_citations.length > 0 && result.verification_status !== "passed");
   const thirdPartyOnly = webGrounded.filter((result) => result.third_party_citations.length > 0 && result.owned_citations.length === 0);
-  if (!summary?.recorded && runs.length === 0) {
+  if (!summary?.recorded && runs.length === 0 && !(summary?.evidence_results || summary?.latest_sampled)) {
     return {
       title: "还没有可写入说明的检查记录",
       text: "先生成买家问题，再用联网数据源或人工记录回答。尚未检查时，不能写成 AI 已经提到你们。",
@@ -116,5 +116,11 @@ export function formatCheckAt(value: string | null | undefined) {
   if (!value) return "暂无";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "暂无";
-  return date.toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  return date.toLocaleString("zh-CN", {
+    timeZone: "Asia/Shanghai",
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }

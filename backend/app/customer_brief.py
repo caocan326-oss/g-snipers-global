@@ -25,34 +25,53 @@ def _display_rate(value: str | None) -> str:
     return value
 
 
+def _geo_plain(geo) -> tuple[str, str]:
+    """客户说明只写买家问题和抽查结果，不写 8 个引擎空位。"""
+    engines = "ChatGPT、Perplexity 等引擎还没逐个打开。"
+    if getattr(geo, "latest_sampled", 0):
+        n = geo.latest_sampled
+        if geo.latest_mentioned == 0 and geo.latest_owned == 0:
+            core = f"联网搜索抽查了 {n} 个买家问题，都没有提到我们，也没有给出官网。"
+        elif geo.latest_mentioned and geo.latest_owned == 0:
+            core = f"联网搜索抽查了 {n} 个买家问题，有提到品牌，但没有给出官网。"
+        elif geo.latest_owned:
+            core = f"联网搜索抽查了 {n} 个买家问题，其中 {geo.latest_owned} 条给出了疑似官网，还要核对。"
+        else:
+            core = f"联网搜索抽查了 {n} 个买家问题。"
+        extra = ""
+        if geo.latest_third_party and geo.latest_owned == 0:
+            extra = f"搜到 {geo.latest_third_party} 个外来网址，不能写成给出了官网。"
+        return core, " ".join(part for part in (core, extra, engines) if part)
+    if geo.prompts:
+        core = f"{geo.prompts} 个买家问题还没联网抽查。"
+        return core, f"{core}{engines}引擎空位不算这一周的缺口。"
+    return "", "还没有买家问题，AI 搜索这一块只能写尚未开始。"
+
+
 def _headline(
     *,
     site_origin: str,
     pages: int,
     critical: int,
     high: int,
-    geo_untested: int,
-    geo_recorded: int,
-    mention_rate: str,
-    cite_rate: str,
+    geo_core: str,
+    geo_sampled: int,
+    geo_prompts: int,
 ) -> str:
     if not site_origin:
         return "还没登记官网。这一周先记下客户网站，再查看网页和 AI 搜索。"
     if not pages:
         return "官网已登记，但还没查看网页。先把页面看一遍，再写改法。"
     if critical:
-        extra = f"另外，AI 搜索还有 {geo_untested} 条尚未检查。" if geo_untested else "AI 搜索已有记录，尚未检查的不要写成结论。"
+        extra = f"另外，{geo_core}" if geo_core else "AI 搜索已有记录，尚未检查的不要写成结论。"
         return f"这一周先处理 {critical} 个紧急网站问题。{extra}"
     if high:
-        geo_bit = f"AI 搜索还有 {geo_untested} 条尚未检查。" if geo_untested else "AI 搜索已有记录。"
+        geo_bit = geo_core or "AI 搜索已有记录。"
         return f"没有紧急问题，还有 {high} 个优先网站问题要跟。{geo_bit}"
-    if geo_untested:
-        return f"网站紧急问题不多。这一周先补齐 {geo_untested} 条尚未检查的 AI 搜索。"
-    if geo_recorded:
-        return (
-            f"已有 {geo_recorded} 条 AI 搜索记录。品牌被提到 {_display_rate(mention_rate)}，"
-            f"给出官网 {_display_rate(cite_rate)}。尚未核对的不要写成已被推荐。"
-        )
+    if geo_sampled:
+        return f"{geo_core} ChatGPT、Perplexity 等引擎还没逐个打开。"
+    if geo_prompts:
+        return f"网站紧急问题不多。这一周先联网抽查 {geo_prompts} 个买家问题。"
     return "这一周可以把网站改法和 AI 搜索检查对一下，再写给客户。"
 
 
@@ -121,6 +140,8 @@ def build_customer_brief(user: User, db: Session) -> CustomerBriefOut:
         or 0
     )
 
+    geo_core, geo_find = _geo_plain(geo)
+
     untested: list[str] = []
     if not site_origin:
         untested.append("客户官网尚未登记。")
@@ -130,13 +151,11 @@ def build_customer_brief(user: User, db: Session) -> CustomerBriefOut:
         untested.append("目标词在谷歌前排还没查过。")
     if not impressions:
         untested.append("谷歌搜索表现还没有可用数据。")
-    if geo.untested:
-        untested.append(f"AI 搜索还有 {geo.untested} 条尚未检查，不能写成已经被提到或给出了官网。")
-    if geo.prompts and not geo.recorded:
-        untested.append("买家问题已生成，但还没有检查记录。")
-    if not geo.prompts:
+    if geo_find:
+        untested.append(geo_find)
+    elif not geo.prompts:
         untested.append("还没有买家问题，AI 搜索这一块只能写尚未开始。")
-    if _display_rate(geo.verified_citation_rate) == "尚未检查":
+    if not geo.latest_sampled and _display_rate(geo.verified_citation_rate) == "尚未检查":
         untested.append("官网来源尚未核对。提到品牌不等于给出了官网。")
     if not untested:
         untested.append("这一轮该查的都有记录。没核对过的来源仍不要写成已推荐。")
@@ -163,8 +182,8 @@ def build_customer_brief(user: User, db: Session) -> CustomerBriefOut:
     ]
     for issue in discovery[:3]:
         findability.append(f"{_plain_title(issue.title)}（{_page_short(issue.page)}）")
-    if geo.untested:
-        findability.append(f"AI 搜索还有 {geo.untested} 条尚未检查，不能写成已经被提到。")
+    if geo_find:
+        findability.append(geo_find)
     if tickets:
         findability.append(tickets[0].title)
     if not findability:
@@ -185,7 +204,7 @@ def build_customer_brief(user: User, db: Session) -> CustomerBriefOut:
     if waiting:
         retest.append(f"有 {len(waiting)} 处已经改过，需要再打开页面核对还在不在。")
     elif priority_issues:
-        retest.append("这几处改完后，再抓一次对应页面核对。系统不会自己改官网。")
+        retest.append("客户改完这几处后，再抓一次对应页面核对。我们不改客户官网。")
     else:
         retest.append("这一轮还没有要复查的改动。")
 
@@ -199,16 +218,15 @@ def build_customer_brief(user: User, db: Session) -> CustomerBriefOut:
         pages=len(pages),
         critical=len(critical),
         high=len(high),
-        geo_untested=geo.untested,
-        geo_recorded=geo.recorded,
-        mention_rate=geo.mention_rate,
-        cite_rate=geo.cite_rate,
+        geo_core=geo_core,
+        geo_sampled=geo.latest_sampled,
+        geo_prompts=geo.prompts,
     )
 
     sections = [
         CustomerBriefSection(key="findability", title="哪些地方让老外搜不到我", items=findability),
-        CustomerBriefSection(key="this_week", title="这周技术改哪三处", items=this_week),
-        CustomerBriefSection(key="retest", title="改完你再看一次", items=retest),
+        CustomerBriefSection(key="this_week", title="这周带给客户改的三处", items=this_week),
+        CustomerBriefSection(key="retest", title="客户改完你再看一次", items=retest),
         CustomerBriefSection(key="inquiries", title="这个月有几个老外来问过", body=f"这个月记到 {inquiry_count} 条。", items=inquiry_items),
     ]
 

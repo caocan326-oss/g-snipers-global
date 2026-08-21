@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.auth import get_current_user
 from app.database import get_db
-from app.geo_providers import GeoProviderError
+from app.geo_providers import GeoProviderError, configured_implemented_grounded
 from app.models import (
     GeoObservation,
     GeoPrompt,
@@ -18,6 +18,7 @@ from app.models import (
 )
 from app.schemas import (
     GeoAutoSampleIn,
+    GeoGroundedBatchOut,
     GeoSampleRunCreate,
     GeoSampleRunOut,
     GeoTicketDraftOut,
@@ -166,20 +167,25 @@ def create_sample_run_from_observations(
     return _run_out(refreshed, include_results=True)
 
 
-@router.post("/sample-runs/auto", response_model=GeoSampleRunOut, status_code=201)
-def create_auto_sample_run(
-    body: GeoAutoSampleIn,
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-) -> GeoSampleRunOut:
-    tenant = db.get(Tenant, user.tenant_id)
+def _load_sample_prompts(db: Session, user: User, body: GeoAutoSampleIn) -> list[GeoPrompt]:
     q = db.query(GeoPrompt).filter(GeoPrompt.tenant_id == user.tenant_id)
     if body.prompt_ids:
         q = q.filter(GeoPrompt.id.in_(body.prompt_ids))
     prompts = q.order_by(GeoPrompt.created_at.desc()).limit(body.limit).all()
     if not prompts:
         raise HTTPException(status_code=400, detail="没有可自动采样的 GEO 问句。")
-    provider_key = body.provider or body.engine or "deepseek"
+    return prompts
+
+
+def _execute_auto_sample(
+    *,
+    db: Session,
+    user: User,
+    tenant: Tenant | None,
+    prompts: list[GeoPrompt],
+    provider_key: str,
+    body: GeoAutoSampleIn,
+) -> GeoSampleRun:
     engines = [provider_key]
     domain = tenant.site_origin if tenant else ""
     root = _root_domain(domain)
@@ -231,7 +237,7 @@ def create_auto_sample_run(
                     region_hint=body.region_hint,
                 )
             except GeoProviderError as exc:
-                errors.append(f"{prompt.prompt_key or prompt.id} trial {trial}: {exc}")
+                errors.append(f"{provider_key} {prompt.prompt_key or prompt.id} trial {trial}: {exc}")
                 continue
             text = sampled.answer[:4000]
             citations = sampled.citations if sampled.web_grounded else []
@@ -240,7 +246,7 @@ def create_auto_sample_run(
             owned = [url for url in citations if _is_owned_url(url, root, [])]
             third_party = [url for url in citations if url not in owned]
             mentioned, brand_hits = _brand_mentioned(text, brand_names)
-            evidence_id = f"ev_{run.id[:8]}_{prompt.id[:8]}_{trial}"
+            evidence_id = f"ev_{run.id[:8]}_{prompt.id[:8]}_{sampled.engine}_{trial}"
             db.add(
                 GeoSampleResult(
                     tenant_id=user.tenant_id,
@@ -275,13 +281,72 @@ def create_auto_sample_run(
     if errors:
         run.note = f"{run.note}\n失败 {len(errors)} 条：" + "\n".join(errors[:5])
     db.commit()
-    refreshed = (
+    return (
         db.query(GeoSampleRun)
         .options(selectinload(GeoSampleRun.results).selectinload(GeoSampleResult.prompt))
         .filter(GeoSampleRun.id == run.id)
         .one()
     )
-    return _run_out(refreshed, include_results=True)
+
+
+@router.post("/sample-runs/auto", response_model=GeoSampleRunOut, status_code=201)
+def create_auto_sample_run(
+    body: GeoAutoSampleIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> GeoSampleRunOut:
+    tenant = db.get(Tenant, user.tenant_id)
+    prompts = _load_sample_prompts(db, user, body)
+    run = _execute_auto_sample(
+        db=db,
+        user=user,
+        tenant=tenant,
+        prompts=prompts,
+        provider_key=body.provider or body.engine or "deepseek",
+        body=body,
+    )
+    return _run_out(run, include_results=True)
+
+
+@router.post("/sample-runs/auto-grounded", response_model=GeoGroundedBatchOut, status_code=201)
+def create_grounded_batch_runs(
+    body: GeoAutoSampleIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> GeoGroundedBatchOut:
+    ready = configured_implemented_grounded()
+    if not ready:
+        raise HTTPException(status_code=400, detail="没有已配置、能联网返回网址的数据源。DeepSeek 不算。")
+    tenant = db.get(Tenant, user.tenant_id)
+    prompts = _load_sample_prompts(db, user, body)
+    runs = []
+    failed: list[str] = []
+    results_count = 0
+    for provider in ready:
+        grounded_body = body.model_copy(update={"provider": provider.key, "engine": provider.key, "web_grounded": "true"})
+        run = _execute_auto_sample(
+            db=db,
+            user=user,
+            tenant=tenant,
+            prompts=prompts,
+            provider_key=provider.key,
+            body=grounded_body,
+        )
+        runs.append(_run_out(run, include_results=True))
+        results_count += len(run.results)
+        if run.status != "done":
+            failed.append(provider.label)
+    labels = [row.label for row in ready]
+    note = f"已对 {len(ready)} 个联网源各抽一轮：{'、'.join(labels)}。DeepSeek 没跑，不算给出官网。"
+    if failed:
+        note += f" 其中失败：{'、'.join(failed)}。"
+    return GeoGroundedBatchOut(
+        providers=[row.key for row in ready],
+        results_count=results_count,
+        failed=failed,
+        note=note,
+        runs=runs,
+    )
 
 
 @router.post("/tickets/draft-from-evidence", response_model=GeoTicketDraftOut)

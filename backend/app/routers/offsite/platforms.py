@@ -4,7 +4,10 @@ from sqlalchemy.orm import Session, selectinload
 from app.auth import get_current_user
 from app.database import get_db
 from app.models import PlatformAccount, PlatformConnector, SourcePlatform, User
+from app.official_apis import OFFICIAL_APIS, OfficialApi
 from app.schemas import (
+    OfficialApiOut,
+    OfficialApiSeedOut,
     PlatformAccountCreate,
     PlatformAccountOut,
     PlatformConnectorCreate,
@@ -65,7 +68,14 @@ def seed_b2b_platforms(user: User = Depends(get_current_user), db: Session = Dep
         if exists:
             skipped += 1
             continue
-        db.add(SourcePlatform(tenant_id=user.tenant_id, has_official_api=False, status="active", **item))
+        db.add(
+            SourcePlatform(
+                tenant_id=user.tenant_id,
+                has_official_api=item["platform_key"] in OFFICIAL_APIS,
+                status="active",
+                **item,
+            )
+        )
         created += 1
     db.commit()
     rows = (
@@ -76,6 +86,73 @@ def seed_b2b_platforms(user: User = Depends(get_current_user), db: Session = Dep
         .all()
     )
     return SourcePlatformSeedOut(created=created, skipped=skipped, platforms=[_platform_out(row) for row in rows])
+
+
+def _api_out(spec: OfficialApi) -> OfficialApiOut:
+    return OfficialApiOut(
+        platform_key=spec.platform_key,
+        label=spec.label,
+        compose_url=spec.compose_url,
+        docs_url=spec.docs_url,
+        api_endpoint=spec.api_endpoint,
+        http_method=spec.http_method,
+        auth_mode=spec.auth_mode,
+        env_hint=spec.env_hint,
+        note=spec.note,
+    )
+
+
+@router.get("/official-apis", response_model=list[OfficialApiOut])
+def list_official_apis(user: User = Depends(get_current_user)) -> list[OfficialApiOut]:
+    return [_api_out(spec) for spec in OFFICIAL_APIS.values()]
+
+
+@router.post("/platforms/seed-official-apis", response_model=OfficialApiSeedOut)
+def seed_official_apis(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> OfficialApiSeedOut:
+    created = 0
+    updated = 0
+    for spec in OFFICIAL_APIS.values():
+        platform = (
+            db.query(SourcePlatform)
+            .filter(SourcePlatform.tenant_id == user.tenant_id, SourcePlatform.platform_key == spec.platform_key)
+            .first()
+        )
+        if platform is None:
+            continue
+        if not platform.has_official_api:
+            platform.has_official_api = True
+            updated += 1
+        exists = (
+            db.query(PlatformConnector)
+            .filter(
+                PlatformConnector.tenant_id == user.tenant_id,
+                PlatformConnector.platform_id == platform.id,
+                PlatformConnector.provider_key == spec.platform_key,
+            )
+            .first()
+        )
+        if exists:
+            exists.auth_mode = spec.auth_mode
+            exists.capabilities = "customer_post"
+            exists.status = "customer_api"
+            exists.notes = spec.note
+            updated += 1
+            continue
+        db.add(
+            PlatformConnector(
+                tenant_id=user.tenant_id,
+                platform_id=platform.id,
+                provider_key=spec.platform_key,
+                auth_mode=spec.auth_mode,
+                capabilities="customer_post",
+                status="customer_api",
+                env_var=spec.env_hint,
+                notes=spec.note,
+            )
+        )
+        created += 1
+    db.commit()
+    return OfficialApiSeedOut(created=created, updated=updated, apis=[_api_out(spec) for spec in OFFICIAL_APIS.values()])
 
 
 @router.get("/accounts", response_model=list[PlatformAccountOut])

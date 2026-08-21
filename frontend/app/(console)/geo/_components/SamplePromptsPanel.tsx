@@ -16,62 +16,76 @@ function slotGroup(
   setObs: (id: string, status: string, extra?: Record<string, string | null>) => void
 ) {
   const rows = p.observations.filter((o) => (o.region || "") === region);
+  const opened = rows.filter((o) => o.status !== "untested");
+  const closed = rows.filter((o) => o.status === "untested");
+  const card = (o: (typeof rows)[number]) => (
+    <div key={o.id} className="w-full rounded-md border p-3 lg:w-[calc(50%-0.375rem)]">
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <div className="text-xs font-medium text-slate-500">{o.engine_label || o.engine}</div>
+        <Badge tone={obsTone[o.status]}>{obsLabel[o.status] ?? o.status}</Badge>
+      </div>
+      <div className="mb-2 flex flex-wrap gap-2 text-[11px] text-slate-500">
+        <span>{o.surface || "manual_ai_answer"}</span>
+        <span>{o.sample_type || "manual"}</span>
+        <span>{evidenceLabel[o.evidence_tier || "none"] || o.evidence_label}</span>
+        {o.observed_at ? <span>{new Date(o.observed_at).toLocaleString("zh-CN")}</span> : null}
+      </div>
+      <div className="mt-2 flex flex-wrap gap-1">
+        {["untested", "not_mentioned", "mentioned", "cited", "verified"].map((s) => (
+          <Button key={s} size="sm" variant="ghost" onClick={() => setObs(o.id, s)}>
+            {obsLabel[s]}
+          </Button>
+        ))}
+      </div>
+      <div className="mt-3 grid gap-2">
+        <Textarea
+          className="min-h-[72px]"
+          placeholder="回答摘录：粘贴 AI 答案里提到客户、竞品或官网来源的片段"
+          defaultValue={o.response_excerpt || ""}
+          onBlur={(e) => setObs(o.id, o.status, { response_excerpt: e.target.value })}
+        />
+        <Input
+          placeholder="来源网址，一行或逗号分隔"
+          defaultValue={o.citation_urls || ""}
+          onBlur={(e) => setObs(o.id, o.status, { citation_urls: e.target.value })}
+        />
+        <div className="grid gap-2 md:grid-cols-2">
+          <Input
+            placeholder="品牌/产品提及"
+            defaultValue={o.brand_mentions || ""}
+            onBlur={(e) => setObs(o.id, o.status, { brand_mentions: e.target.value })}
+          />
+          <Input
+            placeholder="竞品提及"
+            defaultValue={o.competitor_mentions || ""}
+            onBlur={(e) => setObs(o.id, o.status, { competitor_mentions: e.target.value })}
+          />
+        </div>
+        <Input
+          placeholder="备注：说明这条记录来自人工记下、AI 回答、搜索结果或其他来源"
+          defaultValue={o.interpretation_note || o.notes || ""}
+          onBlur={(e) => setObs(o.id, o.status, { interpretation_note: e.target.value, notes: e.target.value })}
+        />
+      </div>
+    </div>
+  );
   return (
     <div>
       <div className="mb-2 text-xs font-medium text-slate-500">{title}</div>
-      <div className="flex flex-wrap gap-3">
-        {rows.map((o) => (
-          <div key={o.id} className="w-full rounded-md border p-3 lg:w-[calc(50%-0.375rem)]">
-            <div className="mb-2 flex items-center justify-between gap-3">
-              <div className="text-xs font-medium text-slate-500">{o.engine_label || o.engine}</div>
-              <Badge tone={obsTone[o.status]}>{obsLabel[o.status] ?? o.status}</Badge>
-            </div>
-            <div className="mb-2 flex flex-wrap gap-2 text-[11px] text-slate-500">
-              <span>{o.surface || "manual_ai_answer"}</span>
-              <span>{o.sample_type || "manual"}</span>
-              <span>{evidenceLabel[o.evidence_tier || "none"] || o.evidence_label}</span>
-              {o.observed_at ? <span>{new Date(o.observed_at).toLocaleString("zh-CN")}</span> : null}
-            </div>
-            <div className="mt-2 flex flex-wrap gap-1">
-              {["untested", "not_mentioned", "mentioned", "cited", "verified"].map((s) => (
-                <Button key={s} size="sm" variant="ghost" onClick={() => setObs(o.id, s)}>
-                  {obsLabel[s]}
-                </Button>
-              ))}
-            </div>
-            <div className="mt-3 grid gap-2">
-              <Textarea
-                className="min-h-[72px]"
-                placeholder="回答摘录：粘贴 AI 答案里提到客户、竞品或官网来源的片段"
-                defaultValue={o.response_excerpt || ""}
-                onBlur={(e) => setObs(o.id, o.status, { response_excerpt: e.target.value })}
-              />
-              <Input
-                placeholder="来源网址，一行或逗号分隔"
-                defaultValue={o.citation_urls || ""}
-                onBlur={(e) => setObs(o.id, o.status, { citation_urls: e.target.value })}
-              />
-              <div className="grid gap-2 md:grid-cols-2">
-                <Input
-                  placeholder="品牌/产品提及"
-                  defaultValue={o.brand_mentions || ""}
-                  onBlur={(e) => setObs(o.id, o.status, { brand_mentions: e.target.value })}
-                />
-                <Input
-                  placeholder="竞品提及"
-                  defaultValue={o.competitor_mentions || ""}
-                  onBlur={(e) => setObs(o.id, o.status, { competitor_mentions: e.target.value })}
-                />
-              </div>
-              <Input
-                placeholder="备注：说明这条记录来自人工记下、AI 回答、搜索结果或其他来源"
-                defaultValue={o.interpretation_note || o.notes || ""}
-                onBlur={(e) => setObs(o.id, o.status, { interpretation_note: e.target.value, notes: e.target.value })}
-              />
-            </div>
-          </div>
-        ))}
-      </div>
+      {closed.length ? (
+        <p className="mb-2 text-xs text-slate-500">
+          {closed.length} 个引擎还没手工打开。这是记 ChatGPT 等回答用的空位，不是这轮联网抽查的缺口。
+        </p>
+      ) : null}
+      {opened.length ? <div className="flex flex-wrap gap-3">{opened.map(card)}</div> : null}
+      {closed.length ? (
+        <details className="mt-3 rounded-md border border-dashed border-slate-200 p-3">
+          <summary className="cursor-pointer text-xs text-slate-600">
+            展开未打开的引擎（{closed.map((o) => o.engine_label || o.engine).join("、")}）
+          </summary>
+          <div className="mt-3 flex flex-wrap gap-3">{closed.map(card)}</div>
+        </details>
+      ) : null}
     </div>
   );
 }

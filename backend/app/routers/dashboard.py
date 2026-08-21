@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.auth import get_current_user
 from app.database import get_db
@@ -14,6 +14,8 @@ from app.models import (
     GeoAsset,
     GeoObservation,
     GeoPrompt,
+    GeoSampleResult,
+    GeoSampleRun,
     GeoTicket,
     Inquiry,
     Market,
@@ -99,6 +101,19 @@ def _summary_for(user: User, db: Session) -> DashboardSummary:
         .scalar()
         or 0
     )
+    geo_evidence_results = (
+        db.query(func.count(GeoSampleResult.id)).filter(GeoSampleResult.tenant_id == tid).scalar() or 0
+    )
+    latest_geo_run = (
+        db.query(GeoSampleRun)
+        .options(selectinload(GeoSampleRun.results))
+        .filter(GeoSampleRun.tenant_id == tid)
+        .order_by(GeoSampleRun.started_at.desc())
+        .first()
+    )
+    latest_geo_results = latest_geo_run.results if latest_geo_run else []
+    geo_latest_sampled = len(latest_geo_results)
+    geo_latest_mentioned = sum(1 for row in latest_geo_results if row.mentioned)
     onsite_pages = db.query(func.count(SitePage.id)).filter(SitePage.tenant_id == tid).scalar() or 0
     onsite_open_low = (
         db.query(func.count(OnsiteIssue.id))
@@ -151,6 +166,9 @@ def _summary_for(user: User, db: Session) -> DashboardSummary:
         geo_recorded=geo_recorded,
         geo_assets_draft=geo_assets_draft,
         geo_tickets_open=geo_tickets_open,
+        geo_evidence_results=geo_evidence_results,
+        geo_latest_sampled=geo_latest_sampled,
+        geo_latest_mentioned=geo_latest_mentioned,
         onsite_pages=onsite_pages,
         onsite_open_low=onsite_open_low,
         onsite_open_high=onsite_open_high,
@@ -449,12 +467,29 @@ def workbench(
                 action_label="去处理",
             )
         )
-    if summary.geo_untested:
+    if summary.geo_latest_sampled:
+        mentioned = summary.geo_latest_mentioned
         next_actions.append(
             WorkbenchItem(
                 id="geo-sampling",
-                title="补齐 AI 搜索检查",
-                subtitle=f"还有 {summary.geo_untested} 条检查尚未做（{summary.geo_prompts} 个买家问题）。",
+                title="看这一轮 AI 搜索抽查",
+                subtitle=(
+                    f"抽查了 {summary.geo_latest_sampled} 个买家问题，"
+                    + ("有提到我们。" if mentioned else "没有提到我们。")
+                    + "ChatGPT 等引擎还没打开。"
+                ),
+                href="/geo",
+                status="已抽查",
+                tone="default",
+                action_label="去查看",
+            )
+        )
+    elif summary.geo_prompts:
+        next_actions.append(
+            WorkbenchItem(
+                id="geo-sampling",
+                title="联网抽查买家问题",
+                subtitle=f"{summary.geo_prompts} 个买家问题还没抽查。",
                 href="/geo",
                 status="尚未检查",
                 tone="amber",
@@ -487,7 +522,9 @@ def workbench(
         )
 
     seo_health, seo_tone = _chain_health(summary.onsite_open_critical + summary.onsite_open_high)
-    geo_health, geo_tone = _chain_health(summary.geo_tickets_open + summary.geo_untested)
+    geo_health, geo_tone = _chain_health(
+        summary.geo_tickets_open + (0 if summary.geo_latest_sampled else summary.geo_prompts)
+    )
     chains = [
         WorkbenchChain(
             key="seo",
@@ -504,7 +541,11 @@ def workbench(
             title="AI 搜索可见度",
             href="/geo",
             primary=summary.geo_tickets_open,
-            secondary=f"{summary.geo_prompts} 个买家问题 / 尚未检查 {summary.geo_untested}",
+            secondary=(
+                f"{summary.geo_prompts} 个买家问题 / 最近抽查 {summary.geo_latest_sampled} 条，提到 {summary.geo_latest_mentioned}"
+                if summary.geo_latest_sampled
+                else f"{summary.geo_prompts} 个买家问题 / 还没联网抽查"
+            ),
             health=geo_health,
             tone=geo_tone,
             action_label="进入检查",

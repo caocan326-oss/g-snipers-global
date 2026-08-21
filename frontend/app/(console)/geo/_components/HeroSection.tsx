@@ -17,6 +17,7 @@ export function HeroSection({
   setSampleProvider,
   selectedProvider,
   runAutoSample,
+  runGroundedBatch,
   downloadGeoReport,
   downloadGeoTable,
   note,
@@ -32,6 +33,7 @@ export function HeroSection({
   setSampleProvider: (value: string) => void;
   selectedProvider: GeoProviderStatus | undefined;
   runAutoSample: () => void;
+  runGroundedBatch: () => void;
   downloadGeoReport: () => void;
   downloadGeoTable: () => void;
   note: string;
@@ -43,7 +45,9 @@ export function HeroSection({
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <Badge tone="brand">AI 搜索可见度</Badge>
-            <Badge tone={summary?.recorded ? "green" : "amber"}>{summary?.recorded ? "已有记录" : "待检查"}</Badge>
+            <Badge tone={(summary?.latest_sampled || summary?.evidence_results || summary?.recorded) ? "green" : "amber"}>
+              {(summary?.latest_sampled || summary?.evidence_results || summary?.recorded) ? "已有抽查" : "还没抽查"}
+            </Badge>
             <Badge tone="blue">标准买家问题</Badge>
           </div>
           <h1 className="mt-3 text-2xl font-semibold text-slate-950">AI 搜索可见度</h1>
@@ -90,9 +94,17 @@ export function HeroSection({
               </option>
             ))}
           </select>
-          <Button size="sm" onClick={runAutoSample} disabled={busyAction === "auto-sample" || Boolean(selectedProvider && !selectedProvider.configured)}>
+          <Button size="sm" onClick={runAutoSample} disabled={busyAction === "auto-sample" || busyAction === "grounded-batch" || Boolean(selectedProvider && !selectedProvider.configured)}>
             <Globe2 className="mr-2 h-4 w-4" />
-            {busyAction === "auto-sample" ? "检查中…" : "开始测试"}
+            {busyAction === "auto-sample" ? "检查中…" : "只测这一源"}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={runGroundedBatch}
+            disabled={busyAction === "auto-sample" || busyAction === "grounded-batch" || !(providers?.providers ?? []).some((provider) => provider.configured && provider.web_grounded && (provider.key === "bocha" || provider.key === "bailian"))}
+          >
+            {busyAction === "grounded-batch" ? "抽查中…" : "已配置的联网源都测"}
           </Button>
         </div>
         <Button size="sm" variant="outline" onClick={downloadGeoReport}>
@@ -107,7 +119,7 @@ export function HeroSection({
       {note ? <p className="mt-3 text-sm text-emerald-700">{note}</p> : null}
       {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
       <p className="mt-3 text-xs text-slate-500">
-        当前测试来源：{selectedProvider?.label ?? sampleProvider} · {selectedProvider?.web_grounded ? "联网来源：返回网址时，可算作给出了官网" : "分析参考：只判断有没有提到品牌，不算给出官网"}
+        一次只跑下拉里选中的源。已配置但没选的卡片会空着，不是坏了。当前：{selectedProvider?.label ?? "尚未选择"} · {selectedProvider?.web_grounded ? "联网来源：返回网址时，可算作给出了官网" : "分析参考：只判断有没有提到品牌，不算给出官网"}
       </p>
     </section>
   );

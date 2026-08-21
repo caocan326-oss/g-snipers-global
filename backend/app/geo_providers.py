@@ -39,6 +39,13 @@ class GeoProviderError(RuntimeError):
     pass
 
 
+IMPLEMENTED_GROUNDED = frozenset({"bocha", "bailian"})
+
+
+def configured_implemented_grounded() -> list[GeoProviderStatus]:
+    return [row for row in provider_statuses() if row.configured and row.key in IMPLEMENTED_GROUNDED]
+
+
 def provider_statuses() -> list[GeoProviderStatus]:
     return [
         GeoProviderStatus(
