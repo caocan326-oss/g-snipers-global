@@ -240,6 +240,25 @@ def _call_bocha(prompt_text: str) -> GeoProviderResult:
     )
 
 
+def _tavily_country(region_hint: str) -> str:
+    value = (region_hint or "").strip().lower()
+    aliases = {
+        "us": "united states",
+        "usa": "united states",
+        "uk": "united kingdom",
+        "gb": "united kingdom",
+        "de": "germany",
+        "jp": "japan",
+        "ae": "united arab emirates",
+        "au": "australia",
+    }
+    if value in aliases:
+        return aliases[value]
+    if len(value) > 3:
+        return value
+    return ""
+
+
 def _call_tavily(prompt_text: str, region_hint: str = "") -> GeoProviderResult:
     if not settings.tavily_api_key:
         raise GeoProviderError("未配置 TAVILY_API_KEY，不能执行 Tavily 搜索采样。")
@@ -249,8 +268,9 @@ def _call_tavily(prompt_text: str, region_hint: str = "") -> GeoProviderResult:
         "include_answer": True,
         "max_results": 8,
     }
-    if region_hint and len(region_hint.strip()) == 2:
-        payload["country"] = region_hint.strip().lower()
+    country = _tavily_country(region_hint)
+    if country:
+        payload["country"] = country
     from app.usage import UsageLimitError, record_current
 
     try:
