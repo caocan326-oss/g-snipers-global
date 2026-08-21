@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.auth import get_current_user
 from app.database import get_db
+from app.geo_loop import HONEST_ACCEPTANCE, HONEST_RETEST, geo_href
 from app.models import BacklinkGap, GeoTicket, OnsiteIssue, SitePage, User
 from app.routers.onsite.common import _category_label, _page_short, _plain_title
 from app.schemas import ExecutionBoardOut, ExecutionItemOut
@@ -64,14 +65,14 @@ def list_execution_items(user: User = Depends(get_current_user), db: Session = D
                 source_module="geo",
                 title=ticket.title,
                 subtitle=ticket.rationale or ticket.diagnosis,
-                href="/geo",
+                href=geo_href(ticket),
                 status=ticket.status,
                 priority=ticket.priority or "P2",
                 owner_hint=ticket.owner_hint or "内容运营 / 客户经理",
-                acceptance_criteria=ticket.acceptance_criteria or "完成 GEO 资产或站外可信源补齐，并复测买家问题。",
+                acceptance_criteria=ticket.acceptance_criteria or HONEST_ACCEPTANCE,
                 evidence=ticket.evidence or "",
-                recommended_action=ticket.recommended_action or "补齐实体说明、第三方可信源或官网可引用内容。",
-                retest_method=ticket.retest_method or "重新运行 GEO 采样，检查提及和引用。",
+                recommended_action=ticket.recommended_action or "补对应页或发出一张站外卡。我们不代改线上、不代发。",
+                retest_method=ticket.retest_method or HONEST_RETEST,
                 retest_result=ticket.retest_result or ticket.verified_note or "",
                 blocked_reason=ticket.blocked_reason or "",
                 updated_at=ticket.last_checked_at or ticket.updated_at or ticket.created_at,

@@ -610,6 +610,10 @@ export type GeoSummary = {
   latest_mentioned?: number;
   latest_owned?: number;
   latest_third_party?: number;
+  previous_sampled?: number;
+  previous_mentioned?: number;
+  previous_owned?: number;
+  compare_note?: string;
 };
 
 export type GeoReport = {

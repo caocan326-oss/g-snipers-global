@@ -829,7 +829,7 @@ def _seed_three_chains(db: Session, tenant: Tenant, user: User) -> None:
                     title="英文安装问题：先记下 AI 怎么回答，再补说明页",
                     diagnosis="untested",
                     rationale="8 个检查位还没查。先抽查看法，不要把空的写成已经给出官网。",
-                    acceptance_criteria="至少完成一轮记录；尚未检查的保持尚未检查。客户经理确认后才算完成。",
+                    acceptance_criteria="页已上线或帖已发出后，同一问再抽查一次。只记有没有变化，不要求必须提到。客户经理确认后才算完成。",
                     status="open",
                 ),
                 GeoTicket(
@@ -838,7 +838,7 @@ def _seed_three_chains(db: Session, tenant: Tenant, user: User) -> None:
                     title="日语许可问题：如果主要在推竞品，再补对照说明",
                     diagnosis="untested",
                     rationale="先检查再判断。不要编造官网被给出的比例。",
-                    acceptance_criteria="可手记或保持尚未检查；完成后须确认。",
+                    acceptance_criteria="可手记或保持尚未检查。同一问再测只记变化，不要求必须提到。完成后须确认。",
                     status="in_progress",
                 ),
             ]

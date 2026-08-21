@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.ai_engine import assist_geo_prompt
 from app.auth import get_current_user
 from app.database import get_db
+from app.geo_loop import compare_runs_note, run_counts
 from app.geo_helpers import DIAGNOSES, ENGINES, OBS_STATUSES, ensure_engine_slots
 from app.geo_providers import provider_statuses
 from app.models import (
@@ -98,14 +99,18 @@ def geo_summary(user: User = Depends(get_current_user), db: Session = Depends(ge
     )
     sample_runs = db.query(func.count(GeoSampleRun.id)).filter(GeoSampleRun.tenant_id == tid).scalar() or 0
     evidence_results = db.query(func.count(GeoSampleResult.id)).filter(GeoSampleResult.tenant_id == tid).scalar() or 0
-    latest_run = (
+    recent_runs = (
         db.query(GeoSampleRun)
         .options(selectinload(GeoSampleRun.results))
         .filter(GeoSampleRun.tenant_id == tid)
         .order_by(GeoSampleRun.started_at.desc())
-        .first()
+        .limit(2)
+        .all()
     )
+    latest_run = recent_runs[0] if recent_runs else None
+    previous_run = recent_runs[1] if len(recent_runs) > 1 else None
     latest_results = latest_run.results if latest_run else []
+    previous_sampled, previous_mentioned, previous_owned, _ = run_counts(previous_run)
     return GeoSummary(
         prompts=prompts,
         untested=untested,
@@ -127,6 +132,10 @@ def geo_summary(user: User = Depends(get_current_user), db: Session = Depends(ge
         latest_mentioned=sum(1 for row in latest_results if row.mentioned),
         latest_owned=sum(1 for row in latest_results if _json_list(row.owned_citations_json)),
         latest_third_party=sum(1 for row in latest_results if _json_list(row.third_party_citations_json)),
+        previous_sampled=previous_sampled,
+        previous_mentioned=previous_mentioned,
+        previous_owned=previous_owned,
+        compare_note=compare_runs_note(latest_run, previous_run),
     )
 
 

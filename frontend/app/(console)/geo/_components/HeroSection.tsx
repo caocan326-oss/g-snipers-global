@@ -18,6 +18,8 @@ export function HeroSection({
   selectedProvider,
   runAutoSample,
   runGroundedBatch,
+  retestSameQuestions,
+  canRetestSame,
   downloadGeoReport,
   downloadGeoTable,
   note,
@@ -34,6 +36,8 @@ export function HeroSection({
   selectedProvider: GeoProviderStatus | undefined;
   runAutoSample: () => void;
   runGroundedBatch: () => void;
+  retestSameQuestions: () => void;
+  canRetestSame: boolean;
   downloadGeoReport: () => void;
   downloadGeoTable: () => void;
   note: string;
@@ -106,6 +110,14 @@ export function HeroSection({
           >
             {busyAction === "grounded-batch" ? "抽查中…" : "已配置的联网源都测"}
           </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={retestSameQuestions}
+            disabled={!canRetestSame || busyAction === "auto-sample" || busyAction === "grounded-batch" || busyAction === "retest-same"}
+          >
+            {busyAction === "retest-same" ? "复测中…" : "同一问再测"}
+          </Button>
         </div>
         <Button size="sm" variant="outline" onClick={downloadGeoReport}>
           <FileText className="mr-2 h-4 w-4" />
@@ -119,7 +131,8 @@ export function HeroSection({
       {note ? <p className="mt-3 text-sm text-emerald-700">{note}</p> : null}
       {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
       <p className="mt-3 text-xs text-slate-500">
-        一次只跑下拉里选中的源。已配置但没选的卡片会空着，不是坏了。当前：{selectedProvider?.label ?? "尚未选择"} · {selectedProvider?.web_grounded ? "联网来源：返回网址时，可算作给出了官网" : "分析参考：只判断有没有提到品牌，不算给出官网"}
+        一次只跑下拉里选中的源。已配置但没选的卡片会空着，不是坏了。当前：{selectedProvider?.label ?? "尚未选择"} · {selectedProvider?.web_grounded ? "联网来源：返回网址时，可算作给出了官网" : "分析参考：只判断有没有提到品牌，不算给出官网"}。
+        「同一问再测」只对最近一批买家问题再抽一次，记下有没有变化，不承诺这次会提到。
       </p>
     </section>
   );

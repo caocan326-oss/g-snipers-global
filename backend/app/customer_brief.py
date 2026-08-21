@@ -41,7 +41,8 @@ def _geo_plain(geo) -> tuple[str, str]:
         extra = ""
         if geo.latest_third_party and geo.latest_owned == 0:
             extra = f"搜到 {geo.latest_third_party} 个外来网址，不能写成给出了官网。"
-        return core, " ".join(part for part in (core, extra, engines) if part)
+        compare = getattr(geo, "compare_note", "") or ""
+        return core, " ".join(part for part in (core, extra, compare, engines) if part)
     if geo.prompts:
         core = f"{geo.prompts} 个买家问题还没联网抽查。"
         return core, f"{core}{engines}引擎空位不算这一周的缺口。"
@@ -196,6 +197,10 @@ def build_customer_brief(user: User, db: Session) -> CustomerBriefOut:
         this_week.append("查看已登记网站的页面。")
     for issue in priority_issues:
         this_week.append(f"{_severity_label(issue.severity)}：{_plain_title(issue.title)}（{_page_short(issue.page)}）")
+    for ticket in tickets:
+        if len(this_week) >= 3:
+            break
+        this_week.append(ticket.title)
     if not this_week:
         this_week.append("对照已有记录，整理给客户的说明，并安排下一轮复查。")
     this_week = this_week[:3]
@@ -205,7 +210,12 @@ def build_customer_brief(user: User, db: Session) -> CustomerBriefOut:
         retest.append(f"有 {len(waiting)} 处已经改过，需要再打开页面核对还在不在。")
     elif priority_issues:
         retest.append("客户改完这几处后，再抓一次对应页面核对。我们不改客户官网。")
-    else:
+    compare_note = getattr(geo, "compare_note", "") or ""
+    if compare_note:
+        retest.append(compare_note)
+    elif geo.latest_sampled:
+        retest.append("客户改完对应页或发出帖后，用同一买家问题再抽查一次。只记有没有变化，不承诺这次会提到。")
+    if not retest:
         retest.append("这一轮还没有要复查的改动。")
 
     inquiry_items = [
@@ -251,6 +261,7 @@ def build_customer_brief(user: User, db: Session) -> CustomerBriefOut:
         "",
         "- 尚未检查的不按 0 计算，也不编造排名或推荐。",
         "- 提到品牌不等于给出了官网；给出官网不等于已被稳定推荐。",
+        "- 做了页或发了帖之后，用同一问再抽查。仍没提到就写仍没提到，不要写成已经推荐。",
         "- 客户说明只写这一次已经看到的事实。",
         "",
     ]

@@ -26,7 +26,7 @@ from app.schemas import (
     GeoTicketOut,
 )
 
-from .constants import EVIDENCE_LABELS, EXPORT_B2B_PACK_ID, EXPORT_B2B_PROMPTS, PROTOCOL_VERSION, RECORDED_OBS
+from .constants import EVIDENCE_LABELS, EXPORT_B2B_PACK_ID, EXPORT_B2B_PROMPTS, RECORDED_OBS
 
 
 def _sha256(text: str) -> str:
@@ -373,8 +373,8 @@ def _ticket_out(row: GeoTicket) -> GeoTicketOut:
         acceptance_criteria=row.acceptance_criteria,
         priority=row.priority or "P2",
         owner_hint=row.owner_hint or "内容运营 / 客户经理",
-        recommended_action=row.recommended_action or "补齐实体说明、第三方可信源或官网可引用内容，并复测买家问题。",
-        retest_method=row.retest_method or "重新运行 GEO 采样，检查品牌提及、官网引用和第三方引用是否改善。",
+        recommended_action=row.recommended_action or "补对应页或发出一张站外卡。我们不代改线上、不代发。",
+        retest_method=row.retest_method or "对同一买家问题再抽查一次，只记有没有变化，不要求这次必须提到。",
         retest_result=row.retest_result or "",
         blocked_reason=row.blocked_reason or "",
         status=row.status,
@@ -446,73 +446,3 @@ def _ticket_exists(db: Session, tenant_id: str, prompt_id: str, title: str) -> b
         or 0
     ) > 0
 
-
-def _aggregate_issue_specs(runs: list[GeoSampleRun]) -> list[dict]:
-    aggregates = [_sample_aggregate(run) for run in runs if run.results]
-    cat_rates: list[float] = []
-    branded_rates: list[float] = []
-    owned_rates: list[float] = []
-    third_party_domains: dict[str, int] = {}
-    run_ids: list[str] = []
-    for aggregate in aggregates:
-        if aggregate.get("run_id"):
-            run_ids.append(str(aggregate["run_id"]))
-        for row in aggregate.get("byPrompt") or []:
-            if int(row.get("trials") or 0) < 3:
-                continue
-            ptype = row.get("type")
-            if ptype == "category":
-                cat_rates.append(float(row.get("mention_rate") or 0))
-                owned_rates.append(float(row.get("owned_citation_rate") or 0))
-            elif ptype == "branded":
-                branded_rates.append(float(row.get("mention_rate") or 0))
-            if ptype in {"category", "competitor"}:
-                for host in row.get("top_third_party_domains") or []:
-                    third_party_domains[host] = third_party_domains.get(host, 0) + 1
-
-    specs: list[dict] = []
-    if cat_rates:
-        category_mean = sum(cat_rates) / len(cat_rates)
-        branded_mean = sum(branded_rates) / len(branded_rates) if branded_rates else None
-        if category_mean < 0.2:
-            specs.append(
-                {
-                    "title": "GEO-ENT-003 品类问题下品牌关联弱",
-                    "diagnosis": "absent",
-                    "rationale": (
-                        f"按 {PROTOCOL_VERSION} 聚合，category mention 均值 {category_mean:.3f}，"
-                        f"低于 0.2 阈值；run={', '.join(run_ids)}。"
-                    ),
-                    "acceptance": "补品类词与品牌共现、参数/认证/应用页，并以 category prompt trials>=3 复测。",
-                    "evidence": {
-                        "issue_id": "GEO-ENT-003",
-                        "category_mention_mean": round(category_mean, 3),
-                        "branded_mention_mean": None if branded_mean is None else round(branded_mean, 3),
-                        "threshold": 0.2,
-                        "run_ids": run_ids,
-                    },
-                }
-            )
-    if third_party_domains:
-        owned_mean = sum(owned_rates) / len(owned_rates) if owned_rates else 0.0
-        if owned_mean <= 0.15:
-            top_domains = sorted(third_party_domains.items(), key=lambda item: item[1], reverse=True)[:10]
-            specs.append(
-                {
-                    "title": "GEO-OFF-001 权威第三方源高频出现但自有引用弱",
-                    "diagnosis": "competitor_dominated",
-                    "rationale": (
-                        f"category/competitor 采样中外域高频出现，自有引用均值 {owned_mean:.3f}；"
-                        f"代表域：{', '.join(host for host, _ in top_domains)}。"
-                    ),
-                    "acceptance": "按源类型完善档案、认证、品类标签和官网规格页链接；复测 third-party domains 与 owned citation。",
-                    "evidence": {
-                        "issue_id": "GEO-OFF-001",
-                        "top_domains": top_domains,
-                        "owned_citation_mean": round(owned_mean, 3),
-                        "threshold": 0.15,
-                        "run_ids": run_ids,
-                    },
-                }
-            )
-    return specs

@@ -232,8 +232,41 @@ export default function GeoPage() {
       setNote(batch.note);
       loadRuns();
       loadPrompts();
+      loadTickets();
     } catch (e) {
       setError(e instanceof Error ? e.message : "联网源抽查失败");
+    } finally {
+      setBusyAction("");
+    }
+  }
+
+  async function retestSameQuestions() {
+    const latest = runs[0];
+    const promptIds = [...new Set((latest?.results ?? []).map((row) => row.prompt_id).filter(Boolean))];
+    if (!promptIds.length) {
+      setError("还没有上一批买家问题，先抽查一次再复测。");
+      return;
+    }
+    setError("");
+    setNote("");
+    setBusyAction("retest-same");
+    try {
+      const batch = await api<GeoGroundedBatch>("/api/geo/sample-runs/auto-grounded", {
+        method: "POST",
+        timeoutMs: 180000,
+        body: JSON.stringify({
+          prompt_ids: promptIds,
+          trials: 1,
+          limit: promptIds.length,
+          web_grounded: "true",
+        }),
+      });
+      setNote(`${batch.note} 复测只记有没有变化，不承诺这次会提到。`);
+      loadRuns();
+      loadPrompts();
+      loadTickets();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "同一问再测失败");
     } finally {
       setBusyAction("");
     }
@@ -259,6 +292,7 @@ export default function GeoPage() {
       setNote(`${selected?.label ?? sampleProvider} 检查完成：${run.results_count} 条记录。${selected?.web_grounded ? "返回来源网址时，可算作给出了官网。" : "该结果用于分析和是否被提到，不算给出官网。"}`);
       loadRuns();
       loadPrompts();
+      loadTickets();
     } catch (e) {
       setError(e instanceof Error ? e.message : "自动检查失败");
     } finally {
@@ -378,6 +412,8 @@ export default function GeoPage() {
         selectedProvider={selectedProvider}
         runAutoSample={runAutoSample}
         runGroundedBatch={runGroundedBatch}
+        retestSameQuestions={retestSameQuestions}
+        canRetestSame={Boolean(runs[0]?.results?.length)}
         downloadGeoReport={downloadGeoReport}
         downloadGeoTable={downloadGeoTable}
         note={note}

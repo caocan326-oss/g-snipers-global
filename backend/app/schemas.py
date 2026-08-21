@@ -560,6 +560,10 @@ class GeoSummary(BaseModel):
     latest_mentioned: int = 0
     latest_owned: int = 0
     latest_third_party: int = 0
+    previous_sampled: int = 0
+    previous_mentioned: int = 0
+    previous_owned: int = 0
+    compare_note: str = ""
 
 
 class GeoSeedOut(BaseModel):

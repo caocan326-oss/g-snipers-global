@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.auth import get_current_user
 from app.database import get_db
+from app.geo_loop import kinds_from_sample_rows, loop_ticket_spec, write_ticket_retest
 from app.geo_providers import GeoProviderError, configured_implemented_grounded
 from app.models import (
     GeoObservation,
@@ -28,7 +29,6 @@ import app.routers.geo as _geo_pkg
 
 from . import router
 from .common import (
-    _aggregate_issue_specs,
     _brand_mentioned,
     _dump_list,
     _evidence_tier,
@@ -289,6 +289,23 @@ def _execute_auto_sample(
     )
 
 
+def _latest_sample_run(db: Session, tenant_id: str) -> GeoSampleRun | None:
+    return (
+        db.query(GeoSampleRun)
+        .options(selectinload(GeoSampleRun.results))
+        .filter(GeoSampleRun.tenant_id == tenant_id)
+        .order_by(GeoSampleRun.started_at.desc())
+        .first()
+    )
+
+
+def _record_retest(db: Session, tenant_id: str, latest: GeoSampleRun | None, previous: GeoSampleRun | None) -> None:
+    if latest is None or previous is None or latest.id == previous.id:
+        return
+    if write_ticket_retest(db, tenant_id, latest, previous):
+        db.commit()
+
+
 @router.post("/sample-runs/auto", response_model=GeoSampleRunOut, status_code=201)
 def create_auto_sample_run(
     body: GeoAutoSampleIn,
@@ -297,6 +314,7 @@ def create_auto_sample_run(
 ) -> GeoSampleRunOut:
     tenant = db.get(Tenant, user.tenant_id)
     prompts = _load_sample_prompts(db, user, body)
+    previous = _latest_sample_run(db, user.tenant_id)
     run = _execute_auto_sample(
         db=db,
         user=user,
@@ -305,6 +323,7 @@ def create_auto_sample_run(
         provider_key=body.provider or body.engine or "deepseek",
         body=body,
     )
+    _record_retest(db, user.tenant_id, run, previous)
     return _run_out(run, include_results=True)
 
 
@@ -319,9 +338,11 @@ def create_grounded_batch_runs(
         raise HTTPException(status_code=400, detail="没有已配置、能联网返回网址的数据源。DeepSeek 不算。")
     tenant = db.get(Tenant, user.tenant_id)
     prompts = _load_sample_prompts(db, user, body)
+    previous = _latest_sample_run(db, user.tenant_id)
     runs = []
     failed: list[str] = []
     results_count = 0
+    last_run: GeoSampleRun | None = None
     for provider in ready:
         grounded_body = body.model_copy(update={"provider": provider.key, "engine": provider.key, "web_grounded": "true"})
         run = _execute_auto_sample(
@@ -332,10 +353,12 @@ def create_grounded_batch_runs(
             provider_key=provider.key,
             body=grounded_body,
         )
+        last_run = run
         runs.append(_run_out(run, include_results=True))
         results_count += len(run.results)
         if run.status != "done":
             failed.append(provider.label)
+    _record_retest(db, user.tenant_id, last_run, previous)
     labels = [row.label for row in ready]
     note = f"已对 {len(ready)} 个联网源各抽一轮：{'、'.join(labels)}。DeepSeek 没跑，不算给出官网。"
     if failed:
@@ -347,6 +370,30 @@ def create_grounded_batch_runs(
         note=note,
         runs=runs,
     )
+
+
+def _add_loop_ticket(db: Session, user: User, prompt: GeoPrompt, kind: str, *, third_party: bool, made: list[GeoTicket]) -> str:
+    spec = loop_ticket_spec(db, user.tenant_id, prompt, kind, third_party=third_party)
+    if _ticket_exists(db, user.tenant_id, prompt.id, spec["title"]):
+        return "skipped"
+    ticket = GeoTicket(
+        tenant_id=user.tenant_id,
+        prompt_id=prompt.id,
+        title=spec["title"],
+        diagnosis=spec["diagnosis"],
+        rationale=spec["rationale"],
+        acceptance_criteria=spec["acceptance_criteria"],
+        priority=spec["priority"],
+        owner_hint=spec["owner_hint"],
+        recommended_action=spec["recommended_action"],
+        retest_method=spec["retest_method"],
+        status="open",
+        evidence=json.dumps(spec["evidence"], ensure_ascii=False, indent=2),
+    )
+    db.add(ticket)
+    db.flush()
+    made.append(ticket)
+    return "created"
 
 
 @router.post("/tickets/draft-from-evidence", response_model=GeoTicketDraftOut)
@@ -363,96 +410,59 @@ def draft_tickets_from_evidence(
     )
     created = skipped = 0
     made: list[GeoTicket] = []
-    latest_runs = (
+    latest_run = (
         db.query(GeoSampleRun)
         .options(selectinload(GeoSampleRun.results).selectinload(GeoSampleResult.prompt))
         .filter(GeoSampleRun.tenant_id == user.tenant_id)
         .order_by(GeoSampleRun.started_at.desc())
-        .limit(5)
-        .all()
+        .first()
     )
-    aggregate_specs = _aggregate_issue_specs(latest_runs)
-    anchor_prompt = prompts[0] if prompts else None
-    for spec in aggregate_specs:
-        if anchor_prompt is None:
-            continue
-        if _ticket_exists(db, user.tenant_id, anchor_prompt.id, spec["title"]):
-            skipped += 1
-            continue
-        ticket = GeoTicket(
-            tenant_id=user.tenant_id,
-            prompt_id=anchor_prompt.id,
-            title=spec["title"],
-            diagnosis=spec["diagnosis"],
-            rationale=spec["rationale"],
-            acceptance_criteria=spec["acceptance"],
-            status="open",
-            evidence=json.dumps(spec["evidence"], ensure_ascii=False, indent=2),
-        )
-        db.add(ticket)
-        made.append(ticket)
-        created += 1
+    sampled_prompt_ids: set[str] = set()
+    if latest_run and latest_run.results:
+        by_prompt: dict[str, list[GeoSampleResult]] = {}
+        for row in latest_run.results:
+            by_prompt.setdefault(row.prompt_id, []).append(row)
+        prompts_by_id = {prompt.id: prompt for prompt in prompts}
+        for prompt_id, rows in by_prompt.items():
+            prompt = prompts_by_id.get(prompt_id) or (rows[0].prompt if rows else None)
+            if prompt is None:
+                continue
+            sampled_prompt_ids.add(prompt.id)
+            third_party = any(_json_list(row.third_party_citations_json) for row in rows)
+            for kind in kinds_from_sample_rows(rows):
+                result = _add_loop_ticket(db, user, prompt, kind, third_party=third_party, made=made)
+                if result == "created":
+                    created += 1
+                else:
+                    skipped += 1
     for prompt in prompts:
+        if prompt.id in sampled_prompt_ids:
+            continue
         recorded = [o for o in prompt.observations if o.status in RECORDED_OBS]
         if not recorded:
             continue
         tiers = [_evidence_tier(o) for o in recorded]
-        competitor_hits = [o for o in recorded if (o.competitor_mentions or "").strip()]
-        rules: list[tuple[str, str, str, str]] = []
-        if all(t == "none" for t in tiers):
-            rules.append((
-                "GEO-ENT-003 品类问句未出现客户",
-                "absent",
-                "已记录的引擎结果均未出现客户品牌或自有引用，属于品类关联弱的初步信号。",
-                "补充该问句对应的权威说明页/产品页，文首 400 字写清品类、适用场景、差异化和可引用事实；复测同一问句至少 3 次。",
-            ))
-        if any(t == "mentioned" for t in tiers) and not any(t in {"cited", "verified"} for t in tiers):
-            rules.append((
-                "GEO-MEAS-002 仅被提及但没有自有引用",
-                "mentioned",
-                "AI 回答能提到客户，但没有指向自有域 URL，说明可引用资产或来源信号不足。",
-                "为相关页面补可引用小节、FAQ、Schema、来源日期和清晰 canonical；复测 owned citation rate。",
-            ))
-        if any(t == "cited" for t in tiers) and not any(t == "verified" for t in tiers):
-            rules.append((
-                "GEO-MEAS-005 引用尚未核验",
-                "mentioned",
-                "已有 citation 记录，但尚未完成 URL 可访问和内容一致性核验，不能写成已核实引用。",
-                "打开 citation URL，记录 HTTP 状态、最终 URL 和页面截图或摘要；通过后标记为引用已核验。",
-            ))
-        if competitor_hits:
-            rules.append((
-                "GEO-OFF-001 竞品在回答中占位",
-                "competitor_dominated",
-                "采样回答出现竞品或替代品牌，需要判断竞品为什么被模型吸收或引用。",
-                "整理竞品被提及/引用的页面类型，补客户侧对比页、案例、参数表和第三方入围机会；复测竞品提及率。",
-            ))
-        if len(recorded) < 3:
-            rules.append((
-                "GEO-MEAS-003 采样次数不足",
-                prompt.diagnosis if prompt.diagnosis != "untested" else "untested",
-                "当前记录少于 3 次 trial，不能作为稳定 GEO 结论。",
-                "按同一 prompt、同一引擎和同一地区至少记录 3 次；正式报告建议 5 次。",
-            ))
-        for title, diagnosis, rationale, acceptance in rules:
-            if _ticket_exists(db, user.tenant_id, prompt.id, title):
+        kinds: list[str] = []
+        if all(tier == "none" for tier in tiers):
+            kinds.append("absent")
+        if any(tier == "mentioned" for tier in tiers) and not any(tier in {"cited", "verified"} for tier in tiers):
+            kinds.append("no_owned")
+        if any(tier == "cited" for tier in tiers) and not any(tier == "verified" for tier in tiers):
+            kinds.append("unverified")
+        if any((o.competitor_mentions or "").strip() for o in recorded):
+            kinds.append("competitor")
+        for kind in kinds:
+            result = _add_loop_ticket(db, user, prompt, kind, third_party=False, made=made)
+            if result == "created":
+                created += 1
+            else:
                 skipped += 1
-                continue
-            ticket = GeoTicket(
-                tenant_id=user.tenant_id,
-                prompt_id=prompt.id,
-                title=title,
-                diagnosis=diagnosis,
-                rationale=rationale,
-                acceptance_criteria=acceptance,
-                status="open",
-                evidence=f"prompt_id={prompt.id}\nrecorded_slots={len(recorded)}\nprotocol={PROTOCOL_VERSION}",
-            )
-            db.add(ticket)
-            made.append(ticket)
-            created += 1
     db.commit()
     for ticket in made:
         db.refresh(ticket)
-    note = "已按 GEO 规则生成整改项草稿。" if created else "没有新增整改项；可能暂无观测，或相关整改项已存在。"
+    note = (
+        "已按抽查看没看到、对应页和渠道卡生成待处理项。完成标准是页已上线或帖已发出，并再测同一问；不要求这次必须提到。"
+        if created
+        else "没有新增待处理项；可能暂无抽查，或相关项已存在。"
+    )
     return GeoTicketDraftOut(created=created, skipped=skipped, note=note, tickets=[_ticket_out(t) for t in made])

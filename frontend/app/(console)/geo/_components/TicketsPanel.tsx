@@ -53,7 +53,10 @@ export function TicketsPanel({
           </CardHeader>
           <CardContent className="space-y-2">
             <p className="text-sm text-slate-600">理由：{t.rationale}</p>
+            {t.recommended_action ? <p className="text-sm text-slate-600">改法：{t.recommended_action}</p> : null}
             <p className="text-sm text-slate-600">完成标准：{t.acceptance_criteria}</p>
+            {t.retest_method ? <p className="text-sm text-slate-600">复查：{t.retest_method}</p> : null}
+            {t.retest_result ? <p className="text-sm text-slate-700">复测记录：{t.retest_result}</p> : null}
             {t.verified_note ? <p className="text-xs text-slate-500">备注：{t.verified_note}</p> : null}
             {t.evidence ? <pre className="whitespace-pre-wrap text-xs text-slate-500">{t.evidence}</pre> : null}
             {t.ai_review ? <p className="text-sm text-slate-600">初审：{t.ai_review}</p> : null}
@@ -116,7 +119,7 @@ export function TicketsPanel({
               onChange={(e) => setTicketForm({ ...ticketForm, rationale: e.target.value })}
             />
             <Textarea
-              placeholder="完成标准，例如：页面已补上可供引用的说明，并完成复查"
+              placeholder="完成标准，例如：对应页已上线或帖已发出，同一问再抽查一次。不要求这次必须提到。"
               value={ticketForm.acceptance_criteria}
               onChange={(e) => setTicketForm({ ...ticketForm, acceptance_criteria: e.target.value })}
             />

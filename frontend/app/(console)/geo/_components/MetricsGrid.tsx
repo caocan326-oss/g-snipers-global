@@ -56,6 +56,14 @@ export function MetricsGrid({ summary }: { summary: GeoSummary | null }) {
           </CardContent>
         </Card>
       </div>
+      {summary?.compare_note ? (
+        <Card className="rounded-md">
+          <CardContent className="py-4 text-sm leading-6 text-slate-700">
+            <div className="text-xs font-medium text-slate-500">上次抽查 → 这次</div>
+            <p className="mt-1">{summary.compare_note}</p>
+          </CardContent>
+        </Card>
+      ) : null}
       <div className="grid gap-3 md:grid-cols-3">
         <Card className="rounded-md">
           <CardContent className="flex items-center justify-between py-4 text-sm">

@@ -53,6 +53,9 @@ function ItemCard({ item }: { item: ExecutionItem }) {
                   <p className="mt-1 line-clamp-2 text-slate-700">{item.retest_method || "待补充"}</p>
                 </div>
               </div>
+              {item.retest_result ? (
+                <p className="mt-3 rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-700">复测记录：{item.retest_result}</p>
+              ) : null}
               {item.blocked_reason ? <p className="mt-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{item.blocked_reason}</p> : null}
             </div>
             <span className="inline-flex shrink-0 items-center gap-1 text-sm font-medium text-brand-700">

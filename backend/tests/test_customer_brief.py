@@ -205,3 +205,57 @@ def test_customer_brief_uses_sample_run_not_engine_slots(client: TestClient, dem
     geo_act = next(item for item in workbench["next_actions"] if item["id"] == "geo-sampling")
     assert geo_act["status"] == "已抽查"
     assert "没有提到我们" in geo_act["subtitle"]
+
+
+def test_customer_brief_retest_only_records_sample_change(client: TestClient, demo_user, db) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    from app.models import GeoPrompt, GeoSampleResult, GeoSampleRun
+
+    tenant = db.get(Tenant, demo_user.tenant_id)
+    tenant.site_origin = "https://www.snipers.com.cn"
+    db.add(SitePage(tenant_id=demo_user.tenant_id, path="/", locale="en-US", title="Home", crawl_status="ok"))
+    prompt = GeoPrompt(
+        tenant_id=demo_user.tenant_id,
+        prompt_text="best smart lock for apartment doors",
+        locale="en-US",
+    )
+    db.add(prompt)
+    db.flush()
+    older = datetime.now(timezone.utc) - timedelta(days=3)
+    newer = datetime.now(timezone.utc)
+    for evidence_id, started_at in (("ev_brief_old", older), ("ev_brief_new", newer)):
+        run = GeoSampleRun(
+            tenant_id=demo_user.tenant_id,
+            config_hash=evidence_id,
+            status="done",
+            started_at=started_at,
+        )
+        db.add(run)
+        db.flush()
+        db.add(
+            GeoSampleResult(
+                tenant_id=demo_user.tenant_id,
+                run_id=run.id,
+                prompt_id=prompt.id,
+                evidence_id=evidence_id,
+                engine="bocha",
+                web_grounded="true",
+                prompt_text_hash="a" * 64,
+                answer_text_hash="b" * 64,
+                answer_excerpt="No brand.",
+                mentioned=False,
+                citations_json="[]",
+                owned_citations_json="[]",
+                third_party_citations_json="[]",
+            )
+        )
+    db.commit()
+
+    headers = auth_header(client)
+    body = client.get("/api/dashboard/customer-brief", headers=headers).json()
+    retest = next(section for section in body["sections"] if section["key"] == "retest")
+    assert any("仍没提到" in item for item in retest["items"])
+    assert all("必须提到" not in item for item in retest["items"])
+    assert all("已稳定推荐" not in item for item in retest["items"])
+    assert "仍没提到就写仍没提到" in body["markdown"]

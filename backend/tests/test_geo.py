@@ -414,15 +414,17 @@ def test_geo_draft_tickets_from_evidence_rules(client: TestClient, demo_user) ->
     drafted = client.post("/api/geo/tickets/draft-from-evidence", headers=headers)
     assert drafted.status_code == 200, drafted.text
     body = drafted.json()
-    assert body["created"] >= 3
+    assert body["created"] >= 2
     titles = {ticket["title"] for ticket in body["tickets"]}
-    assert "GEO-MEAS-002 仅被提及但没有自有引用" in titles
-    assert "GEO-OFF-001 竞品在回答中占位" in titles
-    assert "GEO-MEAS-003 采样次数不足" in titles
+    assert any("没给出官网" in title for title in titles)
+    assert any("先推了别人" in title for title in titles)
+    assert all("采样次数不足" not in title for title in titles)
+    assert all("不要求这次必须提到" in (ticket["acceptance_criteria"] or "") for ticket in body["tickets"])
+    assert all("再抽查" in (ticket["acceptance_criteria"] or "") for ticket in body["tickets"])
 
     second = client.post("/api/geo/tickets/draft-from-evidence", headers=headers).json()
     assert second["created"] == 0
-    assert second["skipped"] >= 3
+    assert second["skipped"] >= 2
 
 
 def test_geo_auto_sampling_aggregate_creates_ent_off_tickets(client: TestClient, demo_user, monkeypatch) -> None:
@@ -472,9 +474,13 @@ def test_geo_auto_sampling_aggregate_creates_ent_off_tickets(client: TestClient,
 
     drafted = client.post("/api/geo/tickets/draft-from-evidence", headers=headers)
     assert drafted.status_code == 200, drafted.text
-    titles = {ticket["title"] for ticket in drafted.json()["tickets"]}
-    assert "GEO-ENT-003 品类问题下品牌关联弱" in titles
-    assert "GEO-OFF-001 权威第三方源高频出现但自有引用弱" in titles
+    tickets = drafted.json()["tickets"]
+    titles = {ticket["title"] for ticket in tickets}
+    assert any("没提到我们" in title for title in titles)
+    assert any("对应页" in (ticket["rationale"] or "") for ticket in tickets)
+    assert any("渠道" in (ticket["rationale"] or "") for ticket in tickets)
+    assert all("不要求这次必须提到" in (ticket["acceptance_criteria"] or "") for ticket in tickets)
+    assert all("trials>=" not in (ticket["acceptance_criteria"] or "") for ticket in tickets)
 
 
 def test_geo_provider_status_and_deepseek_non_grounded_does_not_count_citations(client: TestClient, demo_user, monkeypatch) -> None:
@@ -685,3 +691,100 @@ def test_geo_grounded_batch_requires_a_live_source(client: TestClient, demo_user
     res = client.post("/api/geo/sample-runs/auto-grounded", headers=headers, json={"limit": 1, "trials": 1})
     assert res.status_code == 400, res.text
     assert "DeepSeek" in res.json()["detail"]
+
+
+def _add_sample_run(db, tenant_id: str, prompt_id: str, *, evidence_id: str, mentioned: bool, started_at):
+    from app.models import GeoSampleResult, GeoSampleRun
+
+    run = GeoSampleRun(
+        tenant_id=tenant_id,
+        config_hash=evidence_id,
+        status="done",
+        started_at=started_at,
+    )
+    db.add(run)
+    db.flush()
+    db.add(
+        GeoSampleResult(
+            tenant_id=tenant_id,
+            run_id=run.id,
+            prompt_id=prompt_id,
+            evidence_id=evidence_id,
+            engine="bocha",
+            web_grounded="true",
+            prompt_text_hash="a" * 64,
+            answer_text_hash="b" * 64,
+            answer_excerpt="Third-party tips only.",
+            mentioned=mentioned,
+            citations_json="[]",
+            owned_citations_json="[]",
+            third_party_citations_json='["https://other.example/lock"]',
+        )
+    )
+    return run
+
+
+def test_geo_summary_compare_note_and_ticket_retest(client: TestClient, demo_user, db) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    from app.geo_loop import write_ticket_retest
+    from app.models import GeoPrompt, GeoTicket, SitePage, SourcePlatform
+
+    tenant_id = demo_user.tenant_id
+    db.add(SitePage(tenant_id=tenant_id, path="/products/smart-lock", locale="en-US", title="Smart Lock", crawl_status="ok"))
+    db.add(
+        SourcePlatform(
+            tenant_id=tenant_id,
+            platform_key="linkedin_company",
+            name="LinkedIn",
+            has_official_api=True,
+            status="active",
+        )
+    )
+    prompt = GeoPrompt(tenant_id=tenant_id, prompt_text="How do renters install a smart lock?", locale="en-US")
+    db.add(prompt)
+    db.flush()
+    older = datetime.now(timezone.utc) - timedelta(days=2)
+    newer = datetime.now(timezone.utc)
+    previous = _add_sample_run(db, tenant_id, prompt.id, evidence_id="ev_loop_old", mentioned=False, started_at=older)
+    latest = _add_sample_run(db, tenant_id, prompt.id, evidence_id="ev_loop_new", mentioned=False, started_at=newer)
+    ticket = GeoTicket(
+        tenant_id=tenant_id,
+        prompt_id=prompt.id,
+        title="买家问「How do renters install a smart lock?」时没提到我们",
+        diagnosis="absent",
+        status="open",
+        acceptance_criteria="页已上线或帖已发出后，同一问再抽查一次。",
+    )
+    db.add(ticket)
+    db.commit()
+
+    headers = auth_header(client)
+    summary = client.get("/api/geo/summary", headers=headers).json()
+    assert "仍没提到" in summary["compare_note"]
+    assert "不写成已经稳定推荐" in summary["compare_note"]
+    assert summary["previous_sampled"] == 1
+    assert summary["previous_mentioned"] == 0
+    assert summary["latest_mentioned"] == 0
+
+    write_ticket_retest(db, tenant_id, latest, previous)
+    db.commit()
+    db.refresh(ticket)
+    assert "上次没有提到，这次仍没有提到" in ticket.retest_result
+    assert "仍没有提到" in ticket.retest_result
+
+    drafted = client.post("/api/geo/tickets/draft-from-evidence", headers=headers).json()
+    created = drafted["tickets"]
+    if created:
+        ticket_out = created[0]
+    else:
+        ticket_out = client.get("/api/geo/tickets", headers=headers).json()[0]
+    assert "对应页" in ticket_out["rationale"]
+    assert "Smart Lock" in ticket_out["rationale"] or "LinkedIn" in ticket_out["rationale"] or "渠道" in ticket_out["rationale"]
+    assert "不要求这次必须提到" in (ticket_out["acceptance_criteria"] or "") or "再抽查一次" in (ticket_out["acceptance_criteria"] or "")
+
+    board = client.get("/api/execution/items", headers=headers).json()
+    geo_item = next(item for item in board["items"] if item["source_module"] == "geo")
+    assert "再抽查" in geo_item["acceptance_criteria"] or "再抽查" in geo_item["retest_method"]
+    assert "再" in geo_item["retest_method"]
+    assert geo_item["href"].startswith("/onsite/") or geo_item["href"] in {"/offsite", "/geo"}
