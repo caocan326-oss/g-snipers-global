@@ -236,6 +236,7 @@ powershell -File deploy/sync-from-local.ps1
 | 2026-08-22 | 产品 | 百炼仍可单测，不进默认「都测」。去掉 `search_strategy=agent`。交接 §4.3。 |
 | 2026-08-22 | 产品/运维 | 家里发到 `d51b54b`（`sync-from-local.ps1 -Rebuild`）。百炼默认不进都测。 |
 | 2026-08-22 | 修复 | seed 重复插入 `cite_checklist` 会让 backend 起不来。缺问句再 seed 时跳过已有资产。 |
+| 2026-08-22 | 产品/运维 | 家里发到 `9d2781c`（`sync-from-local.ps1 -Rebuild`）。百炼默认不进都测；seed 修复 502。 |
 
 ---
 

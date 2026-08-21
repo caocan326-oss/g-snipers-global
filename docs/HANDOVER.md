@@ -7,7 +7,7 @@
 
 约定：家里和公司**不会同时改**。换机器前必须把这边 push 完。
 
-最后更新：2026-08-22 03:30（家里。百炼 + seed 修复待对齐三地。）。
+最后更新：2026-08-22 03:31（家里。三地对齐 `9d2781c`。百炼见 §4.3。）。
 
 ---
 
@@ -278,13 +278,13 @@ git log -1 --oneline
 
 | 项 | 值 |
 | --- | --- |
-| 日期 | 2026-08-22 03:30 |
+| 日期 | 2026-08-22 03:31 |
 | 最后一台 | 家里 `D:\workspace\G-snipers海外版` |
 | 分支 | `main` |
-| 提交 | 百炼不进默认「都测」见 §4.3；seed 不再重复插入 cite_checklist（否则 502）。换站保存仍在。 |
-| 已 push origin / upstream | 本轮提交后推。 |
-| 已发版生产 | 本轮 `sync-from-local.ps1 -Rebuild`。`DEMO_LOGIN_ENABLED` 仍关。Postgres 仍不映射 5432。 |
-| 接口实测 | seed / geo / usage 31 通过后再发。发完 health 必须 200。 |
+| 提交 | 四处对齐 `9d2781c`。百炼不进默认「都测」见 §4.3；seed 可重复跑。换站保存仍在。运维：§4.1 / §4.2。 |
+| 已 push origin / upstream | 是。 |
+| 已发版生产 | **是。** `sync-from-local.ps1 -Rebuild`。`DEMO_LOGIN_ENABLED` 仍关。Postgres 仍不映射 5432。 |
+| 接口实测 | seed / geo / usage 31 通过。发完 health 必须 200。 |
 | 未完成 | 绿联实走还没在新保存上重跑。UptimeRobot 没有原生微信。自动 scp 到第二台云还没有。Bing / IndexNow 可等。不要公开注册。不要自动群发。 |
 | 下一台先做 | 公司先 `git pull origin main`。不要两边同时改。 |
 
