@@ -216,6 +216,7 @@ powershell -File deploy/sync-from-local.ps1
 | 2026-08-21 | 运维 | `relay.weiyids.com` 橙云已通。生产 `.env` 的 `GOOGLE_RELAY_URL` 改为该地址（密钥未动）。`sync-from-local.ps1 -Rebuild` 发到 `6dad00d`。线上 Nginx `/api/` 超时已 180s。 |
 | 2026-08-21 | 运维 | 排名改走 Bright Data SERP API 区 `serp_api1`（`/request`）。不要用浏览器区 `scraping_browser1` 或 Dataset scrape。密钥未动。发到 `bacb349`，`excavator` 实测有自然结果。 |
 | 2026-08-21 | 产品 | 测速、GSC、SERP 区均已生产实测。Bing Webmaster / IndexNow 暂不配，可等。 |
+| 2026-08-21 | 产品/运维 | 老板进门体验发到 `9b3ef2c`（`sync-from-local.ps1 -Rebuild`）。登录落到客户说明；清单用人话标题；门锁租户「收录未测」启动时标「本轮不改」。GEO 16 条尚未联网抽查。 |
 
 ---
 

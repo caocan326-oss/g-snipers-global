@@ -206,14 +206,14 @@ git log -1 --oneline
 
 | 项 | 值 |
 | --- | --- |
-| 日期 | 2026-08-21 12:12 |
+| 日期 | 2026-08-21 14:50 |
 | 最后一台 | 公司 `E:\G-snipers海外版` |
 | 分支 | `main` |
-| 提交 | 生产代码 `bacb349`。本笔只改交接。 |
-| 已 push origin / upstream | 是。文档笔会立刻推两个远端。 |
-| 已发版生产 | **是。** `GOOGLE_RELAY_URL=https://relay.weiyids.com`。`BRIGHTDATA_SERP_ZONE=serp_api1`，接口 `/request`。密钥未改。 |
-| 接口实测 | 测速（PageSpeed 经中转）通。GSC 换 token / 同步通（演示客户网域 `snipers.com.cn`，新权限可能先很少行）。排名 SERP 区通（`excavator` 有自然结果）。 |
-| 未完成 | Bing Webmaster、IndexNow **可以等**，不挡交付（Bing 可先导 CSV；IndexNow 要在客户站放钥匙文件）。不要把 `scraping_browser1` 填进 SERP 区。Dataset scrape 已弃用。 |
+| 提交 | 生产代码 `9b3ef2c`（登录落到客户说明、清单人话标题、收录未测标本轮不改）。 |
+| 已 push origin / upstream | 是。 |
+| 已发版生产 | **是。** 镜像已 `--build`。演示客户仍是门锁站 `snipers.com.cn`。`DEMO_LOGIN_ENABLED` 线上仍关，网站登录要用管理员，不是 `am@demo…`。 |
+| 接口实测 | 测速 / GSC / SERP 区未改。GEO 16 条尚未联网抽查，要在 GEO 页用已配置的 Bocha/Dashscope 真跑一轮。 |
+| 未完成 | Bing / IndexNow 可以等。不要把 `scraping_browser1` 填进 SERP 区。不要编询盘或 AI 引用。 |
 | 下一台先做 | 家里先 `git pull origin main`。不要两边同时改。 |
 
 `www` 灰云、A 仍 `39.97.52.149`。`relay.weiyids.com` 橙云，不要 CNAME 回 `workers.dev`。不要开 Google Ads。不要在服务器 `git pull`。
