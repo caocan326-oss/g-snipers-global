@@ -218,6 +218,7 @@ powershell -File deploy/sync-from-local.ps1
 | 2026-08-21 | 产品 | 测速、GSC、SERP 区均已生产实测。Bing Webmaster / IndexNow 暂不配，可等。 |
 | 2026-08-21 | 产品/运维 | 老板进门体验发到 `9b3ef2c`（`sync-from-local.ps1 -Rebuild`）。登录落到客户说明；清单用人话标题；门锁租户「收录未测」启动时标「本轮不改」。GEO 16 条尚未联网抽查。 |
 | 2026-08-21 | 产品/运维 | GEO 与分发发到 `4cf902c`（`sync-from-local.ps1 -Rebuild`）。客户说明按最近一次抽查看「有没有被提到」；分发默认渠道卡片；LinkedIn/X/Facebook 等官方接口只给客户跳转或自己发，不代登、不群发。 |
+| 2026-08-21 | 产品/运维 | 诊断目标发到 `b0c4b70`（`sync-from-local.ps1 -Rebuild`）。不再填 `美国 \| 北美 \| US \| en-US`；点选美英德日阿联酋澳。日文搜索词跟日本，英文跟美英德澳。 |
 
 ---
 
