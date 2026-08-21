@@ -627,8 +627,8 @@ export default function OnsiteBoardPage() {
           body: JSON.stringify({ step: "content", limit: 5 }),
           timeoutMs: 90000,
         });
-        written += res.processed;
-        remaining = res.remaining;
+        written += res.processed ?? 0;
+        remaining = res.remaining ?? 0;
         if (res.status === "未配置") {
           stopped = res.detail || "AI 建议服务未配置，本次不会生成建议。";
           break;
