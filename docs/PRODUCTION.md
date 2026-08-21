@@ -221,6 +221,7 @@ powershell -File deploy/sync-from-local.ps1
 | 2026-08-21 | 产品/运维 | 诊断目标发到 `b0c4b70`（`sync-from-local.ps1 -Rebuild`）。不再填 `美国 \| 北美 \| US \| en-US`；点选美英德日阿联酋澳。日文搜索词跟日本，英文跟美英德澳。 |
 | 2026-08-21 | 运维 | 收掉 Postgres 宿主机 5432 映射，发到 `29cd68a`。库只在 compose 网络给 backend 用。宿主机已无 5432；租户/账号数据仍在。 |
 | 2026-08-21 | 产品/运维 | 点选国家与登录加固发到 `f57e6b5`（`sync-from-local.ps1 -Rebuild`）。GEO/SEO/市场不再填 `en-US`；总览列表对齐 OPENISH；登录 5 次失败锁 15 分钟；分发 providers 需登录；开户用 `python -m app.provision_tenant`，无公开注册。 |
+| 2026-08-21 | 产品/运维 | GEO 闭环发到 `fa68996`（`sync-from-local.ps1 -Rebuild`）。待处理项写明补哪页/发哪张卡；完成标准是页已上线、帖已发出、同一问再测；复测只记有没有变化，不要求这次必须提到。 |
 
 ---
 

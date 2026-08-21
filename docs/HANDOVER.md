@@ -7,7 +7,7 @@
 
 约定：家里和公司**不会同时改**。换机器前必须把这边 push 完。
 
-最后更新：2026-08-21 19:32（公司。GEO/SEO 点选国家、登录限次、内部开户脚本已发版）。
+最后更新：2026-08-21 19:55（公司。GEO 闭环已发：补哪页/发哪张卡，复测只记变化，不承诺提到）。
 
 ---
 
@@ -214,15 +214,15 @@ git log -1 --oneline
 
 | 项 | 值 |
 | --- | --- |
-| 日期 | 2026-08-21 19:32 |
+| 日期 | 2026-08-21 19:55 |
 | 最后一台 | 公司 `E:\G-snipers海外版` |
 | 分支 | `main` |
-| 提交 | 生产代码 `f57e6b5`（GEO/SEO/市场点选国家；总览列表与摘要同一套未关闭状态；登录错 5 次锁 15 分钟；分发渠道列表要登录；内部 `python -m app.provision_tenant` 开户）。文档本条。 |
-| 已 push origin / upstream | 是。 |
+| 提交 | 生产代码 `fa68996`（GEO 闭环：待处理项写对应页/渠道卡；完成=页已上线或帖已发出或同一问再测；客户说明只写上次→这次有没有变化，不承诺提到）。文档本条。 |
+| 已 push origin / upstream | 是。三处应对齐本条所在提交。 |
 | 已发版生产 | **是。** `sync-from-local.ps1 -Rebuild`。演示客户仍是门锁站。`DEMO_LOGIN_ENABLED` 线上关。Postgres 仍不映射 5432。 |
 | 接口实测 | health 200；未登录看 `/api/distribution/providers` 为 401；宿主机无 5432。 |
-| 未完成 | GEO 复测闭环还没做。Bing / IndexNow 可等。不要公开注册。不要自动群发。不要把 `scraping_browser1` 填进 SERP 区。 |
-| 下一台先做 | 家里先 `git pull origin main`。不要两边同时改。不要提交下午那份审计里未推的总览改动。 |
+| 未完成 | Bing / IndexNow 可等。不要公开注册。不要自动群发。不要把 `scraping_browser1` 填进 SERP 区。不要把「复测必须提到」写成完成标准。 |
+| 下一台先做 | 家里先 `git pull origin main`。不要两边同时改。不要提交家里那份未推的总览改动。 |
 
 `www` 灰云、A 仍 `39.97.52.149`。`relay.weiyids.com` 橙云，不要 CNAME 回 `workers.dev`。不要开 Google Ads。不要在服务器 `git pull`。
 
