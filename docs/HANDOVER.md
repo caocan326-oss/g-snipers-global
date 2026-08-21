@@ -7,7 +7,7 @@
 
 约定：家里和公司**不会同时改**。换机器前必须把这边 push 完。
 
-最后更新：2026-08-22 03:12（家里。换站保存已发到 `57dd516`。异地副本见 §4.1。UptimeRobot 已确认。）。
+最后更新：2026-08-22 03:22（家里。百炼不进默认「都测」，见 §4.3。换站保存已在线上。）。
 
 ---
 
@@ -235,6 +235,16 @@ powershell -File deploy/pull-db-backup.ps1
 
 ---
 
+## 4.3 联网抽查源（百炼）
+
+密钥 `DASHSCOPE_API_KEY` 仍在生产 `.env`，可以「只测这一源」。
+
+「已配置的联网源都测」默认只跑 **博查 + Tavily**。百炼能带回网址，但海外问句经常给到国内论坛/站，不当默认证据。单测时不要再加 `search_strategy=agent`（非流式会 400）。
+
+DeepSeek 仍只做分析，不算联网引用。
+
+---
+
 ## 5. 收工 / 换到另一台电脑之前
 
 必须做完，另一台才能开工。
@@ -266,13 +276,13 @@ git log -1 --oneline
 
 | 项 | 值 |
 | --- | --- |
-| 日期 | 2026-08-22 03:12 |
+| 日期 | 2026-08-22 03:22 |
 | 最后一台 | 家里 `D:\workspace\G-snipers海外版` |
 | 分支 | `main` |
-| 提交 | 四处对齐 `57dd516`。换站保存：页内确认归档、真写入新官网、说「已保存，正在重新抓取」。运维：§4.1 异地副本、§4.2 UptimeRobot。 |
-| 已 push origin / upstream | 是。 |
-| 已发版生产 | **是。** `sync-from-local.ps1 -Rebuild`。`DEMO_LOGIN_ENABLED` 仍关。Postgres 仍不映射 5432。 |
-| 接口实测 | health 发版后应 200。请用绿联 `https://www.ugreen.com/` 再摸一遍保存。 |
+| 提交 | 本轮发百炼：默认「都测」只跑博查 + Tavily，见 §4.3。上一版换站保存 `57dd516` 已在线上。 |
+| 已 push origin / upstream | 本轮提交后推。 |
+| 已发版生产 | 本轮 `sync-from-local.ps1 -Rebuild`。`DEMO_LOGIN_ENABLED` 仍关。Postgres 仍不映射 5432。 |
+| 接口实测 | `test_geo` + `test_usage` 27 通过后再发。发完 health 应 200。 |
 | 未完成 | 绿联实走还没在新保存上重跑。UptimeRobot 没有原生微信。自动 scp 到第二台云还没有。Bing / IndexNow 可等。不要公开注册。不要自动群发。 |
 | 下一台先做 | 公司先 `git pull origin main`。不要两边同时改。 |
 

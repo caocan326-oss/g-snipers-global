@@ -713,12 +713,12 @@ def test_geo_grounded_batch_runs_each_configured_source(client: TestClient, demo
     )
     assert batch.status_code == 201, batch.text
     body = batch.json()
-    assert set(body["providers"]) == {"bocha", "bailian", "tavily"}
-    assert body["results_count"] == 3
+    assert set(body["providers"]) == {"bocha", "tavily"}
+    assert body["results_count"] == 2
     assert body["failed"] == []
     assert "DeepSeek" in body["note"]
     engines = {run["engines"][0] for run in body["runs"]}
-    assert engines == {"bocha", "bailian", "tavily"}
+    assert engines == {"bocha", "tavily"}
     summary = client.get("/api/geo/summary", headers=headers).json()
     assert summary["latest_sampled"] == 1
     assert summary["latest_mentioned"] == 0

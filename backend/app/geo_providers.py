@@ -39,7 +39,7 @@ class GeoProviderError(RuntimeError):
     pass
 
 
-IMPLEMENTED_GROUNDED = frozenset({"bocha", "bailian", "tavily"})
+IMPLEMENTED_GROUNDED = frozenset({"bocha", "tavily"})
 
 
 def configured_implemented_grounded() -> list[GeoProviderStatus]:
@@ -76,7 +76,7 @@ def provider_statuses() -> list[GeoProviderStatus]:
             env_var="DASHSCOPE_API_KEY",
             role="grounded_answer",
             status="configured" if settings.dashscope_api_key else "unconfigured",
-            note="联网答案：走百炼原生接口才能带回网址。兼容模式只有回答、没有来源。",
+            note="国内联网答案。能带回网址，但海外问句来源偏弱。默认不进「都测」，要看再选「只测这一源」。",
         ),
         GeoProviderStatus(
             key="perplexity",
@@ -335,7 +335,6 @@ def _call_bailian(prompt_text: str, model: str = "", region_hint: str = "") -> G
             "result_format": "message",
             "enable_search": True,
             "search_options": {
-                "search_strategy": "agent",
                 "enable_source": True,
                 "enable_citation": True,
             },
