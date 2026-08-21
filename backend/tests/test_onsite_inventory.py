@@ -1,6 +1,6 @@
 from sqlalchemy import select
 
-from app.models import SitePage, Tenant
+from app.models import OnsiteIssue, SitePage, Tenant
 from app.onsite_inventory import DEMO_LEFTOVER_PATHS, purge_demo_leftover_pages
 from app.seed import seed
 
@@ -44,3 +44,35 @@ def test_seed_drops_leftovers_once_a_live_page_exists(db) -> None:
     paths = {page.path for page in db.query(SitePage).filter(SitePage.tenant_id == tenant.id).all()}
     assert "/" in paths
     assert not (paths & DEMO_LEFTOVER_PATHS)
+
+
+def test_seed_marks_untested_index_as_wont_fix(db) -> None:
+    seed(db)
+    tenant = db.scalar(select(Tenant).where(Tenant.name == "演示客户 · 智能门锁出海"))
+    page = db.query(SitePage).filter(SitePage.tenant_id == tenant.id).first()
+    db.add_all(
+        [
+            OnsiteIssue(
+                tenant_id=tenant.id,
+                page_id=page.id,
+                category="index",
+                title="收录状态未测（需 GSC）",
+                severity="critical",
+                status="open",
+            ),
+            OnsiteIssue(
+                tenant_id=tenant.id,
+                page_id=page.id,
+                category="index",
+                title="页面声明 noindex",
+                severity="critical",
+                status="open",
+            ),
+        ]
+    )
+    db.commit()
+
+    seed(db)
+    rows = {issue.title: issue.status for issue in db.query(OnsiteIssue).filter(OnsiteIssue.tenant_id == tenant.id).all()}
+    assert rows["收录状态未测（需 GSC）"] == "wont_fix"
+    assert rows["页面声明 noindex"] == "open"

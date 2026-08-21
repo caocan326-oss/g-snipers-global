@@ -11,7 +11,7 @@ from app.content_templates import generate_draft, generate_meta, generate_outlin
 from app.database import SessionLocal
 from app.geo_helpers import CHECKLIST_DEFS, ENGINES, build_llms_txt
 from app.risk import default_severity, severity_to_risk
-from app.onsite_inventory import purge_demo_leftover_pages
+from app.onsite_inventory import close_untested_index_findings, purge_demo_leftover_pages
 from app.models import (
     BacklinkGap,
     Competitor,
@@ -291,6 +291,7 @@ def _finish_seed(db: Session, tenant: Tenant, user: User) -> None:
     _seed_three_chains(db, tenant, user)
     ensure_admin(db)
     purge_demo_leftover_pages(db, tenant.id)
+    close_untested_index_findings(db, tenant.id)
     db.commit()
 
 
