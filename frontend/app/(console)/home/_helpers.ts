@@ -212,7 +212,7 @@ export function projectTargetsPayload(form: TargetForm, current: ProjectTargets 
       .map((row) => ({
         name: row.name,
         website: row.website,
-        country_code: markets[0]?.code,
+        country_code: markets[0]?.country_code,
       })),
   };
 }
