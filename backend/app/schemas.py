@@ -1668,3 +1668,64 @@ class SendResultOut(BaseModel):
     provider_status: str
     detail: str
     job: DistributionJobOut
+
+
+class BackupDumpOut(BaseModel):
+    filename: str
+    size_bytes: int
+    modified_at: str
+
+
+class BackupStatusOut(BaseModel):
+    schedule_enabled: bool
+    local_dir: str
+    keep: int
+    offsite_kind: str
+    offsite_configured: bool
+    offsite_dir: str = ""
+    offsite_scp_set: bool = False
+    latest: BackupDumpOut | None = None
+    dumps: list[BackupDumpOut] = []
+    note: str = ""
+
+
+class BackupCreateOut(BaseModel):
+    filename: str
+    size_bytes: int
+    offsite: str
+    note: str = ""
+
+
+class UsageMeterOut(BaseModel):
+    key: str
+    label: str
+    vendor: str
+    hint: str
+    used: int
+    limit: int
+    remaining: int
+
+
+class UsageTodayOut(BaseModel):
+    day: str
+    tenant_id: str
+    tenant_name: str
+    meters: list[UsageMeterOut]
+
+
+class UsageTenantOut(BaseModel):
+    tenant_id: str
+    tenant_name: str
+    site_origin: str = ""
+    meters: list[UsageMeterOut]
+
+
+class UsageBoardOut(BaseModel):
+    day: str
+    tenants: list[UsageTenantOut]
+
+
+class UsageQuotaPatch(BaseModel):
+    tenant_id: str
+    meter: str
+    daily_limit: int = Field(ge=0, le=10000)

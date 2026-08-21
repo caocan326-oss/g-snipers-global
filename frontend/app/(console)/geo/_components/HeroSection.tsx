@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { GeoProviderStatus, GeoProviderStatusList, GeoSummary } from "@/lib/api";
 
+import { UsageTodayBar } from "../../_components/UsageTodayBar";
 import { displayRate, formatCheckAt, providerRoleLabel } from "../_helpers";
 
 export function HeroSection({
@@ -58,6 +59,9 @@ export function HeroSection({
           <p className="mt-1 max-w-4xl text-sm leading-6 text-slate-500">
             用买家会问的问题，看 AI 回答里有没有提到客户、有没有给出官网、是不是只在推荐竞品。没有联网来源的结果只作分析参考。
           </p>
+          <div className="mt-2">
+            <UsageTodayBar meters={["bocha", "bailian", "llm"]} />
+          </div>
         </div>
         <div className="grid w-full gap-2 text-sm md:grid-cols-3 xl:w-[560px]">
           <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
@@ -121,7 +125,7 @@ export function HeroSection({
         </div>
         <Button size="sm" variant="outline" onClick={downloadGeoReport}>
           <FileText className="mr-2 h-4 w-4" />
-          下载 AI 搜索说明
+          下载 AI 搜索说明（PDF）
         </Button>
         <Button size="sm" variant="outline" onClick={downloadGeoTable}>
           <Download className="mr-2 h-4 w-4" />

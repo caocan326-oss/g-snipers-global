@@ -34,7 +34,7 @@ export function PageHeaderActions({
         </Button>
         <Button onClick={downloadReport} variant="outline">
           <Download className="mr-2 h-4 w-4" />
-          导出客户报告
+          导出客户报告（PDF）
         </Button>
         <Button onClick={downloadReportTable} variant="outline">
           <Download className="mr-2 h-4 w-4" />

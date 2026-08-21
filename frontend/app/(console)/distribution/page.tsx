@@ -9,10 +9,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   api,
+  downloadApiFile,
   type CustomerBrief,
-  type GeoReport,
   type GeoReportTable,
-  type SeoReport,
   type SeoReportTable,
   type Workbench,
 } from "@/lib/api";
@@ -53,12 +52,9 @@ export default function ReportDeliveryPage() {
     setBusy("brief");
     setError("");
     try {
-      downloadText(
-        `本周客户说明-${new Date(brief.generated_at).toISOString().slice(0, 10)}.md`,
-        brief.markdown,
-        "text/markdown;charset=utf-8"
-      );
-      setNote("本周客户说明已下载。");
+      const date = new Date(brief.generated_at).toISOString().slice(0, 10);
+      await downloadApiFile("/api/dashboard/customer-brief.pdf", `本周客户说明-${date}.pdf`);
+      setNote("本周客户说明（PDF）已下载。");
     } catch (e) {
       setError(e instanceof Error ? e.message : "下载失败");
     } finally {
@@ -70,9 +66,9 @@ export default function ReportDeliveryPage() {
     setBusy("seo-report");
     setError("");
     try {
-      const report = await api<SeoReport>("/api/onsite/report");
-      downloadText(`网站检查说明-${new Date(report.generated_at).toISOString().slice(0, 10)}.md`, report.markdown, "text/markdown;charset=utf-8");
-      setNote("网站说明已下载。");
+      const date = new Date().toISOString().slice(0, 10);
+      await downloadApiFile("/api/onsite/report.pdf", `网站检查说明-${date}.pdf`);
+      setNote("网站说明（PDF）已下载。");
     } catch (e) {
       setError(e instanceof Error ? e.message : "网站说明下载失败");
     } finally {
@@ -98,9 +94,9 @@ export default function ReportDeliveryPage() {
     setBusy("geo-report");
     setError("");
     try {
-      const report = await api<GeoReport>("/api/geo/report");
-      downloadText(`AI搜索说明-${new Date(report.generated_at).toISOString().slice(0, 10)}.md`, report.markdown, "text/markdown;charset=utf-8");
-      setNote("AI 搜索说明已下载。");
+      const date = new Date().toISOString().slice(0, 10);
+      await downloadApiFile("/api/geo/report.pdf", `AI搜索说明-${date}.pdf`);
+      setNote("AI 搜索说明（PDF）已下载。");
     } catch (e) {
       setError(e instanceof Error ? e.message : "AI 搜索说明下载失败");
     } finally {
@@ -142,7 +138,7 @@ export default function ReportDeliveryPage() {
           <div className="flex flex-col gap-2 sm:min-w-[220px]">
             <Button onClick={downloadBrief} disabled={busy === "brief"}>
               <FileText className="mr-2 h-4 w-4" />
-              {busy === "brief" ? "下载中…" : "下载本周说明"}
+              {busy === "brief" ? "下载中…" : "下载本周说明（PDF）"}
             </Button>
           </div>
         </div>
@@ -211,11 +207,11 @@ export default function ReportDeliveryPage() {
 
       <section className="rounded-md border border-slate-200 bg-white p-5">
         <div className="text-sm font-medium text-slate-900">更多导出</div>
-        <p className="mt-1 text-sm text-slate-500">需要分开发给执行或留底时，再下载单份网站说明或 AI 搜索记录。</p>
+        <p className="mt-1 text-sm text-slate-500">给客户的说明是排好版的 PDF。改法清单和检查记录仍是表格，留给执行留底。</p>
         <div className="mt-3 flex flex-wrap gap-2">
           <Button size="sm" variant="outline" onClick={exportSeoReport} disabled={busy === "seo-report"}>
             <FileText className="mr-2 h-4 w-4" />
-            下载网站说明
+            下载网站说明（PDF）
           </Button>
           <Button size="sm" variant="outline" onClick={exportSeoTable} disabled={busy === "seo-table"}>
             <FileSpreadsheet className="mr-2 h-4 w-4" />
@@ -223,7 +219,7 @@ export default function ReportDeliveryPage() {
           </Button>
           <Button size="sm" variant="outline" onClick={exportGeoReport} disabled={busy === "geo-report"}>
             <FileText className="mr-2 h-4 w-4" />
-            下载 AI 搜索说明
+            下载 AI 搜索说明（PDF）
           </Button>
           <Button size="sm" variant="outline" onClick={exportGeoTable} disabled={busy === "geo-table"}>
             <Download className="mr-2 h-4 w-4" />

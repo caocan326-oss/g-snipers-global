@@ -102,7 +102,8 @@ certbot --nginx -d www.weiyids.com -d weiyids.com
 | --- | --- |
 | `/opt/g-snipers-overseas` | **正在跑的应用**（git checkout） |
 | `/opt/g-snipers-overseas/.env` | 线上密钥，**不进 git** |
-| `/opt/g-snipers-backups` | 备份目录 |
+| `/opt/g-snipers-backups` | 旧的发版前代码 tar，仍在同一块盘上，不算异地 |
+| `/opt/g-snipers-db-exports` | 客户库导出落点（compose `BACKUP_HOST_DIR`）。定时默认关 |
 | `/opt/g-snipers-overseas-backup-*.tgz` | 历史代码包（8 月中旬密集备份，可日后清理） |
 | `/opt/g-snipers-global` | 空壳，不要当发版目标 |
 | `/root/strapi-news.tar.gz` | 与本项目无关 |
@@ -189,7 +190,8 @@ powershell -File deploy/sync-from-local.ps1
 2. **不要提交或覆盖线上 `.env`。**
 3. **不要用 `git reset --hard` 除非你明确要丢掉服务器上的临时改动。**
 4. Nginx / 证书不在每次发版里动。改反代先改 `/etc/nginx/sites-available/g-snipers`，`nginx -t` 再 reload，并回写 `deploy/nginx/g-snipers.live.conf` 与本档案日期。
-5. 发版前可打一份备份：`tar -C /opt -czf /opt/g-snipers-backups/pre-$(date +%Y%m%d%H%M%S).tgz g-snipers-overseas --exclude=g-snipers-overseas/.git`
+5. 发版前可打一份代码 tar：`tar -C /opt -czf /opt/g-snipers-backups/pre-$(date +%Y%m%d%H%M%S).tgz g-snipers-overseas --exclude=g-snipers-overseas/.git`。这不是数据库，也不在机器外。
+6. 客户库副本：管理员页 `/ops/backup` 可导出并下载。宿主机落点 `BACKUP_HOST_DIR`（建议 `/opt/g-snipers-db-exports`）。异地写 `BACKUP_OFFSITE_KIND=dir|scp`。`deploy/backup-postgres.sh` 打 Postgres 自定义格式。**定时默认关**，不要装 `deploy/backup-postgres.cron.example`，除非异地已经抄通过。
 
 ---
 
@@ -222,6 +224,9 @@ powershell -File deploy/sync-from-local.ps1
 | 2026-08-21 | 运维 | 收掉 Postgres 宿主机 5432 映射，发到 `29cd68a`。库只在 compose 网络给 backend 用。宿主机已无 5432；租户/账号数据仍在。 |
 | 2026-08-21 | 产品/运维 | 点选国家与登录加固发到 `f57e6b5`（`sync-from-local.ps1 -Rebuild`）。GEO/SEO/市场不再填 `en-US`；总览列表对齐 OPENISH；登录 5 次失败锁 15 分钟；分发 providers 需登录；开户用 `python -m app.provision_tenant`，无公开注册。 |
 | 2026-08-21 | 产品/运维 | GEO 闭环发到 `fa68996`，线上对齐 `7327aef`（`sync-from-local.ps1 -Rebuild`）。待处理项写明补哪页/发哪张卡；完成标准是页已上线、帖已发出、同一问再测；复测只记有没有变化，不要求这次必须提到。同一问再测不用展开 Set，否则 Next 构建失败。 |
+| 2026-08-21 | 代码 | 客户库可导出：管理员 `/ops/backup`、落点 `BACKUP_HOST_DIR`、可选异地 dir/SCP、`deploy/backup-postgres.sh`。定时默认关，未装 cron。 |
+| 2026-08-21 | 产品 | 外部接口按客户按天限次。管理员 `/ops/usage` 设每天上限，看已用/还剩。默认：排名 15、博查 24、百炼 24、大模型 60、测速 8。GEO/SERP/测速用完返回 429。 |
+| 2026-08-21 | 产品 | 客户说明、站内诊断、GEO 抽查可下 PDF（Markdown → HTML → WeasyPrint）。发版必须 `-Rebuild`。 |
 
 ---
 

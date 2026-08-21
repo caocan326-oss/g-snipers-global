@@ -34,6 +34,7 @@ from app.llm import status_label
 from app.onsite_analyzer import rank_distribution
 from app.routers.onsite.constants import OPENISH
 from app.customer_brief import build_customer_brief
+from app.report_export import pdf_response
 from app.schemas import (
     CustomerBriefOut,
     DashboardSummary,
@@ -337,6 +338,13 @@ def summary(user: User = Depends(get_current_user), db: Session = Depends(get_db
 @router.get("/customer-brief", response_model=CustomerBriefOut)
 def customer_brief(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> CustomerBriefOut:
     return build_customer_brief(user, db)
+
+
+@router.get("/customer-brief.pdf")
+def customer_brief_pdf(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    brief = build_customer_brief(user, db)
+    date = brief.generated_at.strftime("%Y-%m-%d")
+    return pdf_response(title=brief.title, markdown_text=brief.markdown, filename=f"本周客户说明-{date}.pdf")
 
 
 @router.get("/workbench", response_model=WorkbenchOut)

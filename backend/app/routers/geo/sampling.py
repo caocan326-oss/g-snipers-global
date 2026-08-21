@@ -225,6 +225,14 @@ def _execute_auto_sample(
     db.add(run)
     db.flush()
 
+    from app.usage import UsageLimitError, assert_can, raise_http
+
+    meter = "bocha" if provider_key == "bocha" else "bailian" if provider_key == "bailian" else "llm"
+    try:
+        assert_can(db, user.tenant_id, meter, len(prompts) * max(1, body.trials))
+    except UsageLimitError as exc:
+        raise_http(exc)
+
     result_count = 0
     errors: list[str] = []
     for prompt in prompts:
@@ -236,6 +244,8 @@ def _execute_auto_sample(
                     model=body.model,
                     region_hint=body.region_hint,
                 )
+            except UsageLimitError as exc:
+                raise_http(exc)
             except GeoProviderError as exc:
                 errors.append(f"{provider_key} {prompt.prompt_key or prompt.id} trial {trial}: {exc}")
                 continue
@@ -338,6 +348,15 @@ def create_grounded_batch_runs(
         raise HTTPException(status_code=400, detail="没有已配置、能联网返回网址的数据源。DeepSeek 不算。")
     tenant = db.get(Tenant, user.tenant_id)
     prompts = _load_sample_prompts(db, user, body)
+    from app.usage import UsageLimitError, assert_can, raise_http
+
+    need = len(prompts) * max(1, body.trials)
+    try:
+        for provider in ready:
+            meter = "bocha" if provider.key == "bocha" else "bailian" if provider.key == "bailian" else "llm"
+            assert_can(db, user.tenant_id, meter, need)
+    except UsageLimitError as exc:
+        raise_http(exc)
     previous = _latest_sample_run(db, user.tenant_id)
     runs = []
     failed: list[str] = []

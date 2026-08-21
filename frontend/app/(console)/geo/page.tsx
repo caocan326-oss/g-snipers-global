@@ -5,13 +5,13 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Input } from "@/components/ui/input";
 import {
   api,
+  downloadApiFile,
   type AiAssist,
   type GeoAsset,
   type GeoChecklistItem,
   type GeoGroundedBatch,
   type GeoPrompt,
   type GeoProviderStatusList,
-  type GeoReport,
   type GeoReportTable,
   type GeoSampleRun,
   type GeoSummary,
@@ -158,17 +158,9 @@ export default function GeoPage() {
   }
 
   async function downloadGeoReport() {
-    const report = await api<GeoReport>("/api/geo/report");
-    const blob = new Blob([report.markdown], { type: "text/markdown;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `geo-report-${new Date(report.generated_at).toISOString().slice(0, 10)}.md`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-    setNote("AI 搜索说明已下载。");
+    const date = new Date().toISOString().slice(0, 10);
+    await downloadApiFile("/api/geo/report.pdf", `AI搜索说明-${date}.pdf`);
+    setNote("AI 搜索说明（PDF）已下载。");
   }
 
   async function downloadGeoTable() {

@@ -53,6 +53,47 @@ export async function api<T>(path: string, init: RequestInit & { timeoutMs?: num
   }
 }
 
+export async function downloadApiFile(path: string, filename: string, timeoutMs = 60000) {
+  const headers = new Headers();
+  const token = getToken();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(path, { headers, signal: controller.signal });
+    if (res.status === 401 && typeof window !== "undefined") {
+      clearToken();
+      window.location.href = "/login";
+    }
+    if (!res.ok) {
+      let detail = res.statusText;
+      try {
+        const data = await res.json();
+        detail = data.detail || JSON.stringify(data);
+      } catch {
+        /* ignore */
+      }
+      throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error("下载超时，请稍后重试。");
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
+
 export function siteOriginHost(raw: string): string {
   const text = raw.trim();
   if (!text) return "";
@@ -76,6 +117,61 @@ export function confirmSiteSwitch(currentOrigin: string, nextOrigin: string): bo
     `更换官网会归档当前工作台，页面上的检查、AI 搜索和清单都会换成新站点。\n\n当前：${currentOrigin || "未设置"}\n新官网：${nextOrigin}\n\n若这个新官网以前查过，会恢复那份历史，不会再造空站。确定更换？`,
   );
 }
+
+export type BackupDump = {
+  filename: string;
+  size_bytes: number;
+  modified_at: string;
+};
+
+export type BackupStatus = {
+  schedule_enabled: boolean;
+  local_dir: string;
+  keep: number;
+  offsite_kind: string;
+  offsite_configured: boolean;
+  offsite_dir?: string;
+  offsite_scp_set?: boolean;
+  latest: BackupDump | null;
+  dumps: BackupDump[];
+  note: string;
+};
+
+export type UsageMeter = {
+  key: string;
+  label: string;
+  vendor: string;
+  hint: string;
+  used: number;
+  limit: number;
+  remaining: number;
+};
+
+export type UsageToday = {
+  day: string;
+  tenant_id: string;
+  tenant_name: string;
+  meters: UsageMeter[];
+};
+
+export type UsageTenant = {
+  tenant_id: string;
+  tenant_name: string;
+  site_origin: string;
+  meters: UsageMeter[];
+};
+
+export type UsageBoard = {
+  day: string;
+  tenants: UsageTenant[];
+};
+
+export type BackupCreate = {
+  filename: string;
+  size_bytes: number;
+  offsite: string;
+  note: string;
+};
 
 export type User = {
   id: string;

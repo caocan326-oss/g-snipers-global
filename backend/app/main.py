@@ -1,11 +1,18 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.config import settings
 from app.llm import status_label
-from app.routers import ai, auth, dashboard, distribution, execution, geo, inquiries, insights, offsite, onsite, seo, site_context, work_orders
+from app.routers import ai, auth, dashboard, distribution, execution, geo, inquiries, insights, offsite, onsite, ops, seo, site_context, usage, work_orders
+from app.usage import UsageLimitError
 
 app = FastAPI(title="G-Snipers Overseas", version="0.1.0")
+
+
+@app.exception_handler(UsageLimitError)
+def usage_limit_handler(_request: Request, exc: UsageLimitError) -> JSONResponse:
+    return JSONResponse(status_code=429, content={"detail": str(exc)})
 
 app.add_middleware(
     CORSMiddleware,
@@ -28,6 +35,8 @@ app.include_router(distribution.router)
 app.include_router(execution.router)
 app.include_router(work_orders.router)
 app.include_router(inquiries.router)
+app.include_router(ops.router)
+app.include_router(usage.router)
 
 
 @app.get("/api/health")

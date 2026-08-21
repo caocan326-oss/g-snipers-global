@@ -50,6 +50,13 @@ class Settings(BaseSettings):
     dashscope_api_key: str = ""
     bailian_model: str = "qwen-plus"
     bailian_chat_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
+    # Off-site DB copies. Schedule stays off until you flip BACKUP_SCHEDULE_ENABLED.
+    backup_local_dir: str = ""
+    backup_keep: int = 14
+    backup_schedule_enabled: bool = False
+    backup_offsite_kind: str = "none"
+    backup_offsite_dir: str = ""
+    backup_offsite_scp: str = ""
 
 
 settings = Settings()

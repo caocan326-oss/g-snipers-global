@@ -898,3 +898,35 @@ class AiRun(Base):
     evidence: Mapped[str] = mapped_column(Text, default="")
     detail: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class UsageQuota(Base):
+    """Per-customer daily cap for one paid API. Empty row = use default."""
+
+    __tablename__ = "usage_quotas"
+    __table_args__ = (UniqueConstraint("tenant_id", "meter", name="uq_usage_quotas_tenant_meter"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
+    meter: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    daily_limit: Mapped[int] = mapped_column(Integer, nullable=False)
+    updated_by: Mapped[str | None] = mapped_column(ForeignKey("users.id"))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class UsageDaily(Base):
+    """How many calls this customer already used today (Asia/Shanghai date)."""
+
+    __tablename__ = "usage_daily"
+    __table_args__ = (UniqueConstraint("tenant_id", "meter", "used_on", name="uq_usage_daily_tenant_meter_day"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
+    meter: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    used_on: Mapped[str] = mapped_column(String(10), nullable=False, index=True)
+    used_count: Mapped[int] = mapped_column(Integer, default=0)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )

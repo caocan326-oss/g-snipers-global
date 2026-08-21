@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.auth import get_current_user
 from app.database import get_db
 from app.models import CrawlSession, OnsiteIssue, PageSpeedAudit, SeoPerformanceRow, SitePage, User
+from app.report_export import pdf_response
 from app.schemas import SeoReportOut, SeoReportTableOut
 
 from . import router
@@ -252,6 +253,13 @@ def seo_report(user: User = Depends(get_current_user), db: Session = Depends(get
         "",
     ]
     return SeoReportOut(title=f"网站检查说明 - {tenant.name}", markdown="\n".join(lines), generated_at=generated)
+
+
+@router.get("/report.pdf")
+def seo_report_pdf(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    report = seo_report(user, db)
+    date = report.generated_at.strftime("%Y-%m-%d")
+    return pdf_response(title=report.title, markdown_text=report.markdown, filename=f"网站检查说明-{date}.pdf")
 
 
 @router.get("/report-table", response_model=SeoReportTableOut)

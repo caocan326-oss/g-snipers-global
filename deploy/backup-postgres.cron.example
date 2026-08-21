@@ -1,0 +1,4 @@
+# 先不要装这条。确认异地落点能写之后，再复制到 /etc/cron.d/g-snipers-backup
+# BACKUP_SCHEDULE_ENABLED=true 只是状态标记，真正跑的是 cron。
+# 每天 03:15 UTC 在生产仓库根目录打一份库副本。
+# 15 3 * * * root cd /opt/g-snipers-overseas && /bin/sh deploy/backup-postgres.sh >> /var/log/g-snipers-backup.log 2>&1

@@ -7,7 +7,7 @@
 
 约定：家里和公司**不会同时改**。换机器前必须把这边 push 完。
 
-最后更新：2026-08-21 19:55（公司。GEO 闭环已发：补哪页/发哪张卡，复测只记变化，不承诺提到）。三处已对齐 `7327aef`。
+最后更新：2026-08-21 22:50（家里。外部接口按客户按天限次；客户说明/站内/GEO 可下 PDF；库副本页开着、定时关）。
 
 ---
 
@@ -214,15 +214,15 @@ git log -1 --oneline
 
 | 项 | 值 |
 | --- | --- |
-| 日期 | 2026-08-21 19:55 |
-| 最后一台 | 公司 `E:\G-snipers海外版` |
+| 日期 | 2026-08-21 22:50 |
+| 最后一台 | 家里 `D:\workspace\G-snipers海外版` |
 | 分支 | `main` |
-| 提交 | 三处对齐 `7327aef`（前端构建修正）。功能 `fa68996`：GEO 闭环，待处理项写对应页/渠道卡；完成=页已上线或帖已发出或同一问再测；客户说明只写上次→这次有没有变化，不承诺提到。文档本条。 |
-| 已 push origin / upstream | 是。本机 / origin / upstream / 生产均为 `7327aef` 后再推本条。 |
-| 已发版生产 | **是。** `sync-from-local.ps1 -Rebuild`。演示客户仍是门锁站。`DEMO_LOGIN_ENABLED` 线上关。Postgres 仍不映射 5432。 |
-| 接口实测 | health 200；未登录看 `/api/distribution/providers` 为 401；宿主机无 5432。 |
-| 未完成 | Bing / IndexNow 可等。不要公开注册。不要自动群发。不要把 `scraping_browser1` 填进 SERP 区。不要把「复测必须提到」写成完成标准。 |
-| 下一台先做 | 家里先 `git pull origin main`。不要两边同时改。不要提交家里那份未推的总览改动。 |
+| 提交 | 发版后把本机 / origin / upstream / 生产的短哈希写在这里。功能：① 管理员 `/ops/usage` 给每家客户设每天次数（排名 / 博查 / 百炼 / 大模型 / 测速），用完 429，不重试、不编造。② 客户说明、站内、GEO 可下 PDF。③ 管理员 `/ops/backup` 可手导出库；`BACKUP_SCHEDULE_ENABLED` 默认关，不要装 cron。 |
+| 已 push origin / upstream | 本轮会推。推完核对本机 = origin = upstream。 |
+| 已发版生产 | 本轮 `sync-from-local.ps1 -Rebuild`（Dockerfile 加了 WeasyPrint/CJK 字体，compose 挂了库导出目录）。演示客户仍是门锁站。`DEMO_LOGIN_ENABLED` 线上关。Postgres 仍不映射 5432。库导出定时不要开。 |
+| 接口实测 | 发版后查 health、未登录 `/api/distribution/providers` 为 401、宿主机无 5432、管理员能打开 `/ops/usage`。 |
+| 未完成 | Bing / IndexNow 可等。不要公开注册。不要自动群发。不要把 `scraping_browser1` 填进 SERP 区。不要把「复测必须提到」写成完成标准。不要装备份 cron，除非异地抄已经通。 |
+| 下一台先做 | 公司先 `git pull origin main`。不要两边同时改。 |
 
 `www` 灰云、A 仍 `39.97.52.149`。`relay.weiyids.com` 橙云，不要 CNAME 回 `workers.dev`。不要开 Google Ads。不要在服务器 `git pull`。
 

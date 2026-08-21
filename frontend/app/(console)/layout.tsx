@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { FileText, Globe2, LayoutDashboard, ListChecks, MapPinned, MessageSquare, Newspaper, SearchCheck, SquareCheckBig } from "lucide-react";
+import { FileText, Gauge, Globe2, HardDrive, LayoutDashboard, ListChecks, MapPinned, MessageSquare, Newspaper, SearchCheck, SquareCheckBig } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { api, clearToken, getToken, type AiStatus, type User } from "@/lib/api";
@@ -23,6 +23,11 @@ const internalNav = [
   { href: "/insights", label: "市场机会", note: "国家 / 竞品 / 需求", icon: MapPinned },
   { href: "/seo", label: "SEO 内容", note: "选题 / 大纲 / 正文", icon: Newspaper },
   { href: "/inquiries", label: "询盘", note: "线索记录", icon: MessageSquare },
+];
+
+const adminNav = [
+  { href: "/ops/backup", label: "数据副本", note: "导出 / 异地落点 / 定时关着", icon: HardDrive },
+  { href: "/ops/usage", label: "接口用量", note: "每家客户每天能打几次", icon: Gauge },
 ];
 
 export default function ConsoleLayout({ children }: { children: ReactNode }) {
@@ -44,7 +49,8 @@ export default function ConsoleLayout({ children }: { children: ReactNode }) {
       .catch(() => router.replace("/login"));
   }, [router]);
 
-  const allNav = [...nav, ...internalNav];
+  const extraNav = user?.role === "admin" ? adminNav : [];
+  const allNav = [...nav, ...internalNav, ...extraNav];
   const activeNav = allNav.find((item) => pathname === item.href || pathname.startsWith(item.href + "/")) ?? nav[0];
 
   return (
@@ -105,6 +111,33 @@ export default function ConsoleLayout({ children }: { children: ReactNode }) {
               </span>
             </Link>
           )})}
+          {user?.role === "admin" ? (
+            <>
+              <div className="px-3 pt-4 text-[11px] uppercase tracking-wide text-slate-500">管理员</div>
+              {adminNav.map((item) => {
+                const Icon = item.icon;
+                const active = pathname === item.href || pathname.startsWith(item.href + "/");
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={cn(
+                      "flex gap-3 rounded-md px-3 py-2.5 text-sm transition",
+                      active
+                        ? "bg-white text-slate-950 shadow-sm"
+                        : "text-slate-300 hover:bg-white/10 hover:text-white"
+                    )}
+                  >
+                    <Icon className={cn("mt-0.5 h-4 w-4 shrink-0", active ? "text-brand-700" : "text-slate-500")} />
+                    <span className="min-w-0">
+                      <span className="block font-medium">{item.label}</span>
+                      <span className={cn("mt-0.5 block truncate text-xs", "text-slate-500")}>{item.note}</span>
+                    </span>
+                  </Link>
+                );
+              })}
+            </>
+          ) : null}
         </nav>
         <div className="border-t border-white/10 px-4 py-4">
           <div className="text-[11px] uppercase tracking-wide text-slate-500">当前客户</div>

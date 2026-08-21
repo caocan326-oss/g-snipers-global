@@ -4,6 +4,7 @@ import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 
 import {
   api,
+  downloadApiFile,
   confirmSiteSwitch,
   looksLikeSiteOrigin,
   siteOriginHost,
@@ -25,7 +26,6 @@ import {
   type OnsiteGuide,
   type OnsiteIssue,
   type ProjectTargets,
-  type SeoReport,
   type SeoReportTable,
   type SeoPerformanceSummary,
   type SeoPage,
@@ -538,17 +538,9 @@ export default function OnsiteBoardPage() {
   async function downloadReport() {
     setError("");
     try {
-      const report = await api<SeoReport>("/api/onsite/report");
-      const blob = new Blob([report.markdown], { type: "text/markdown;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `seo-report-${new Date(report.generated_at).toISOString().slice(0, 10)}.md`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-      setNote("客户说明已生成。");
+      const date = new Date().toISOString().slice(0, 10);
+      await downloadApiFile("/api/onsite/report.pdf", `网站检查说明-${date}.pdf`);
+      setNote("客户说明（PDF）已生成。");
     } catch (e) {
       setError(e instanceof Error ? e.message : "报告生成失败");
     }

@@ -160,6 +160,12 @@ def _call_bocha(prompt_text: str) -> GeoProviderResult:
     if not settings.bocha_api_key:
         raise GeoProviderError("未配置 BOCHA_API_KEY，不能执行博查搜索采样。")
     payload = {"query": prompt_text, "freshness": "noLimit", "summary": True, "count": 10}
+    from app.usage import UsageLimitError, record_current
+
+    try:
+        record_current("bocha", 1)
+    except UsageLimitError:
+        raise
     try:
         with httpx.Client(timeout=45) as client:
             response = client.post(
@@ -211,6 +217,12 @@ def _call_bailian(prompt_text: str, model: str = "", region_hint: str = "") -> G
         "enable_search": True,
         "search_options": {"enable_source": True, "enable_citation": True},
     }
+    from app.usage import UsageLimitError, record_current
+
+    try:
+        record_current("bailian", 1)
+    except UsageLimitError:
+        raise
     try:
         with httpx.Client(timeout=90) as client:
             response = client.post(

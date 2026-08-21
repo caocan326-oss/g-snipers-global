@@ -9,6 +9,7 @@ from app.auth import get_current_user
 from app.database import get_db
 from app.geo_helpers import DIAGNOSES, ENGINE_LABELS, engine_region
 from app.models import GeoPrompt, GeoSampleResult, GeoSampleRun, Tenant, User
+from app.report_export import pdf_response
 from app.schemas import GeoReportOut, GeoReportTableOut
 
 from . import router
@@ -132,6 +133,13 @@ def geo_report(user: User = Depends(get_current_user), db: Session = Depends(get
         "4. 改完后再查同一批问题，记下有没有被提到、有没有给出官网。",
     ]
     return GeoReportOut(title=f"AI 搜索说明 - {tenant.name if tenant else ''}", markdown="\n".join(lines), generated_at=generated)
+
+
+@router.get("/report.pdf")
+def geo_report_pdf(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    report = geo_report(user, db)
+    date = report.generated_at.strftime("%Y-%m-%d")
+    return pdf_response(title=report.title, markdown_text=report.markdown, filename=f"AI搜索说明-{date}.pdf")
 
 
 @router.get("/report-table", response_model=GeoReportTableOut)

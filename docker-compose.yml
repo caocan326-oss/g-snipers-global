@@ -20,6 +20,9 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://gsnipers:gsnipers@postgres:5432/gsnipers
       FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:3000}
+      BACKUP_LOCAL_DIR: /var/lib/gsnipers/backups
+    volumes:
+      - ${BACKUP_HOST_DIR:-./data/db-exports}:/var/lib/gsnipers/backups
     ports:
       - "8000:8000"
     depends_on:

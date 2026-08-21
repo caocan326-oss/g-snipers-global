@@ -66,6 +66,12 @@ def complete(*, system: str, user: str) -> LlmResult:
         "Content-Type": "application/json",
     }
     try:
+        from app.usage import UsageLimitError, record_current
+
+        record_current("llm", 1)
+    except UsageLimitError:
+        raise
+    try:
         with httpx.Client(timeout=30.0) as client:
             res = client.post(url, json=payload, headers=headers)
         if res.status_code >= 400:

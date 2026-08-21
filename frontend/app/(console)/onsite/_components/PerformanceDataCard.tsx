@@ -14,6 +14,7 @@ import type {
   SeoPerformanceSummary,
 } from "@/lib/api";
 import { explainServiceError } from "@/lib/errors";
+import { UsageTodayBar } from "../../_components/UsageTodayBar";
 
 type IntegrationForm = {
   gsc_oauth_client_id: string;
@@ -82,6 +83,9 @@ export function PerformanceDataCard({
       <CardHeader>
         <CardTitle>补充搜索数据</CardTitle>
         <p className="mt-1 text-sm text-slate-500">用 Google / Bing 看真实展示和点击，用测速看打开体验，用关键词位置检查看目标词有没有出现。</p>
+        <div className="mt-2">
+          <UsageTodayBar meters={["serp", "pagespeed"]} />
+        </div>
       </CardHeader>
       <CardContent className="grid gap-4 xl:grid-cols-2">
         <div className="rounded-md border border-slate-200 p-4">

@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.database import get_db
 from app.models import Tenant, User
+from app.usage import set_usage_tenant
 
 bearer = HTTPBearer(auto_error=False)
 
@@ -40,6 +41,7 @@ def get_current_user(
     user = db.get(User, user_id)
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="用户不存在")
+    set_usage_tenant(user.tenant_id, db)
     return user
 
 

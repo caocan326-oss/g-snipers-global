@@ -254,6 +254,10 @@ def _fetch_brightdata_serp(
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
     }
+    from app.usage import record
+
+    if db is not None and tenant_id:
+        record(db, tenant_id, "serp", 1)
     with httpx.Client(timeout=60, headers=headers) as client:
         response = client.post(endpoint, json=payload)
         response.raise_for_status()
@@ -512,6 +516,9 @@ def _run_google_pagespeed(db: Session, tenant_id: str, url: str, strategy: str) 
 
 
 def _run_pagespeed(db: Session, tenant_id: str, url: str, strategy: str) -> dict:
+    from app.usage import record
+
+    record(db, tenant_id, "pagespeed", 1)
     if google_relay.configured():
         return _run_google_pagespeed(db, tenant_id, url, strategy if strategy in {"mobile", "desktop"} else "mobile")
     user, password = _speed_credentials(db, tenant_id)
@@ -606,6 +613,12 @@ def run_serp(
     keywords = _target_serp_keywords(db, user, body.keywords, limit=min(5, body.limit))
     if not keywords:
         raise HTTPException(status_code=400, detail="没有可查询的关键词。请先在首页配置客户 SEO 目标关键词。")
+    from app.usage import UsageLimitError, assert_can, raise_http
+
+    try:
+        assert_can(db, user.tenant_id, "serp", len(keywords))
+    except UsageLimitError as exc:
+        raise_http(exc)
     runs: list[SerpRun] = []
     for keyword in keywords:
         runs.append(_run_one_serp(db, user, keyword, country=body.country, locale=body.locale, device=body.device, limit=body.limit))
@@ -646,6 +659,12 @@ def run_pagespeed_audits(
     if not urls:
         raise HTTPException(status_code=400, detail="没有可测速的页面。请先登记官网或加入诊断页。")
     strategy = "mobile" if google_relay.configured() else "overseas"
+    from app.usage import UsageLimitError, assert_can, raise_http
+
+    try:
+        assert_can(db, user.tenant_id, "pagespeed", len(urls))
+    except UsageLimitError as exc:
+        raise_http(exc)
     audits: list[PageSpeedAudit] = []
     for url in urls:
         try:

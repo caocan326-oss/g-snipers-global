@@ -111,7 +111,7 @@ export function GuideHeader({
             </Button>
             <Button type="button" variant="outline" size="sm" onClick={downloadReport}>
               <Download className="mr-2 h-4 w-4" />
-              下载客户说明
+              下载客户说明（PDF）
             </Button>
             <Button type="button" variant="outline" size="sm" onClick={downloadReportTable}>
               <Download className="mr-2 h-4 w-4" />
