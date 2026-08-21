@@ -345,6 +345,7 @@ def test_geo_sample_run_freezes_manual_observations_as_evidence(client: TestClie
     assert summary["sample_runs"] == 1
     assert summary["evidence_results"] == 1
     assert summary["latest_run_id"] == run["id"]
+    assert summary["latest_run_at"]
 
     report = client.get("/api/geo/report", headers=headers).json()["markdown"]
     assert "证据运行" in report

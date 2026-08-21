@@ -25,6 +25,11 @@ export function SeoPerformanceSection({
           </div>
           <h3 className="mt-3 text-xl font-semibold text-slate-950">{seoVerdict.title}</h3>
           <p className="mt-2 text-sm leading-6 text-slate-600">{seoVerdict.text}</p>
+          {perf.serp_runs > 0 ? (
+            <p className="mt-3 text-lg font-semibold text-slate-950">
+              我方出现 {perf.serp_own_visible_runs} / 竞品出现 {perf.serp_competitor_visible_runs}
+            </p>
+          ) : null}
         </div>
         <div className="grid w-full gap-2 text-sm sm:grid-cols-3 xl:w-[520px]">
           <div className="rounded-md bg-slate-50 p-3">

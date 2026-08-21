@@ -1,5 +1,30 @@
 import type { OnsiteIssue, SeoPerformanceSummary } from "@/lib/api";
 
+export const issuePlainTitle: Record<string, string> = {
+  "收录状态未测（需 GSC）": "还没确认谷歌有没有收到这个页",
+  "搜索是否收录尚未检查": "还没确认谷歌有没有收到这个页",
+  "Canonical 未登记": "标准网址没写清，搜索可能认错页",
+  "标准网址未登记": "标准网址没写清，搜索可能认错页",
+  "缺少 JSON-LD / schema": "页面缺少给搜索看的说明",
+  "缺少页面说明标记": "页面缺少给搜索看的说明",
+  "首页公司说明标记缺失": "首页缺少公司介绍说明",
+  "页面声明 noindex": "这个页告诉搜索不要收录",
+  "缺少 H1": "页面缺少主标题",
+  "缺少 Title": "搜索结果里可能没有标题",
+  "Description 过短或为空": "搜索摘要几乎是空的",
+  "页面摘要过短": "搜索摘要太短",
+  "正文内容过薄": "正文太少，买家看不够",
+  "图片 Alt 缺失": "图片没有文字说明",
+  "缺少内链": "和其他页缺少互相链接",
+  "URL 层级过深": "网址层级太深，不好被找到",
+  "GEO-SCHEMA-002 Schema 类型与正文弱一致": "页面说明和正文对不上",
+  "GEO-ENT-002 缺少 Organization / WebSite schema": "首页缺少公司介绍说明",
+};
+
+export function plainIssueTitle(title: string) {
+  return issuePlainTitle[title] || title;
+}
+
 export const catLabel: Record<string, string> = {
   tdk: "标题与摘要",
   heading: "页面标题",

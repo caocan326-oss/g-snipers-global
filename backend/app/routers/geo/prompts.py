@@ -119,6 +119,7 @@ def geo_summary(user: User = Depends(get_current_user), db: Session = Depends(ge
         sample_runs=sample_runs,
         evidence_results=evidence_results,
         latest_run_id=latest_run.id if latest_run else None,
+        latest_run_at=latest_run.started_at if latest_run else None,
     )
 
 

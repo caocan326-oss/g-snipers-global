@@ -11,12 +11,12 @@ import { api, clearToken, getToken, type AiStatus, type User } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const nav = [
+  { href: "/distribution", label: "客户说明", note: "搜不搜得到 / 这周改哪三处", icon: FileText },
   { href: "/home", label: "客户总览", note: "能否交付 / 风险 / 下一步", icon: LayoutDashboard },
   { href: "/onsite", label: "网站检查", note: "查看网页 / 给出改法 / 改后复查", icon: SearchCheck },
   { href: "/geo", label: "AI 搜索可见度", note: "有没有被提到 / 有没有给出官网", icon: Globe2 },
   { href: "/execution", label: "处理清单", note: "负责人 / 完成标准 / 复查", icon: SquareCheckBig },
   { href: "/offsite", label: "站外曝光", note: "渠道 / 执行 / 结果核对", icon: ListChecks },
-  { href: "/distribution", label: "客户说明", note: "预览 / 下载 / 交付", icon: FileText },
 ];
 
 const internalNav = [
@@ -107,10 +107,11 @@ export default function ConsoleLayout({ children }: { children: ReactNode }) {
           )})}
         </nav>
         <div className="border-t border-white/10 px-4 py-4">
-          <div className="text-sm font-medium text-white">{user?.name ?? "…"}</div>
-          <div className="truncate text-xs text-slate-500">
-            {user?.role === "admin" ? "管理员" : "客户经理"}
-            {user?.tenant_name ? ` · ${user.tenant_name}` : ""}
+          <div className="text-[11px] uppercase tracking-wide text-slate-500">当前客户</div>
+          <div className="mt-1 truncate text-sm font-medium text-white">{user?.tenant_name || "未选择客户"}</div>
+          <p className="mt-1 text-xs leading-5 text-slate-400">你在看这家客户，不是被检查的人。</p>
+          <div className="mt-2 truncate text-xs text-slate-500">
+            {user?.name ?? "…"} · {user?.role === "admin" ? "管理员" : "客户经理"}
           </div>
           <Button
             variant="ghost"
@@ -130,8 +131,8 @@ export default function ConsoleLayout({ children }: { children: ReactNode }) {
           <div className="px-4 py-3">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <div className="text-sm font-semibold text-slate-950">G-Snipers Global</div>
-                <div className="mt-0.5 text-xs text-slate-500">{activeNav.label} · {activeNav.note}</div>
+                <div className="text-sm font-semibold text-slate-950">当前客户：{user?.tenant_name || "未选择"}</div>
+                <div className="mt-0.5 text-xs text-slate-500">{activeNav.label} · 你在看客户，不是被检查的人</div>
               </div>
               <Button
                 variant="outline"

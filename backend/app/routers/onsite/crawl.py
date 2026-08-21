@@ -9,6 +9,7 @@ from app.auth import get_current_user
 from app.database import get_db
 from app.models import CrawlSession, OnsiteIssue, SitePage, User
 from app.onsite_analyzer import parse_internal_paths
+from app.onsite_inventory import purge_demo_leftover_pages
 from app.onsite_fetch import (
     OriginError,
     allowed_hosts_from_origin,
@@ -200,6 +201,7 @@ def crawl_site(
         db, user, db.query(SitePage).filter(SitePage.tenant_id == user.tenant_id).all()
     )
     created += site_created
+    dropped = purge_demo_leftover_pages(db, user.tenant_id) if fetched else 0
     session.status = "finished"
     session.discovered = len(rows)
     session.fetched = fetched
@@ -213,6 +215,8 @@ def crawl_site(
         f"已完成站点诊断抓取：发现 {len(rows)} 个 URL，成功 {fetched}，失败 {failed}，"
         f"新增问题 {created}，刷新站点级问题 {site_refreshed}，验收 {verified}。AI 不参与抓取事实。"
     )
+    if dropped:
+        session.note += f" 已清掉 {dropped} 个演示残留页。"
     db.commit()
     db.refresh(session)
     return _crawl_session_out(session)

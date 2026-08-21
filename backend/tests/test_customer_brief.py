@@ -18,7 +18,8 @@ def test_customer_brief_empty_tenant_stays_untested(client: TestClient, demo_use
     assert "已被 AI 稳定推荐" not in body["markdown"]
     assert "0%" not in body["markdown"]
     keys = [section["key"] for section in body["sections"]]
-    assert keys == ["this_week", "onsite", "geo", "untested"]
+    assert keys == ["findability", "this_week", "retest", "inquiries"]
+    assert "这个月记到" in body["markdown"]
 
 
 def test_customer_brief_merges_onsite_and_geo(client: TestClient, demo_user, db) -> None:
@@ -60,14 +61,12 @@ def test_customer_brief_merges_onsite_and_geo(client: TestClient, demo_user, db)
     markdown = body["markdown"]
     assert "这一周先处理 1 个紧急网站问题" in body["headline"]
     assert "首页标题过长" in markdown
-    assert "标题与摘要" in markdown
-    assert "买家问题 1 个" in markdown
-    assert "尚未检查 8 条" in markdown
-    assert any("紧急网站问题" in item for item in body["this_week"])
+    assert "哪些地方让老外搜不到我" in markdown
+    assert "这周技术改哪三处" in markdown
+    assert "改完你再看一次" in markdown
+    assert "这个月有几个老外来问过" in markdown
+    assert any("首页标题过长" in item for item in body["this_week"])
     assert any("尚未检查" in item for item in body["untested"])
-    assert "网站检查" in markdown
-    assert "AI 搜索可见度" in markdown
-    assert "来源核对 尚未检查" in markdown
 
     workbench = client.get("/api/dashboard/workbench?days=28", headers=headers).json()
     assert workbench["summary"]["onsite_open_critical"] == 1
@@ -97,10 +96,9 @@ def test_seeded_demo_counts_align_across_surfaces(client: TestClient, db) -> Non
     assert summary["geo_prompts"] == geo["prompts"] == 2
     assert summary["geo_untested"] == geo["untested"] == 16
     assert summary["geo_tickets_open"] == 2
-    assert "待处理 9 个问题" in brief["sections"][1]["body"]
-    assert "紧急 5" in brief["sections"][1]["body"]
-    assert "优先 1" in brief["sections"][1]["body"]
-    assert "常规 3" in brief["sections"][1]["body"]
+    assert [section["key"] for section in brief["sections"]] == ["findability", "this_week", "retest", "inquiries"]
+    assert any("紧急" in item for item in brief["this_week"])
+    assert "这个月记到" in brief["markdown"]
     assert guide["open_high"] == 6
     assert guide["current"] != "collect"
     assert any(item["id"] == "seo-critical" for item in workbench["next_actions"])

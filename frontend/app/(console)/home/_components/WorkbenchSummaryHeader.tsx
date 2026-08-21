@@ -18,13 +18,13 @@ export function WorkbenchSummaryHeader({
       <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge tone="brand">客户项目状态</Badge>
+            <Badge tone="brand">当前客户</Badge>
             <Badge tone={data.diagnostic_status.includes("处理") ? "amber" : "green"}>{data.diagnostic_status}</Badge>
             <Badge tone={targets?.readiness === "ready" ? "green" : "amber"}>{targets?.readiness === "ready" ? "诊断目标完整" : "诊断目标待补"}</Badge>
           </div>
-          <h1 className="mt-3 text-2xl font-semibold text-slate-950">{data.summary.tenant_name}</h1>
+          <h1 className="mt-3 text-2xl font-semibold text-slate-950">当前客户：{data.summary.tenant_name}</h1>
           <p className="mt-1 max-w-4xl text-sm leading-6 text-slate-500">
-            这里用客户能理解的方式汇总：网站现在有什么风险、搜索表现怎么样、AI 有没有提到客户、下一步先做什么。没有检查的数据会明确标为尚未检查。
+            你在看这家客户的检查结果，不是被检查的人。给客户看的是「客户说明」。没有查过的会标尚未检查。
           </p>
           <div className="mt-4 grid gap-2 lg:grid-cols-3">
             {executiveSummary.map((item) => (

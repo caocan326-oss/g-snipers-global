@@ -11,6 +11,7 @@ from app.content_templates import generate_draft, generate_meta, generate_outlin
 from app.database import SessionLocal
 from app.geo_helpers import CHECKLIST_DEFS, ENGINES, build_llms_txt
 from app.risk import default_severity, severity_to_risk
+from app.onsite_inventory import purge_demo_leftover_pages
 from app.models import (
     BacklinkGap,
     Competitor,
@@ -87,13 +88,11 @@ def seed(db: Session) -> None:
         )
         db.add(user)
         db.flush()
+    elif user.tenant_id != tenant.id:
+        user.tenant_id = tenant.id
 
     if db.scalar(select(Market).where(Market.tenant_id == tenant.id)) is not None:
-        _seed_geo(db, tenant, user)
-        _seed_onsite_offsite_dist(db, tenant, user)
-        _seed_three_chains(db, tenant, user)
-        ensure_admin(db)
-        db.commit()
+        _finish_seed(db, tenant, user)
         return
 
     us = Market(
@@ -283,10 +282,15 @@ def seed(db: Session) -> None:
             notes="询问多门锁批量安装，来自英文指南预览页（演示）。",
         )
     )
+    _finish_seed(db, tenant, user)
+
+
+def _finish_seed(db: Session, tenant: Tenant, user: User) -> None:
     _seed_geo(db, tenant, user)
     _seed_onsite_offsite_dist(db, tenant, user)
     _seed_three_chains(db, tenant, user)
     ensure_admin(db)
+    purge_demo_leftover_pages(db, tenant.id)
     db.commit()
 
 
@@ -475,6 +479,8 @@ def _seed_onsite_offsite_dist(db: Session, tenant: Tenant, user: User) -> None:
         crawl_status="ok",
         fetched_at=datetime.now(timezone.utc),
     )
+    for page in (p1, p2, p3, p4, p5):
+        page.discovery_source = "seed"
     db.add_all([p1, p2, p3, p4, p5])
     db.flush()
 

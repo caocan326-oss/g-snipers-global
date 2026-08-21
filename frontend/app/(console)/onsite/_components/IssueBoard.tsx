@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import {
   catLabel,
   filters,
+  plainIssueTitle,
   type FilterKey,
   nextStep,
   priorityLabel,
@@ -114,7 +115,7 @@ export function IssueBoard({
                 </div>
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-medium text-slate-900">{issue.title}</span>
+                    <span className="font-medium text-slate-900">{plainIssueTitle(issue.title)}</span>
                     <Badge>{catLabel[issue.category] ?? issue.category}</Badge>
                     <Badge tone="amber">{issue.metric_status === "untested" ? "尚未检查" : issue.metric_status}</Badge>
                   </div>
@@ -154,6 +155,9 @@ export function IssueBoard({
                   <div className="grid gap-4 xl:grid-cols-[1fr_1fr]">
                     <div className="space-y-2">
                       <div className="text-xs font-medium text-slate-500">查看依据</div>
+                      {plainIssueTitle(issue.title) !== issue.title ? (
+                        <p className="text-xs text-slate-500">内部名称：{issue.title}</p>
+                      ) : null}
                       <p className="text-sm text-slate-700">{issue.detail || "暂无详情。"}</p>
                       {issue.evidence ? (
                         <pre className="max-h-44 overflow-auto whitespace-pre-wrap rounded-md bg-white p-3 text-xs text-slate-500">

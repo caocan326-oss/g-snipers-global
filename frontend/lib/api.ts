@@ -602,6 +602,7 @@ export type GeoSummary = {
   sample_runs?: number;
   evidence_results?: number;
   latest_run_id?: string | null;
+  latest_run_at?: string | null;
 };
 
 export type GeoReport = {

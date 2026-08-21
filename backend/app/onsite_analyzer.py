@@ -41,7 +41,7 @@ FINDINGS = {
     "schema_org": ("schema", "GEO-ENT-002 缺少 Organization / WebSite schema", CRITICAL),
     "schema_product": ("schema", "GEO-ENT-002 产品/方案页缺少 Product 或 Service schema", SEV_HIGH),
     "schema_body_mismatch": ("schema", "GEO-SCHEMA-002 Schema 类型与正文弱一致", SEV_LOW),
-    "index": ("index", "收录状态未测（需 GSC）", CRITICAL),
+    "index": ("index", "收录状态未测（需 GSC）", SEV_LOW),
     "noindex": ("index", "页面声明 noindex", CRITICAL),
     "geo_noindex": ("index", "GEO-INDEX-001 关键页声明 noindex", CRITICAL),
     "canonical": ("canonical", "Canonical 未登记", CRITICAL),
@@ -171,17 +171,6 @@ def analyze_page(page: SitePage) -> list[Finding]:
                 detail="当前观察无 JSON-LD / schema。上线改 HTML 属 critical。须改稿后再确认，分析不落稿。",
                 severity=CRITICAL,
                 suggested_fix='{"@context":"https://schema.org","@type":"WebPage"}',
-                metric_status="untested",
-            )
-        )
-    if (page.index_status or "untested") == "untested":
-        out.append(
-            Finding(
-                category="index",
-                title=FINDINGS["index"][1],
-                detail="未接 GSC，不能从 HTML 编已收录或 0 页。",
-                severity=CRITICAL,
-                suggested_fix="有 Search Console 后再测。在此之前保持未测。",
                 metric_status="untested",
             )
         )

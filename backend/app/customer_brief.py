@@ -4,17 +4,17 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session, selectinload
 
-from app.models import GeoTicket, OnsiteIssue, SitePage, Tenant, User
+from app.models import GeoTicket, Inquiry, OnsiteIssue, SeoPerformanceRow, SerpRun, SitePage, Tenant, User
 from app.routers.geo.prompts import geo_summary
 from app.routers.onsite.common import (
     _active_issue,
-    _category_label,
     _issue_sort_key,
-    _page_label,
+    _page_short,
+    _plain_title,
     _severity_label,
-    _status_name,
 )
 from app.schemas import CustomerBriefOut, CustomerBriefSection
 
@@ -56,6 +56,10 @@ def _headline(
     return "这一周可以把网站改法和 AI 搜索检查对一下，再写给客户。"
 
 
+def _month_start(now: datetime) -> datetime:
+    return now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+
 def build_customer_brief(user: User, db: Session) -> CustomerBriefOut:
     tenant = db.get(Tenant, user.tenant_id)
     site_origin = (tenant.site_origin if tenant else "") or ""
@@ -78,8 +82,8 @@ def build_customer_brief(user: User, db: Session) -> CustomerBriefOut:
     active = [issue for issue in issues if _active_issue(issue)]
     critical = [issue for issue in active if issue.severity == "critical"]
     high = [issue for issue in active if issue.severity == "high"]
-    low = [issue for issue in active if issue.severity == "low"]
-    priority_issues = sorted(active, key=_issue_sort_key)[:5]
+    priority_issues = sorted(active, key=_issue_sort_key)[:3]
+    waiting = [issue for issue in active if issue.status in {"confirmed", "draft_applied"}]
 
     geo = geo_summary(user, db)
     tickets = (
@@ -93,12 +97,39 @@ def build_customer_brief(user: User, db: Session) -> CustomerBriefOut:
         .limit(5)
         .all()
     )
+    serp_ok = (
+        db.query(SerpRun)
+        .filter(SerpRun.tenant_id == user.tenant_id, SerpRun.status == "ok")
+        .all()
+    )
+    impressions = (
+        db.query(func.coalesce(func.sum(SeoPerformanceRow.impressions), 0))
+        .filter(SeoPerformanceRow.tenant_id == user.tenant_id)
+        .scalar()
+        or 0
+    )
+    clicks = (
+        db.query(func.coalesce(func.sum(SeoPerformanceRow.clicks), 0))
+        .filter(SeoPerformanceRow.tenant_id == user.tenant_id)
+        .scalar()
+        or 0
+    )
+    inquiry_count = (
+        db.query(func.count(Inquiry.id))
+        .filter(Inquiry.tenant_id == user.tenant_id, Inquiry.created_at >= _month_start(generated))
+        .scalar()
+        or 0
+    )
 
     untested: list[str] = []
     if not site_origin:
         untested.append("客户官网尚未登记。")
     if site_origin and not pages:
         untested.append("还没有查看网页，不能写网站结论。")
+    if not serp_ok:
+        untested.append("目标词在谷歌前排还没查过。")
+    if not impressions:
+        untested.append("谷歌搜索表现还没有可用数据。")
     if geo.untested:
         untested.append(f"AI 搜索还有 {geo.untested} 条尚未检查，不能写成已经被提到或给出了官网。")
     if geo.prompts and not geo.recorded:
@@ -110,21 +141,58 @@ def build_customer_brief(user: User, db: Session) -> CustomerBriefOut:
     if not untested:
         untested.append("这一轮该查的都有记录。没核对过的来源仍不要写成已推荐。")
 
+    findability: list[str] = []
+    if not site_origin:
+        findability.append("还没登记官网，谈不上老外搜不搜得到。")
+    elif not pages:
+        findability.append("官网已登记，但还没查看网页，不能写搜索结论。")
+    if serp_ok:
+        own = sum(1 for row in serp_ok if row.own_best_position is not None)
+        competitors = sum(1 for row in serp_ok if row.competitor_best_position is not None)
+        findability.append(f"目标词里，我方出现 {own} 次，竞品出现 {competitors} 次。")
+    elif site_origin:
+        findability.append("目标词在谷歌前排还没查过，这一项标尚未检查。")
+    if impressions:
+        findability.append(f"最近导入的搜索数据：曝光 {int(impressions)}，点击 {int(clicks)}。")
+    elif site_origin:
+        findability.append("谷歌搜索表现还没有可用数据，不能写成已经有曝光。")
+    discovery = [
+        issue
+        for issue in critical
+        if issue.category in {"index", "canonical", "crawl"} or "noindex" in (issue.title or "")
+    ]
+    for issue in discovery[:3]:
+        findability.append(f"{_plain_title(issue.title)}（{_page_short(issue.page)}）")
+    if geo.untested:
+        findability.append(f"AI 搜索还有 {geo.untested} 条尚未检查，不能写成已经被提到。")
+    if tickets:
+        findability.append(tickets[0].title)
+    if not findability:
+        findability.append("这一轮还没有足够记录，说明里只能写尚未检查。")
+
     this_week: list[str] = []
     if not site_origin:
         this_week.append("登记客户官网。")
     elif not pages:
         this_week.append("查看已登记网站的页面。")
-    if critical:
-        this_week.append(f"先处理 {len(critical)} 个紧急网站问题。")
-    elif high:
-        this_week.append(f"跟进 {len(high)} 个优先网站问题。")
-    if geo.untested:
-        this_week.append(f"补齐 {geo.untested} 条尚未检查的 AI 搜索。")
-    if tickets:
-        this_week.append(f"复查 {len(tickets)} 个 AI 搜索待处理项。")
+    for issue in priority_issues:
+        this_week.append(f"{_severity_label(issue.severity)}：{_plain_title(issue.title)}（{_page_short(issue.page)}）")
     if not this_week:
         this_week.append("对照已有记录，整理给客户的说明，并安排下一轮复查。")
+    this_week = this_week[:3]
+
+    retest: list[str] = []
+    if waiting:
+        retest.append(f"有 {len(waiting)} 处已经改过，需要再打开页面核对还在不在。")
+    elif priority_issues:
+        retest.append("这几处改完后，再抓一次对应页面核对。系统不会自己改官网。")
+    else:
+        retest.append("这一轮还没有要复查的改动。")
+
+    inquiry_items = [
+        f"这个月记到 {inquiry_count} 条。",
+        "软件不会自动抓邮箱。客户来问之后，由客户经理登记。",
+    ]
 
     headline = _headline(
         site_origin=site_origin,
@@ -137,45 +205,11 @@ def build_customer_brief(user: User, db: Session) -> CustomerBriefOut:
         cite_rate=geo.cite_rate,
     )
 
-    onsite_items = [
-        f"{_severity_label(issue.severity)} · {_category_label(issue.category)} · {issue.title}（{_page_label(issue.page)}，{_status_name(issue.status)}）"
-        for issue in priority_issues
-    ]
-    if not onsite_items:
-        onsite_items = ["这一轮没有未关闭的网站问题，或还没查看网页。"]
-
-    geo_items = [
-        f"{ticket.title}（{ticket.prompt.prompt_text if ticket.prompt else '买家问题'}）"
-        for ticket in tickets
-    ]
-    if not geo_items:
-        if geo.recorded:
-            geo_items = ["已有检查记录，这一轮还没有未关闭的待处理项。"]
-        else:
-            geo_items = ["还没有可写入说明的 AI 搜索记录。"]
-
     sections = [
-        CustomerBriefSection(key="this_week", title="这一周先做", items=this_week),
-        CustomerBriefSection(
-            key="onsite",
-            title="网站检查",
-            body=(
-                f"已查看 {len(pages)} 个页面，待处理 {len(active)} 个问题，"
-                f"其中紧急 {len(critical)} 个、优先 {len(high)} 个、常规 {len(low)} 个。"
-            ),
-            items=onsite_items,
-        ),
-        CustomerBriefSection(
-            key="geo",
-            title="AI 搜索可见度",
-            body=(
-                f"买家问题 {geo.prompts} 个，已有记录 {geo.recorded} 条，尚未检查 {geo.untested} 条。"
-                f"品牌被提到 {_display_rate(geo.mention_rate)}，给出官网 {_display_rate(geo.cite_rate)}，"
-                f"来源核对 {_display_rate(geo.verified_citation_rate)}。"
-            ),
-            items=geo_items,
-        ),
-        CustomerBriefSection(key="untested", title="还没查到的", items=untested),
+        CustomerBriefSection(key="findability", title="哪些地方让老外搜不到我", items=findability),
+        CustomerBriefSection(key="this_week", title="这周技术改哪三处", items=this_week),
+        CustomerBriefSection(key="retest", title="改完你再看一次", items=retest),
+        CustomerBriefSection(key="inquiries", title="这个月有几个老外来问过", body=f"这个月记到 {inquiry_count} 条。", items=inquiry_items),
     ]
 
     lines = [

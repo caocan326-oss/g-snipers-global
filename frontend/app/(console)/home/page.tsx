@@ -11,8 +11,6 @@ import {
   type GscAuthUrl,
   type GscStatus,
   type ProjectTargets,
-  type SiteArchive,
-  type SiteArchiveRestore,
   type Workbench,
 } from "@/lib/api";
 
@@ -25,21 +23,18 @@ import { PriorityAndDataSourceSection } from "./_components/PriorityAndDataSourc
 import { QuickLinksSection } from "./_components/QuickLinksSection";
 import { ReportReadinessSection } from "./_components/ReportReadinessSection";
 import { SeoPerformanceSection } from "./_components/SeoPerformanceSection";
-import { SiteArchivesSection } from "./_components/SiteArchivesSection";
 import { WorkbenchSummaryHeader } from "./_components/WorkbenchSummaryHeader";
 
 export default function HomePage() {
   const [data, setData] = useState<Workbench | null>(null);
   const [executionBoard, setExecutionBoard] = useState<ExecutionBoard | null>(null);
   const [targets, setTargets] = useState<ProjectTargets | null>(null);
-  const [archives, setArchives] = useState<SiteArchive[]>([]);
   const [gsc, setGsc] = useState<GscStatus | null>(null);
   const [error, setError] = useState("");
   const [executionError, setExecutionError] = useState("");
   const [note, setNote] = useState("");
   const [days, setDays] = useState(28);
   const [targetForm, setTargetForm] = useState<TargetForm>({ site_origin: "", markets: "", keywords: "", competitors: "" });
-  const [archiveBusyId, setArchiveBusyId] = useState("");
   const [executionLoading, setExecutionLoading] = useState(false);
 
   useEffect(() => {
@@ -65,7 +60,6 @@ export default function HomePage() {
     api<GscStatus>("/api/onsite/gsc/status")
       .then(setGsc)
       .catch(() => undefined);
-    loadArchives();
   }, []);
 
   const reviewTotal = useMemo(() => {
@@ -133,15 +127,13 @@ export default function HomePage() {
   }
 
   async function reloadWorkbench() {
-    const [nextWorkbench, nextTargets, nextArchives, nextExecutionBoard] = await Promise.all([
+    const [nextWorkbench, nextTargets, nextExecutionBoard] = await Promise.all([
       api<Workbench>(`/api/dashboard/workbench?days=${days}`),
       api<ProjectTargets>("/api/project-targets"),
-      api<SiteArchive[]>("/api/site-context/archives"),
       api<ExecutionBoard>("/api/execution/items"),
     ]);
     setData(nextWorkbench);
     setTargets(nextTargets);
-    setArchives(nextArchives);
     setExecutionBoard(nextExecutionBoard);
     setExecutionError("");
     const targetMarkets = activeTargetMarkets(nextTargets);
@@ -153,12 +145,6 @@ export default function HomePage() {
     });
   }
 
-  function loadArchives() {
-    api<SiteArchive[]>("/api/site-context/archives")
-      .then(setArchives)
-      .catch(() => undefined);
-  }
-
   function loadExecutionBoard() {
     setExecutionLoading(true);
     setExecutionError("");
@@ -166,38 +152,6 @@ export default function HomePage() {
       .then(setExecutionBoard)
       .catch((e) => setExecutionError(e instanceof Error ? e.message : "待处理队列加载失败"))
       .finally(() => setExecutionLoading(false));
-  }
-
-  async function restoreArchive(item: SiteArchive) {
-    setError("");
-    setNote("");
-    setArchiveBusyId(item.id);
-    try {
-      const res = await api<SiteArchiveRestore>(`/api/site-context/archives/${item.id}/restore`, { method: "POST" });
-      await reloadWorkbench();
-      setNote(res.note || `已恢复 ${res.site_origin}`);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "恢复历史网站失败");
-    } finally {
-      setArchiveBusyId("");
-    }
-  }
-
-  async function deleteArchive(item: SiteArchive) {
-    const confirmText = window.prompt(`删除 ${item.site_origin} 的历史数据？\n会删除该历史快照中的抓取记录、AI 搜索检查、测速、排名和说明记录。\n请输入网站域名或 DELETE 确认。`);
-    if (!confirmText) return;
-    setError("");
-    setNote("");
-    setArchiveBusyId(item.id);
-    try {
-      await api(`/api/site-context/archives/${item.id}`, { method: "DELETE", body: JSON.stringify({ confirm: confirmText }) });
-      await reloadWorkbench();
-      setNote(`已删除历史网站：${item.site_origin}`);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "删除历史网站失败");
-    } finally {
-      setArchiveBusyId("");
-    }
   }
 
   async function saveTargets() {
@@ -276,14 +230,6 @@ export default function HomePage() {
       <PriorityAndDataSourceSection data={data} gsc={gsc} untestedTotal={untestedTotal} perf={perf} authorizeGsc={authorizeGsc} />
 
       <DiagnosticTargetsSection targets={targets} targetForm={targetForm} setTargetForm={setTargetForm} saveTargets={saveTargets} note={note} error={error} />
-
-      <SiteArchivesSection
-        archives={archives}
-        archiveBusyId={archiveBusyId}
-        restoreArchive={restoreArchive}
-        deleteArchive={deleteArchive}
-        loadArchives={loadArchives}
-      />
 
       <DeliveryBoundarySection data={data} days={days} setDays={setDays} />
 

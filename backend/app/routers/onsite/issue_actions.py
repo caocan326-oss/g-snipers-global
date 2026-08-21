@@ -331,6 +331,17 @@ def ai_onsite_engine(
         site_created, site_skipped = _reconcile_site_patterns(db, user, pages)
         created += site_created
         skipped += site_skipped
+    if body.step == "analyze":
+        db.commit()
+        extra = f" 又查出 {created} 条。不是网站更差了，是清单更完整。" if created else ""
+        return AiAssistOut(
+            status="ok" if created or skipped else "skipped",
+            step=body.step,
+            processed=created + skipped,
+            remaining=0,
+            limit=limit,
+            detail=f"只重新检查了一遍，没有写改法。新建 {created} 条，刷新 {skipped} 条。{extra}".strip(),
+        )
     issues = [i for i in _ai_issue_candidates(db, user) if _issue_needs_ai(i)]
     if not issues:
         db.commit()
@@ -340,7 +351,7 @@ def ai_onsite_engine(
             processed=0,
             remaining=0,
             limit=limit,
-            detail=f"没有待处理问题。规则诊断新建 {created} 条，刷新 {skipped} 条。",
+            detail="没有待写的改法。" if body.step == "content" else f"没有待处理问题。规则诊断新建 {created} 条，刷新 {skipped} 条。",
         )
     last: dict = {"status": UNCONFIGURED, "step": body.step, "detail": ""}
     processed = drafted = ok = errors = unconfigured = 0
@@ -362,12 +373,17 @@ def ai_onsite_engine(
             drafted += 1
     db.commit()
     remaining = max(len(issues) - processed, 0)
-    last["detail"] = (
-        f"本次已处理 {processed} 条 AI 建议；"
-        f"生成草案 {drafted} 条，成功 {ok} 条，未配置 {unconfigured} 条，错误 {errors} 条；"
-        f"剩余约 {remaining} 条可继续处理。"
-        f"规则诊断新建 {created} 条，刷新 {skipped} 条。"
-    )
+    if body.step == "content":
+        last["detail"] = f"已写 {drafted} 条改法，还剩 {remaining} 条。这次只写改法，没有再查一遍。"
+    else:
+        last["detail"] = (
+            f"本次已处理 {processed} 条 AI 建议；"
+            f"生成草案 {drafted} 条，成功 {ok} 条，未配置 {unconfigured} 条，错误 {errors} 条；"
+            f"剩余约 {remaining} 条可继续处理。"
+            f"规则诊断新建 {created} 条，刷新 {skipped} 条。"
+        )
+        if created:
+            last["detail"] += " 又查出新问题，不是网站更差了。"
     last["processed"] = processed
     last["remaining"] = remaining
     last["limit"] = limit

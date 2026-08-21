@@ -49,6 +49,23 @@ def test_onsite_ai_does_not_fake_when_unconfigured(client: TestClient, demo_user
     assert after["meta_description"] == before_desc
 
 
+def test_onsite_ai_analyze_does_not_write_drafts(client: TestClient, demo_user) -> None:
+    headers = auth_header(client)
+    page = client.post(
+        "/api/onsite/pages",
+        headers=headers,
+        json={"path": "/en-us/recheck", "locale": "en-US", "title": "Recheck"},
+    ).json()
+    client.post(f"/api/onsite/pages/{page['id']}/analyze", headers=headers)
+    before = client.get(f"/api/onsite/pages/{page['id']}", headers=headers).json()
+    assert before["issues"]
+    res = client.post("/api/onsite/ai", headers=headers, json={"step": "analyze", "limit": 5})
+    assert res.status_code == 200, res.text
+    assert "只重新检查" in res.json()["detail"]
+    after = client.get(f"/api/onsite/pages/{page['id']}", headers=headers).json()
+    assert all(i["proposed_change"] == "" for i in after["issues"])
+
+
 def test_geo_ai_untested_or_unconfigured_not_invented(client: TestClient, demo_user) -> None:
     headers = auth_header(client)
     prompt = client.post(

@@ -95,7 +95,7 @@ def compute_state(db: Session, user: User) -> GuideState:
     if needs_draft > 0:
         return GuideState(
             "diagnose",
-            GuideAction("generate_drafts", "生成改法"),
+            GuideAction("generate_drafts", "写出改法"),
             origin,
             pages,
             fetched,
@@ -170,7 +170,7 @@ def fallback_narrative(state: GuideState) -> str:
         return f"当前网站是 {origin}。下一步只读取现有页面，不会修改线上内容。"
     if state.current == "diagnose":
         high = "其中有优先处理项。" if state.open_high else ""
-        return f"已查看 {state.fetched} 个页面，还有 {state.needs_draft} 条未写改法。{high}下一步生成改法，上线前仍需人工确认。"
+        return f"已查看 {state.fetched} 个页面，还有 {state.needs_draft} 条未写改法。{high}点主按钮会把剩下的改法写完，不会再查一遍，所以问题数不会因此变多。"
     if state.current == "confirm":
         return f"已有 {state.ready_to_execute} 条改法待确认。系统不会直接改客户网站，确认后才能复查。"
     if state.complete:

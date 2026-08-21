@@ -111,3 +111,10 @@ export function displayRate(value: string | null | undefined) {
   if (!value || value === "未测") return "尚未检查";
   return value;
 }
+
+export function formatCheckAt(value: string | null | undefined) {
+  if (!value) return "暂无";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "暂无";
+  return date.toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}

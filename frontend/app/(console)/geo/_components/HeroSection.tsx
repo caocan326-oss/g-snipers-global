@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { GeoProviderStatus, GeoProviderStatusList, GeoSummary } from "@/lib/api";
 
-import { displayRate, providerRoleLabel } from "../_helpers";
+import { displayRate, formatCheckAt, providerRoleLabel } from "../_helpers";
 
 export function HeroSection({
   summary,
@@ -54,7 +54,7 @@ export function HeroSection({
         <div className="grid w-full gap-2 text-sm md:grid-cols-3 xl:w-[560px]">
           <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
             <div className="flex items-center gap-2 text-xs text-slate-500"><Activity className="h-4 w-4" />最近一次检查</div>
-            <div className="mt-1 truncate font-mono text-xs font-medium text-slate-900">{summary?.latest_run_id ?? "暂无"}</div>
+            <div className="mt-1 font-medium text-slate-900">{formatCheckAt(summary?.latest_run_at)}</div>
           </div>
           <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
             <div className="flex items-center gap-2 text-xs text-slate-500"><Database className="h-4 w-4" />检查记录</div>

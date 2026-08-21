@@ -1,7 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import type { GeoSummary } from "@/lib/api";
 
-import { displayRate } from "../_helpers";
+import { displayRate, formatCheckAt } from "../_helpers";
 
 export function MetricsGrid({ summary }: { summary: GeoSummary | null }) {
   return (
@@ -68,7 +68,7 @@ export function MetricsGrid({ summary }: { summary: GeoSummary | null }) {
         <Card className="rounded-md">
           <CardContent className="py-4 text-sm">
             <div className="text-slate-500">最近一次检查</div>
-            <div className="mt-1 truncate font-mono text-xs text-slate-900">{summary?.latest_run_id ?? "暂无"}</div>
+            <div className="mt-1 font-medium text-slate-900">{formatCheckAt(summary?.latest_run_at)}</div>
           </CardContent>
         </Card>
       </div>

@@ -32,7 +32,7 @@ export function DiagnosticTargetsSection({
             <h2 className="text-lg font-semibold text-slate-950">客户诊断目标</h2>
             <Badge tone={targets?.readiness === "ready" ? "green" : "amber"}>{targets?.readiness === "ready" ? "可开跑" : "待补"}</Badge>
           </div>
-          <p className="mt-1 text-sm text-slate-500">先明确客户官网、目标国家、核心关键词和竞品。更换官网会归档当前工作台；同一官网会恢复历史，不会再造空站。</p>
+          <p className="mt-1 text-sm text-slate-500">先明确客户官网、目标国家、核心关键词和竞品。</p>
         </div>
         <Button type="button" onClick={saveTargets}>保存诊断目标</Button>
       </div>

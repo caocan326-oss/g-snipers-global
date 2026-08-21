@@ -491,3 +491,56 @@ def test_crawl_site_discovers_sitemap_links_and_report(client: TestClient, demo_
     assert report.status_code == 200
     assert "网站检查说明" in report.json()["markdown"]
     assert "/product" in report.json()["markdown"]
+
+
+def test_crawl_site_drops_demo_leftover_pages(client: TestClient, demo_user, db, monkeypatch) -> None:
+    headers = auth_header(client)
+    client.patch("/api/onsite/settings", headers=headers, json={"site_origin": ORIGIN})
+    db.add_all(
+        [
+            SitePage(
+                tenant_id=demo_user.tenant_id,
+                path="/qa-test-page",
+                locale="en-US",
+                title="QA Test Page",
+                crawl_status="ok",
+                discovery_source="manual",
+            ),
+            SitePage(
+                tenant_id=demo_user.tenant_id,
+                path="/en-us/smart-lock-installation-renters",
+                locale="en-US",
+                title="Smart lock installation for renters",
+                crawl_status="ok",
+                discovery_source="seed",
+            ),
+        ]
+    )
+    db.commit()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/robots.txt":
+            return httpx.Response(200, text=f"User-agent: *\nAllow: /\nSitemap: {ORIGIN}/sitemap.xml\n")
+        if request.url.path == "/sitemap.xml":
+            return httpx.Response(
+                200,
+                text=f"""<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>{ORIGIN}/product</loc></url>
+</urlset>""",
+            )
+        if request.url.path in {"/", "/product"}:
+            return httpx.Response(200, text=SAMPLE_HTML)
+        return httpx.Response(404, text="no")
+
+    import app.onsite_fetch as onsite_fetch
+
+    monkeypatch.setattr(onsite_fetch, "TEST_TRANSPORT", httpx.MockTransport(handler))
+    crawled = client.post("/api/onsite/crawl-site", headers=headers, json={"max_urls": 5, "max_depth": 1})
+    assert crawled.status_code == 200, crawled.text
+    assert "演示残留页" in crawled.json()["note"]
+
+    paths = {page["path"] for page in client.get("/api/onsite/pages", headers=headers).json()}
+    assert "/product" in paths
+    assert "/qa-test-page" not in paths
+    assert "/en-us/smart-lock-installation-renters" not in paths

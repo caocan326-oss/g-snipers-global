@@ -16,6 +16,7 @@ from .constants import (
     AI_BATCH_MAX_LIMIT,
     CATEGORY_GUIDANCE,
     CATEGORY_LABELS,
+    ISSUE_PLAIN_TITLES,
     CRAWL_LABELS,
     CSV_ALIASES,
     OPENISH,
@@ -98,7 +99,7 @@ def _issue_out(row: OnsiteIssue, page: SitePage | None = None) -> OnsiteIssueOut
         page_path=p.path if p else "",
         page_title=p.title if p else "",
         category=row.category,
-        title=row.title,
+        title=_plain_title(row.title),
         detail=row.detail,
         proposed_change=row.proposed_change,
         severity=row.severity or "low",
@@ -239,6 +240,16 @@ def _severity_label(severity: str) -> str:
 
 def _category_label(category: str) -> str:
     return CATEGORY_LABELS.get(category, category or "其他")
+
+
+def _plain_title(title: str) -> str:
+    return ISSUE_PLAIN_TITLES.get(title, title)
+
+
+def _page_short(page: SitePage | None) -> str:
+    if page is None:
+        return "未找到的页面"
+    return page.title or page.meta_title or page.path or "未命名页面"
 
 
 def _page_label(page: SitePage | None) -> str:

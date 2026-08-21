@@ -32,6 +32,7 @@ import {
   type SerpRunBatch,
   type SitePage,
 } from "@/lib/api";
+import { explainServiceError } from "@/lib/errors";
 
 import { DiagnosisSection } from "./_components/DiagnosisSection";
 import { IssueBoard } from "./_components/IssueBoard";
@@ -361,15 +362,18 @@ export default function OnsiteBoardPage() {
       const ok = res.length - failed.length;
       const label = usingGoogle ? "Google 测速" : "海外打开检查";
       if (!res.length || failed.length === res.length) {
-        const reason = failed[0]?.detail || (usingGoogle ? "没有测速结果。中转或 PageSpeed 可能超时。" : "没有测速结果。17CE 海外节点可能还没返回。");
+        const reason = explainServiceError(
+          failed[0]?.detail || (usingGoogle ? "没有测速结果。中转或 PageSpeed 可能超时。" : "没有测速结果。17CE 海外节点可能还没返回。"),
+          "speed",
+        );
         setError(`${label}未完成：${reason}`);
         return;
       }
       setNote(`${label}完成：成功 ${ok} 项，失败 ${failed.length} 项。`);
-      if (failed.length) setError(failed[0]?.detail || `部分页面${label}失败。`);
+      if (failed.length) setError(explainServiceError(failed[0]?.detail || `部分页面${label}失败。`, "speed"));
       load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "测速失败");
+      setError(explainServiceError(e instanceof Error ? e.message : "测速失败", "speed"));
     } finally {
       setBusyId("");
     }
@@ -397,7 +401,7 @@ export default function OnsiteBoardPage() {
       setNote(res.note || `SERP 查询完成：${res.ran} 个关键词。`);
       load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "SERP 查询失败");
+      setError(explainServiceError(e instanceof Error ? e.message : "SERP 查询失败", "rank"));
     } finally {
       setBusyId("");
     }
@@ -590,7 +594,7 @@ export default function OnsiteBoardPage() {
       return;
     }
     if (guide.action_key === "generate_drafts") {
-      await analyze();
+      await writeDrafts();
       return;
     }
     if (guide.action_key === "review_drafts" || guide.action_key === "retest_queue") {
@@ -609,22 +613,64 @@ export default function OnsiteBoardPage() {
     load();
   }
 
-  async function analyze() {
+  async function writeDrafts() {
     setError("");
-    setNote("正在生成本批改法，请稍等…");
     setBusyId("ai-batch");
+    let written = 0;
+    let remaining = 1;
+    let stopped = "";
+    try {
+      while (remaining > 0) {
+        setNote(written ? `已写 ${written} 条，继续写剩下的…` : "正在写改法，不会再查一遍…");
+        const res = await api<AiAssist>("/api/onsite/ai", {
+          method: "POST",
+          body: JSON.stringify({ step: "content", limit: 5 }),
+          timeoutMs: 90000,
+        });
+        written += res.processed;
+        remaining = res.remaining;
+        if (res.status === "未配置") {
+          stopped = res.detail || "AI 建议服务未配置，本次不会生成建议。";
+          break;
+        }
+        if (res.processed === 0) break;
+      }
+      if (stopped) {
+        setError(stopped);
+      } else {
+        setNote(
+          remaining
+            ? `已写 ${written} 条改法，还剩 ${remaining} 条，再点一次继续。这次只写改法，问题数不会因此变多。`
+            : `已写完 ${written} 条改法。这次只写改法，问题数不会因此变多。`,
+        );
+      }
+      load();
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "写改法失败";
+      setError(
+        message.includes("Gateway Time-out") || message.includes("超时")
+          ? `已写 ${written} 条。这次超时了，再点一次会从剩下的继续，不会从头再查。`
+          : message,
+      );
+    } finally {
+      setBusyId("");
+    }
+  }
+
+  async function recheckSite() {
+    setError("");
+    setNote("正在再检查一遍，不会立刻写改法…");
+    setBusyId("ai-recheck");
     try {
       const res = await api<AiAssist>("/api/onsite/ai", {
         method: "POST",
-        body: JSON.stringify({ step: "all", limit: 5 }),
+        body: JSON.stringify({ step: "analyze", limit: 5 }),
+        timeoutMs: 90000,
       });
-      const more = res.remaining ? ` 还有约 ${res.remaining} 条，继续点击可处理下一批。` : "";
-      setNote((res.detail || `本批 AI 建议完成：${res.status}`) + more);
-      if (res.status === "未配置") setError(res.detail || "AI 建议服务未配置，本次不会生成建议。");
+      setNote(res.detail || "检查完成。");
       load();
     } catch (e) {
-      const message = e instanceof Error ? e.message : "批量生成 AI 建议失败";
-      setError(message.includes("Gateway Time-out") ? "网关超时：本批 AI 处理耗时过长。请稍后重试，系统现在已改为小批量处理。" : message);
+      setError(e instanceof Error ? e.message : "再检查失败");
     } finally {
       setBusyId("");
     }
@@ -748,7 +794,8 @@ export default function OnsiteBoardPage() {
         busyId={busyId}
         onPrimary={() => void runPrimary()}
         crawlOrSeed={crawlOrSeed}
-        analyze={analyze}
+        writeDrafts={() => void writeDrafts()}
+        recheckSite={() => void recheckSite()}
         downloadReport={downloadReport}
         downloadReportTable={downloadReportTable}
       />

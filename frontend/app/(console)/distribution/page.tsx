@@ -131,7 +131,7 @@ export default function ReportDeliveryPage() {
         <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <Badge tone="brand">客户说明</Badge>
+              <Badge tone="brand">给客户看的这一页</Badge>
               <Badge tone={brief.untested.some((item) => item.includes("尚未检查") || item.includes("尚未")) ? "amber" : "green"}>
                 {brief.this_week[0] ?? "可预览"}
               </Badge>

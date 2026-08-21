@@ -552,6 +552,7 @@ class GeoSummary(BaseModel):
     sample_runs: int = 0
     evidence_results: int = 0
     latest_run_id: str | None = None
+    latest_run_at: datetime | None = None
 
 
 class GeoSeedOut(BaseModel):

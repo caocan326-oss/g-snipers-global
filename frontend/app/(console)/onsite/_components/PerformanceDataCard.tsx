@@ -13,6 +13,7 @@ import type {
   IntegrationSettings,
   SeoPerformanceSummary,
 } from "@/lib/api";
+import { explainServiceError } from "@/lib/errors";
 
 type IntegrationForm = {
   gsc_oauth_client_id: string;
@@ -276,7 +277,7 @@ export function PerformanceDataCard({
               : (integrations?.google_relay_configured ? "测首页（Google PageSpeed）" : "从海外节点打开首页")}
           </Button>
           {performance?.speed_latest[0]?.detail ? (
-            <p className="mt-2 text-xs leading-5 text-slate-500">{performance.speed_latest[0].detail}</p>
+            <p className="mt-2 text-xs leading-5 text-slate-500">{explainServiceError(performance.speed_latest[0].detail, "speed")}</p>
           ) : (
             <p className="mt-2 text-xs text-slate-500">
               {integrations?.google_relay_configured
@@ -292,19 +293,11 @@ export function PerformanceDataCard({
             <Search className="h-4 w-4" />
             Google 关键词排名检查
           </div>
-          <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-            <div className="rounded-md bg-slate-50 p-2">
-              <div className="text-lg font-semibold">{performance?.serp?.total_runs ?? 0}</div>
-              <div className="text-[11px] text-slate-500">查询轮次</div>
+          <div className="mt-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-3">
+            <div className="text-xl font-semibold text-slate-950">
+              我方出现 {performance?.serp?.own_visible_runs ?? 0} / 竞品出现 {performance?.serp?.competitor_visible_runs ?? 0}
             </div>
-            <div className="rounded-md bg-slate-50 p-2">
-              <div className="text-lg font-semibold">{performance?.serp?.own_visible_runs ?? 0}</div>
-              <div className="text-[11px] text-slate-500">我方出现</div>
-            </div>
-            <div className="rounded-md bg-slate-50 p-2">
-              <div className="text-lg font-semibold">{performance?.serp?.competitor_visible_runs ?? 0}</div>
-              <div className="text-[11px] text-slate-500">竞品出现</div>
-            </div>
+            <p className="mt-1 text-xs text-slate-500">查了 {performance?.serp?.total_runs ?? 0} 轮目标词。没出现不代表网站坏了，只是这几个词前排还看不见客户。</p>
           </div>
           <Button type="button" onClick={runSerp} disabled={busyId === "serp" || !performance?.serp?.configured} className="mt-3 w-full">
             <Search className="mr-2 h-4 w-4" />

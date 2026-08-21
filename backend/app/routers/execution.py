@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.auth import get_current_user
 from app.database import get_db
 from app.models import BacklinkGap, GeoTicket, OnsiteIssue, SitePage, User
+from app.routers.onsite.common import _category_label, _page_short, _plain_title
 from app.schemas import ExecutionBoardOut, ExecutionItemOut
 
 router = APIRouter(prefix="/api/execution", tags=["execution"])
@@ -38,8 +39,8 @@ def list_execution_items(user: User = Depends(get_current_user), db: Session = D
             ExecutionItemOut(
                 id=issue.id,
                 source_module="seo",
-                title=issue.title,
-                subtitle=f"{page.path if page else ''} · {issue.category}",
+                title=_plain_title(issue.title),
+                subtitle=f"{_page_short(page)} · {_category_label(issue.category)}",
                 href=f"/onsite/{issue.page_id}",
                 status=issue.status,
                 priority=priority,

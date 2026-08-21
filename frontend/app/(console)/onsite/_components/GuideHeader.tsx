@@ -18,7 +18,8 @@ export function GuideHeader({
   busyId,
   onPrimary,
   crawlOrSeed,
-  analyze,
+  writeDrafts,
+  recheckSite,
   downloadReport,
   downloadReportTable,
 }: {
@@ -27,7 +28,8 @@ export function GuideHeader({
   busyId: string;
   onPrimary: () => void;
   crawlOrSeed: () => void;
-  analyze: () => void;
+  writeDrafts: () => void;
+  recheckSite: () => void;
   downloadReport: () => void;
   downloadReportTable: () => void;
 }) {
@@ -99,9 +101,13 @@ export function GuideHeader({
               <ClipboardList className="mr-2 h-4 w-4" />
               补充更多页面
             </Button>
-            <Button type="button" variant="outline" size="sm" onClick={analyze} disabled={busyId === "ai-batch"}>
+            <Button type="button" variant="outline" size="sm" onClick={writeDrafts} disabled={busyId === "ai-batch"}>
               <Bot className="mr-2 h-4 w-4" />
-              {busyId === "ai-batch" ? "生成中…" : "再生成一批改法"}
+              {busyId === "ai-batch" ? "处理中…" : "继续写剩下的改法"}
+            </Button>
+            <Button type="button" variant="outline" size="sm" onClick={recheckSite} disabled={busyId === "ai-recheck"}>
+              <Bot className="mr-2 h-4 w-4" />
+              {busyId === "ai-recheck" ? "检查中…" : "再检查一遍"}
             </Button>
             <Button type="button" variant="outline" size="sm" onClick={downloadReport}>
               <Download className="mr-2 h-4 w-4" />
