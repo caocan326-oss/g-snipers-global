@@ -1,5 +1,51 @@
 import type { GscStatus, ProjectTargets, Workbench, WorkbenchSeoPerformance } from "@/lib/api";
 
+export type DiagnosticCountry = {
+  code: string;
+  name: string;
+  region: string;
+  locale: string;
+};
+
+export type TargetCompetitorDraft = { name: string; website: string };
+
+export type TargetForm = {
+  site_origin: string;
+  country_codes: string[];
+  extraMarkets: DiagnosticCountry[];
+  keywords: string;
+  competitors: TargetCompetitorDraft[];
+};
+
+export const DIAGNOSTIC_COUNTRIES: DiagnosticCountry[] = [
+  { code: "US", name: "美国", region: "北美", locale: "en-US" },
+  { code: "GB", name: "英国", region: "欧洲", locale: "en-GB" },
+  { code: "DE", name: "德国", region: "欧洲", locale: "de-DE" },
+  { code: "JP", name: "日本", region: "亚太", locale: "ja-JP" },
+  { code: "AE", name: "阿联酋", region: "中东", locale: "en-AE" },
+  { code: "AU", name: "澳大利亚", region: "亚太", locale: "en-AU" },
+];
+
+export const emptyTargetForm: TargetForm = {
+  site_origin: "",
+  country_codes: [],
+  extraMarkets: [],
+  keywords: "",
+  competitors: [{ name: "", website: "" }],
+};
+
+function uniqueTexts(values: string[]) {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const value of values) {
+    const key = value.trim().toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(value.trim());
+  }
+  return out;
+}
+
 export const toneBorder: Record<string, string> = {
   default: "border-slate-200",
   green: "border-emerald-200",
@@ -68,6 +114,107 @@ export function splitKeywordInput(text: string) {
       if (!value) return [];
       return /[\u4e00-\u9fff]/.test(value) ? value.split(/\s+/).map((item) => item.trim()).filter(Boolean) : [value];
     });
+}
+
+export function formFromTargets(targets: ProjectTargets | null): TargetForm {
+  const markets = activeTargetMarkets(targets);
+  const country_codes: string[] = [];
+  const extraMarkets: DiagnosticCountry[] = [];
+  for (const market of markets) {
+    const code = (market.country_code || "").toUpperCase();
+    const known = DIAGNOSTIC_COUNTRIES.find((item) => item.code === code);
+    if (known) {
+      if (!country_codes.includes(known.code)) country_codes.push(known.code);
+      continue;
+    }
+    extraMarkets.push({
+      code: code || market.name.slice(0, 2).toUpperCase(),
+      name: market.name,
+      region: market.region || "",
+      locale: market.primary_locale || "en-US",
+    });
+  }
+  const keywords = uniqueTexts(markets.flatMap((market) => market.demand_signals.map((row) => row.theme)));
+  const competitors: TargetCompetitorDraft[] = [];
+  const seen = new Set<string>();
+  for (const market of markets) {
+    for (const row of market.competitors) {
+      const key = `${(row.name || "").trim().toLowerCase()}|${(row.website || "").trim().toLowerCase()}`;
+      if (!row.name.trim() || seen.has(key)) continue;
+      seen.add(key);
+      competitors.push({ name: row.name, website: row.website || "" });
+    }
+  }
+  return {
+    site_origin: targets?.site_origin || "",
+    country_codes,
+    extraMarkets,
+    keywords: keywords.join("\n"),
+    competitors: competitors.length ? competitors : [{ name: "", website: "" }],
+  };
+}
+
+export function selectedDiagnosticMarkets(form: TargetForm): DiagnosticCountry[] {
+  const picked = form.country_codes
+    .map((code) => DIAGNOSTIC_COUNTRIES.find((item) => item.code === code))
+    .filter((item): item is DiagnosticCountry => Boolean(item));
+  return [...picked, ...form.extraMarkets];
+}
+
+function keywordLooksCjk(theme: string) {
+  return /[\u3040-\u30ff\u4e00-\u9fff]/.test(theme);
+}
+
+function keywordLooksArabic(theme: string) {
+  return /[\u0600-\u06ff]/.test(theme);
+}
+
+export function marketsForKeyword(theme: string, markets: DiagnosticCountry[]) {
+  if (!markets.length) return [];
+  const japan = markets.filter((item) => item.code === "JP");
+  const gulf = markets.filter((item) => item.code === "AE");
+  if (keywordLooksCjk(theme)) return japan.length ? japan : markets.slice(0, 1);
+  if (keywordLooksArabic(theme)) return gulf.length ? gulf : markets.slice(0, 1);
+  const western = markets.filter((item) => item.code !== "JP");
+  return western.length ? western : markets;
+}
+
+export function projectTargetsPayload(form: TargetForm, current: ProjectTargets | null = null) {
+  const selected = selectedDiagnosticMarkets(form);
+  const existingByCode = new Map(
+    activeTargetMarkets(current).map((market) => [market.country_code.toUpperCase(), market])
+  );
+  const markets = selected.map((item) => {
+    const existing = existingByCode.get(item.code);
+    return {
+      name: existing?.name || item.name,
+      region: existing?.region || item.region,
+      country_code: item.code,
+      primary_locale: existing?.primary_locale || item.locale,
+      status: "priority" as const,
+      opportunity_score: existing?.opportunity_score ?? 70,
+    };
+  });
+  return {
+    markets,
+    keywords: splitKeywordInput(form.keywords).flatMap((theme) =>
+      marketsForKeyword(theme, selected).map((item) => ({
+        theme,
+        locale: item.locale,
+        country_code: item.code,
+        intent: "commercial",
+        intensity: 4,
+      }))
+    ),
+    competitors: form.competitors
+      .map((row) => ({ name: row.name.trim(), website: row.website.trim() }))
+      .filter((row) => row.name)
+      .map((row) => ({
+        name: row.name,
+        website: row.website,
+        country_code: markets[0]?.code,
+      })),
+  };
 }
 
 export function reportReadyChecks(data: Workbench, targets: ProjectTargets | null, gsc: GscStatus | null) {

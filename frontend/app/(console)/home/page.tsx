@@ -14,9 +14,9 @@ import {
   type Workbench,
 } from "@/lib/api";
 
-import { activeTargetMarkets, reportReadyChecks, seoPerformanceVerdict, splitKeywordInput } from "./_helpers";
+import { emptyTargetForm, formFromTargets, projectTargetsPayload, reportReadyChecks, seoPerformanceVerdict } from "./_helpers";
 import { DeliveryBoundarySection } from "./_components/DeliveryBoundarySection";
-import { DiagnosticTargetsSection, type TargetForm } from "./_components/DiagnosticTargetsSection";
+import { DiagnosticTargetsSection } from "./_components/DiagnosticTargetsSection";
 import { PillarsOverview } from "./_components/PillarsOverview";
 import { PriorityQueueSection } from "./_components/PriorityQueueSection";
 import { PriorityAndDataSourceSection } from "./_components/PriorityAndDataSourceSection";
@@ -31,16 +31,17 @@ export default function HomePage() {
   const [targets, setTargets] = useState<ProjectTargets | null>(null);
   const [gsc, setGsc] = useState<GscStatus | null>(null);
   const [error, setError] = useState("");
+  const [loadError, setLoadError] = useState("");
   const [executionError, setExecutionError] = useState("");
   const [note, setNote] = useState("");
   const [days, setDays] = useState(28);
-  const [targetForm, setTargetForm] = useState<TargetForm>({ site_origin: "", markets: "", keywords: "", competitors: "" });
+  const [targetForm, setTargetForm] = useState(emptyTargetForm);
   const [executionLoading, setExecutionLoading] = useState(false);
 
   useEffect(() => {
     api<Workbench>(`/api/dashboard/workbench?days=${days}`)
       .then(setData)
-      .catch((e) => setError(e.message));
+      .catch((e) => setLoadError(e.message));
   }, [days]);
 
   useEffect(() => {
@@ -48,15 +49,9 @@ export default function HomePage() {
     api<ProjectTargets>("/api/project-targets")
       .then((res) => {
         setTargets(res);
-        const targetMarkets = activeTargetMarkets(res);
-        setTargetForm({
-          site_origin: res.site_origin || "",
-          markets: targetMarkets.map((m) => [m.name, m.region, m.country_code, m.primary_locale].filter(Boolean).join(" | ")).join("\n"),
-          keywords: targetMarkets.flatMap((m) => m.demand_signals.map((s) => s.theme)).join("\n"),
-          competitors: targetMarkets.flatMap((m) => m.competitors.map((c) => [c.name, c.website].filter(Boolean).join(" | "))).join("\n"),
-        });
+        setTargetForm(formFromTargets(res));
       })
-      .catch((e) => setError(e.message));
+      .catch((e) => setLoadError(e.message));
     api<GscStatus>("/api/onsite/gsc/status")
       .then(setGsc)
       .catch(() => undefined);
@@ -68,7 +63,7 @@ export default function HomePage() {
     return data.summary.onsite_open_critical + data.summary.onsite_open_high + data.summary.geo_tickets_open + data.summary.offsite_gaps;
   }, [data, executionBoard]);
 
-  if (error) return <p className="text-sm text-red-600">{error}</p>;
+  if (loadError) return <p className="text-sm text-red-600">{loadError}</p>;
   if (!data) return <p className="text-sm text-slate-500">加载中…</p>;
 
   const perf = data.seo_performance;
@@ -105,32 +100,6 @@ export default function HomePage() {
     },
   ];
 
-  function parseMarkets(text: string) {
-    return text
-      .split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .map((line) => {
-        const [name, region = "", country_code = "", primary_locale = "en-US"] = line.split("|").map((item) => item.trim());
-        return { name, region, country_code: country_code || name.slice(0, 2).toUpperCase(), primary_locale, status: "priority", opportunity_score: 70 };
-      });
-  }
-
-  function parseKeywords(text: string) {
-    return splitKeywordInput(text).map((theme) => ({ theme, locale: "en-US", intent: "commercial", intensity: 4 }));
-  }
-
-  function parseCompetitors(text: string) {
-    return text
-      .split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .map((line) => {
-        const [name, website = ""] = line.split("|").map((item) => item.trim());
-        return { name, website };
-      });
-  }
-
   async function reloadWorkbench() {
     const [nextWorkbench, nextTargets, nextExecutionBoard] = await Promise.all([
       api<Workbench>(`/api/dashboard/workbench?days=${days}`),
@@ -141,13 +110,7 @@ export default function HomePage() {
     setTargets(nextTargets);
     setExecutionBoard(nextExecutionBoard);
     setExecutionError("");
-    const targetMarkets = activeTargetMarkets(nextTargets);
-    setTargetForm({
-      site_origin: nextTargets.site_origin || "",
-      markets: targetMarkets.map((m) => [m.name, m.region, m.country_code, m.primary_locale].filter(Boolean).join(" | ")).join("\n"),
-      keywords: targetMarkets.flatMap((m) => m.demand_signals.map((s) => s.theme)).join("\n"),
-      competitors: targetMarkets.flatMap((m) => m.competitors.map((c) => [c.name, c.website].filter(Boolean).join(" | "))).join("\n"),
-    });
+    setTargetForm(formFromTargets(nextTargets));
   }
 
   function loadExecutionBoard() {
@@ -163,13 +126,11 @@ export default function HomePage() {
     setError("");
     setNote("");
     try {
-      const parsedMarkets = parseMarkets(targetForm.markets);
-      const parsedKeywords = parseKeywords(targetForm.keywords);
-      const parsedCompetitors = parseCompetitors(targetForm.competitors);
+      const payload = projectTargetsPayload(targetForm, targets);
       if (!targetForm.site_origin.trim()) return setError("请先填写客户官网。");
       if (!looksLikeSiteOrigin(targetForm.site_origin)) return setError("官网地址无效。请填写带域名的网址，例如 https://www.snipers.com.cn。");
-      if (!parsedMarkets.length) return setError("请至少填写 1 个目标国家，例如：United States | North America | US | en-US");
-      if (!parsedKeywords.length) return setError("请至少填写 1 个核心关键词。");
+      if (!payload.markets.length) return setError("请至少点选 1 个目标国家。");
+      if (!payload.keywords.length) return setError("请至少填写 1 个核心关键词。");
       const currentHost = siteOriginHost(targets?.site_origin || "");
       const nextHost = siteOriginHost(targetForm.site_origin);
       const switching = Boolean(currentHost && nextHost && currentHost !== nextHost);
@@ -178,20 +139,12 @@ export default function HomePage() {
         method: "PUT",
         body: JSON.stringify({
           site_origin: targetForm.site_origin,
-          markets: parsedMarkets,
-          keywords: parsedKeywords,
-          competitors: parsedCompetitors,
+          ...payload,
           confirm_site_switch: switching,
         }),
       });
       setTargets(saved);
-      const targetMarkets = activeTargetMarkets(saved);
-      setTargetForm({
-        site_origin: saved.site_origin || targetForm.site_origin,
-        markets: targetMarkets.map((m) => [m.name, m.region, m.country_code, m.primary_locale].filter(Boolean).join(" | ")).join("\n"),
-        keywords: targetMarkets.flatMap((m) => m.demand_signals.map((s) => s.theme)).join("\n"),
-        competitors: targetMarkets.flatMap((m) => m.competitors.map((c) => [c.name, c.website].filter(Boolean).join(" | "))).join("\n"),
-      });
+      setTargetForm(formFromTargets(saved));
       setNote(saved.note || "诊断目标已保存。");
       await reloadWorkbench();
     } catch (e) {

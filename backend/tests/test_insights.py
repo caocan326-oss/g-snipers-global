@@ -130,6 +130,62 @@ def test_project_targets_partial_update_keeps_keywords_and_competitors(
     assert second.json()["competitor_count"] == 1
 
 
+def test_project_targets_accepts_country_chip_payload(client: TestClient, demo_user) -> None:
+    headers = auth_header(client)
+    saved = client.put(
+        "/api/project-targets",
+        headers=headers,
+        json={
+            "site_origin": "https://www.snipers.com.cn",
+            "markets": [
+                {
+                    "name": "美国",
+                    "region": "北美",
+                    "country_code": "US",
+                    "primary_locale": "en-US",
+                    "status": "priority",
+                    "opportunity_score": 70,
+                },
+                {
+                    "name": "日本",
+                    "region": "亚太",
+                    "country_code": "JP",
+                    "primary_locale": "ja-JP",
+                    "status": "priority",
+                    "opportunity_score": 70,
+                },
+            ],
+            "keywords": [
+                {
+                    "theme": "smart lock for renters",
+                    "locale": "en-US",
+                    "country_code": "US",
+                    "intent": "commercial",
+                    "intensity": 4,
+                },
+                {
+                    "theme": "賃貸",
+                    "locale": "ja-JP",
+                    "country_code": "JP",
+                    "intent": "commercial",
+                    "intensity": 4,
+                },
+            ],
+            "competitors": [
+                {"name": "August Home", "website": "https://august.com", "country_code": "US"},
+            ],
+        },
+    )
+    assert saved.status_code == 200, saved.text
+    body = saved.json()
+    assert body["readiness"] == "ready"
+    us = next(row for row in body["markets"] if row["country_code"] == "US")
+    jp = next(row for row in body["markets"] if row["country_code"] == "JP")
+    assert any(row["theme"] == "smart lock for renters" and row["locale"] == "en-US" for row in us["demand_signals"])
+    assert any(row["theme"] == "賃貸" and row["locale"] == "ja-JP" for row in jp["demand_signals"])
+    assert any(row["name"] == "August Home" for row in us["competitors"])
+
+
 def test_insight_feeds_three_chains(client: TestClient, demo_user) -> None:
     headers = auth_header(client)
     market = client.post(
