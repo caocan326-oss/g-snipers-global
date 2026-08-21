@@ -234,6 +234,7 @@ powershell -File deploy/sync-from-local.ps1
 | 2026-08-22 | 产品 | 换站保存不再静默失败：页内确认归档，写入新官网后自动抓取，灰字区分已保存/未保存。 |
 | 2026-08-22 | 产品/运维 | 家里发到 `57dd516`（`sync-from-local.ps1 -Rebuild`）。换站保存、交接 §4.1 / §4.2。 |
 | 2026-08-22 | 产品 | 百炼仍可单测，不进默认「都测」。去掉 `search_strategy=agent`。交接 §4.3。 |
+| 2026-08-22 | 产品/运维 | 家里发到 `d51b54b`（`sync-from-local.ps1 -Rebuild`）。百炼默认不进都测。 |
 
 ---
 
