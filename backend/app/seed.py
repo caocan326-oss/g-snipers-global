@@ -337,8 +337,13 @@ def _seed_geo(db: Session, tenant: Tenant, user: User) -> None:
             )
 
     pages = db.query(SeoPage).filter(SeoPage.tenant_id == tenant.id).all()
-    db.add_all(
-        [
+    existing_kinds = {
+        kind
+        for (kind,) in db.query(GeoAsset.kind).filter(GeoAsset.tenant_id == tenant.id).all()
+    }
+    assets: list[GeoAsset] = []
+    if "llms_txt" not in existing_kinds:
+        assets.append(
             GeoAsset(
                 tenant_id=tenant.id,
                 kind="llms_txt",
@@ -346,7 +351,10 @@ def _seed_geo(db: Session, tenant: Tenant, user: User) -> None:
                 body=build_llms_txt(tenant, pages),
                 status="draft",
                 updated_by=user.id,
-            ),
+            )
+        )
+    if "cite_checklist" not in existing_kinds:
+        assets.append(
             GeoAsset(
                 tenant_id=tenant.id,
                 kind="cite_checklist",
@@ -360,12 +368,25 @@ def _seed_geo(db: Session, tenant: Tenant, user: User) -> None:
                 ),
                 status="draft",
                 updated_by=user.id,
-            ),
-        ]
-    )
+            )
+        )
+    if assets:
+        db.add_all(assets)
+    db.flush()
 
     if us_page:
+        existing_keys = {
+            key
+            for (key,) in db.query(GeoChecklistItem.item_key)
+            .filter(
+                GeoChecklistItem.tenant_id == tenant.id,
+                GeoChecklistItem.seo_page_id == us_page.id,
+            )
+            .all()
+        }
         for key, label in CHECKLIST_DEFS:
+            if key in existing_keys:
+                continue
             db.add(
                 GeoChecklistItem(
                     tenant_id=tenant.id,

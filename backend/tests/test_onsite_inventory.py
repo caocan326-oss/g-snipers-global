@@ -1,6 +1,6 @@
 from sqlalchemy import select
 
-from app.models import OnsiteIssue, SitePage, Tenant
+from app.models import GeoAsset, GeoObservation, GeoPrompt, GeoTicket, OnsiteIssue, SitePage, Tenant
 from app.onsite_inventory import DEMO_LEFTOVER_PATHS, purge_demo_leftover_pages
 from app.seed import seed
 
@@ -76,3 +76,17 @@ def test_seed_marks_untested_index_as_wont_fix(db) -> None:
     rows = {issue.title: issue.status for issue in db.query(OnsiteIssue).filter(OnsiteIssue.tenant_id == tenant.id).all()}
     assert rows["收录状态未测（需 GSC）"] == "wont_fix"
     assert rows["页面声明 noindex"] == "open"
+
+
+def test_seed_does_not_duplicate_cite_checklist_when_prompts_missing(db) -> None:
+    seed(db)
+    tenant = db.scalar(select(Tenant).where(Tenant.name == "演示客户 · 智能门锁出海"))
+    assert tenant is not None
+    db.query(GeoObservation).filter(GeoObservation.tenant_id == tenant.id).delete()
+    db.query(GeoTicket).filter(GeoTicket.tenant_id == tenant.id).delete()
+    db.query(GeoPrompt).filter(GeoPrompt.tenant_id == tenant.id).delete()
+    db.commit()
+    seed(db)
+    kinds = [row.kind for row in db.query(GeoAsset).filter(GeoAsset.tenant_id == tenant.id).all()]
+    assert kinds.count("cite_checklist") == 1
+    assert kinds.count("llms_txt") == 1
