@@ -39,7 +39,7 @@ class GeoProviderError(RuntimeError):
     pass
 
 
-IMPLEMENTED_GROUNDED = frozenset({"bocha", "bailian"})
+IMPLEMENTED_GROUNDED = frozenset({"bocha", "bailian", "tavily"})
 
 
 def configured_implemented_grounded() -> list[GeoProviderStatus]:
@@ -76,7 +76,7 @@ def provider_statuses() -> list[GeoProviderStatus]:
             env_var="DASHSCOPE_API_KEY",
             role="grounded_answer",
             status="configured" if settings.dashscope_api_key else "unconfigured",
-            note="GroundedAnswerProvider：用于 GEO 联网答案采样；只有返回 source URL 时才计入真实 citation。",
+            note="联网答案：走百炼原生接口才能带回网址。兼容模式只有回答、没有来源。",
         ),
         GeoProviderStatus(
             key="perplexity",
@@ -116,7 +116,7 @@ def provider_statuses() -> list[GeoProviderStatus]:
             env_var="TAVILY_API_KEY",
             role="ai_search",
             status="configured" if settings.tavily_api_key else "unconfigured",
-            note="预留：接入后可作为 Agent 搜索结果和来源观测源。",
+            note="英文网页搜索：返回标题、摘要和网址，用来看海外结果里有没有官网。",
         ),
     ]
 
@@ -134,6 +134,8 @@ def normalize_provider_key(key: str) -> str:
         return "bocha"
     if value in {"aliyun_bailian_web_search", "dashscope", "qwen_search", "bailian"}:
         return "bailian"
+    if value in {"tavily_search", "tavily"}:
+        return "tavily"
     return value
 
 
@@ -154,6 +156,42 @@ def _extract_urls_from_raw(data: Any) -> list[str]:
                 urls.append(url)
             start = end
     return sorted(set(urls))
+
+
+def _search_result_urls(block: Any) -> list[str]:
+    rows = []
+    if isinstance(block, dict):
+        rows = block.get("search_results") or block.get("searchResults") or []
+    elif isinstance(block, list):
+        rows = block
+    urls: list[str] = []
+    for item in rows:
+        if not isinstance(item, dict):
+            continue
+        url = (item.get("url") or item.get("link") or "").strip()
+        if url.startswith("http"):
+            urls.append(url)
+    return urls
+
+
+def _bailian_urls(data: dict) -> list[str]:
+    output = data.get("output") if isinstance(data.get("output"), dict) else {}
+    urls = _search_result_urls(output.get("search_info") or output.get("searchInfo"))
+    urls.extend(_search_result_urls(data.get("search_info") or data.get("search_results")))
+    if urls:
+        return sorted(set(urls))
+    return _extract_urls_from_raw(data)
+
+
+def _bailian_answer(data: dict) -> str:
+    output = data.get("output") if isinstance(data.get("output"), dict) else {}
+    choices = output.get("choices") or data.get("choices") or []
+    if not choices:
+        text = output.get("text") or ""
+        return text.strip() if isinstance(text, str) else ""
+    message = choices[0].get("message") or {}
+    content = message.get("content") or ""
+    return content.strip() if isinstance(content, str) else ""
 
 
 def _call_bocha(prompt_text: str) -> GeoProviderResult:
@@ -202,20 +240,86 @@ def _call_bocha(prompt_text: str) -> GeoProviderResult:
     )
 
 
+def _call_tavily(prompt_text: str, region_hint: str = "") -> GeoProviderResult:
+    if not settings.tavily_api_key:
+        raise GeoProviderError("未配置 TAVILY_API_KEY，不能执行 Tavily 搜索采样。")
+    payload: dict[str, Any] = {
+        "query": prompt_text,
+        "search_depth": "basic",
+        "include_answer": True,
+        "max_results": 8,
+    }
+    if region_hint and len(region_hint.strip()) == 2:
+        payload["country"] = region_hint.strip().lower()
+    from app.usage import UsageLimitError, record_current
+
+    try:
+        record_current("tavily", 1)
+    except UsageLimitError:
+        raise
+    try:
+        with httpx.Client(timeout=45) as client:
+            response = client.post(
+                settings.tavily_search_url,
+                headers={"Authorization": f"Bearer {settings.tavily_api_key}", "Content-Type": "application/json"},
+                json=payload,
+            )
+        if response.status_code >= 400:
+            raise GeoProviderError(f"Tavily 返回 HTTP {response.status_code}: {response.text[:300]}")
+        data = response.json()
+    except httpx.HTTPError as exc:
+        raise GeoProviderError(f"Tavily 请求失败：{str(exc)[:200]}") from exc
+
+    pages = data.get("results") or []
+    urls: list[str] = []
+    snippets: list[str] = []
+    answer = (data.get("answer") or "").strip()
+    if answer:
+        snippets.append(answer)
+    for item in pages:
+        url = item.get("url") or ""
+        if url:
+            urls.append(url)
+        title = item.get("title") or ""
+        snippet = item.get("content") or ""
+        if title or snippet:
+            snippets.append(f"{title}\n{snippet}".strip())
+    return GeoProviderResult(
+        provider="tavily",
+        engine="tavily",
+        model="tavily-search",
+        answer="\n\n".join(snippets) or json.dumps(data, ensure_ascii=False)[:2000],
+        citations=sorted(set(urls)),
+        web_grounded=True,
+        surface="search_provider",
+        detail=f"Tavily returned {len(urls)} source URLs.",
+    )
+
+
 def _call_bailian(prompt_text: str, model: str = "", region_hint: str = "") -> GeoProviderResult:
     if not settings.dashscope_api_key:
         raise GeoProviderError("未配置 DASHSCOPE_API_KEY，不能执行百炼联网采样。")
     system = "You are a search-grounded B2B SEO/GEO evaluator. Prefer reliable official or third-party sources."
     if region_hint:
         system += f" Region hint: {region_hint}."
+    model_name = model or settings.bailian_model or "qwen-plus"
     payload = {
-        "model": model or settings.bailian_model or "qwen-plus",
-        "messages": [
-            {"role": "system", "content": system},
-            {"role": "user", "content": prompt_text},
-        ],
-        "enable_search": True,
-        "search_options": {"enable_source": True, "enable_citation": True},
+        "model": model_name,
+        "input": {
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": prompt_text},
+            ]
+        },
+        "parameters": {
+            "result_format": "message",
+            "enable_search": True,
+            "search_options": {
+                "search_strategy": "agent",
+                "enable_source": True,
+                "enable_citation": True,
+            },
+        },
     }
     from app.usage import UsageLimitError, record_current
 
@@ -226,7 +330,7 @@ def _call_bailian(prompt_text: str, model: str = "", region_hint: str = "") -> G
     try:
         with httpx.Client(timeout=90) as client:
             response = client.post(
-                settings.bailian_chat_url,
+                settings.bailian_generation_url,
                 headers={"Authorization": f"Bearer {settings.dashscope_api_key}", "Content-Type": "application/json"},
                 json=payload,
             )
@@ -236,18 +340,20 @@ def _call_bailian(prompt_text: str, model: str = "", region_hint: str = "") -> G
     except httpx.HTTPError as exc:
         raise GeoProviderError(f"百炼请求失败：{str(exc)[:200]}") from exc
 
-    choices = data.get("choices") or []
-    answer = (choices[0].get("message") or {}).get("content") if choices else ""
-    urls = _extract_urls_from_raw(data)
+    if data.get("code") and data.get("code") not in {"", "Success", "success"}:
+        raise GeoProviderError(f"百炼返回 {data.get('code')}: {str(data.get('message') or '')[:200]}")
+
+    urls = _bailian_urls(data)
+    answer = _bailian_answer(data)
     return GeoProviderResult(
         provider="bailian",
         engine="bailian",
-        model=payload["model"],
+        model=model_name,
         answer=answer or json.dumps(data, ensure_ascii=False)[:2000],
         citations=urls,
         web_grounded=True,
         surface="grounded_answer_provider",
-        detail=f"Bailian returned {len(urls)} source URLs; source URL extraction may vary by API shape.",
+        detail=f"Bailian returned {len(urls)} source URLs.",
     )
 
 
@@ -285,6 +391,9 @@ def sample_with_provider(
 
     if provider == "bocha":
         return _call_bocha(prompt_text)
+
+    if provider == "tavily":
+        return _call_tavily(prompt_text, region_hint=region_hint)
 
     if provider == "bailian":
         return _call_bailian(prompt_text, model=model, region_hint=region_hint)

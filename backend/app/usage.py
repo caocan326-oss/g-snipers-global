@@ -37,6 +37,13 @@ METERS = (
         "hint": "GEO 抽查每问 1 次。和博查分开算。",
     },
     {
+        "key": "tavily",
+        "label": "AI 搜索 · Tavily",
+        "vendor": "Tavily",
+        "default_daily": 24,
+        "hint": "英文网页搜索。GEO 抽查每问 1 次。免费档每月 1000 次。",
+    },
+    {
         "key": "llm",
         "label": "改法与分析",
         "vendor": "大模型",
@@ -80,6 +87,12 @@ def current_tenant_id() -> str:
 
 def usage_day() -> str:
     return datetime.now(timezone(timedelta(hours=8))).date().isoformat()
+
+
+def meter_for_provider(provider_key: str) -> str:
+    if provider_key in {"bocha", "bailian", "tavily"}:
+        return provider_key
+    return "llm"
 
 
 def default_limit(meter: str) -> int:

@@ -45,11 +45,13 @@ class Settings(BaseSettings):
     you_api_key: str = ""
     exa_api_key: str = ""
     tavily_api_key: str = ""
+    tavily_search_url: str = "https://api.tavily.com/search"
     bocha_api_key: str = ""
     bocha_web_search_url: str = "https://api.bochaai.com/v1/web-search"
     dashscope_api_key: str = ""
     bailian_model: str = "qwen-plus"
     bailian_chat_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
+    bailian_generation_url: str = "https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation"
     # Off-site DB copies. Schedule stays off until you flip BACKUP_SCHEDULE_ENABLED.
     backup_local_dir: str = ""
     backup_keep: int = 14

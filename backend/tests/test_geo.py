@@ -2,7 +2,24 @@ from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 
+from app.geo_providers import _bailian_answer, _bailian_urls
 from tests.conftest import auth_header
+
+
+def test_bailian_reads_native_search_info() -> None:
+    data = {
+        "output": {
+            "choices": [{"message": {"content": "Answer without raw links."}}],
+            "search_info": {
+                "search_results": [
+                    {"index": 1, "url": "https://www.sulzer.com/en"},
+                    {"index": 2, "url": "https://industry.example/report"},
+                ]
+            },
+        }
+    }
+    assert _bailian_answer(data) == "Answer without raw links."
+    assert _bailian_urls(data) == ["https://industry.example/report", "https://www.sulzer.com/en"]
 
 
 def test_geo_prompt_slots_are_untested_not_zero(client: TestClient, demo_user) -> None:
@@ -544,6 +561,7 @@ def test_geo_bocha_and_bailian_provider_adapters(client: TestClient, demo_user, 
 
     monkeypatch.setattr(geo_providers.settings, "bocha_api_key", "test-bocha")
     monkeypatch.setattr(geo_providers.settings, "dashscope_api_key", "test-dashscope")
+    monkeypatch.setattr(geo_providers.settings, "tavily_api_key", "test-tavily")
 
     status = client.get("/api/geo/providers/status", headers=headers).json()
     providers = {row["key"]: row for row in status["providers"]}
@@ -551,6 +569,7 @@ def test_geo_bocha_and_bailian_provider_adapters(client: TestClient, demo_user, 
     assert providers["bocha"]["configured"] is True
     assert providers["bailian"]["role"] == "grounded_answer"
     assert providers["bailian"]["configured"] is True
+    assert providers["tavily"]["configured"] is True
 
     class FakeResponse:
         def __init__(self, status_code: int, data: dict):
@@ -572,6 +591,17 @@ def test_geo_bocha_and_bailian_provider_adapters(client: TestClient, demo_user, 
             return False
 
         def post(self, url: str, headers: dict, json: dict):
+            if "tavily.com" in url:
+                return FakeResponse(
+                    200,
+                    {
+                        "answer": "Sulzer is a pump brand.",
+                        "results": [
+                            {"title": "Sulzer official", "url": "https://www.sulzer.com/en", "content": "Official site"},
+                            {"title": "Industry report", "url": "https://industry.example/report", "content": "Third party"},
+                        ],
+                    },
+                )
             if "bochaai" in url:
                 return FakeResponse(
                     200,
@@ -597,14 +627,21 @@ def test_geo_bocha_and_bailian_provider_adapters(client: TestClient, demo_user, 
             return FakeResponse(
                 200,
                 {
-                    "choices": [
-                        {
-                            "message": {
-                                "content": "Sulzer is often compared with Flowserve and Alfa Laval. See https://www.sulzer.com/en and https://industry.example/report."
+                    "output": {
+                        "choices": [
+                            {
+                                "message": {
+                                    "content": "Sulzer is often compared with Flowserve and Alfa Laval."
+                                }
                             }
-                        }
-                    ],
-                    "search_results": [{"url": "https://industry.example/report"}],
+                        ],
+                        "search_info": {
+                            "search_results": [
+                                {"index": 1, "title": "Sulzer", "url": "https://www.sulzer.com/en"},
+                                {"index": 2, "title": "Industry report", "url": "https://industry.example/report"},
+                            ]
+                        },
+                    }
                 },
             )
 
@@ -632,6 +669,17 @@ def test_geo_bocha_and_bailian_provider_adapters(client: TestClient, demo_user, 
     assert "https://www.sulzer.com/en" in bailian_result["owned_citations"]
     assert "https://industry.example/report" in bailian_result["third_party_citations"]
 
+    tavily_run = client.post(
+        "/api/geo/sample-runs/auto",
+        headers=headers,
+        json={"prompt_ids": [prompt["id"]], "trials": 1, "limit": 1, "provider": "tavily"},
+    )
+    assert tavily_run.status_code == 201, tavily_run.text
+    tavily_result = tavily_run.json()["results"][0]
+    assert tavily_result["engine"] == "tavily"
+    assert "https://www.sulzer.com/en" in tavily_result["owned_citations"]
+    assert "https://industry.example/report" in tavily_result["third_party_citations"]
+
 
 def test_geo_grounded_batch_runs_each_configured_source(client: TestClient, demo_user, monkeypatch) -> None:
     from app import geo_providers
@@ -644,6 +692,7 @@ def test_geo_grounded_batch_runs_each_configured_source(client: TestClient, demo
     ).json()
     monkeypatch.setattr(geo_providers.settings, "bocha_api_key", "test-bocha")
     monkeypatch.setattr(geo_providers.settings, "dashscope_api_key", "test-dashscope")
+    monkeypatch.setattr(geo_providers.settings, "tavily_api_key", "test-tavily")
 
     def fake_sample(provider, prompt_text, **kwargs):
         return SimpleNamespace(
@@ -664,12 +713,12 @@ def test_geo_grounded_batch_runs_each_configured_source(client: TestClient, demo
     )
     assert batch.status_code == 201, batch.text
     body = batch.json()
-    assert set(body["providers"]) == {"bocha", "bailian"}
-    assert body["results_count"] == 2
+    assert set(body["providers"]) == {"bocha", "bailian", "tavily"}
+    assert body["results_count"] == 3
     assert body["failed"] == []
     assert "DeepSeek" in body["note"]
     engines = {run["engines"][0] for run in body["runs"]}
-    assert engines == {"bocha", "bailian"}
+    assert engines == {"bocha", "bailian", "tavily"}
     summary = client.get("/api/geo/summary", headers=headers).json()
     assert summary["latest_sampled"] == 1
     assert summary["latest_mentioned"] == 0
@@ -688,6 +737,7 @@ def test_geo_grounded_batch_requires_a_live_source(client: TestClient, demo_user
     )
     monkeypatch.setattr(geo_providers.settings, "bocha_api_key", "")
     monkeypatch.setattr(geo_providers.settings, "dashscope_api_key", "")
+    monkeypatch.setattr(geo_providers.settings, "tavily_api_key", "")
     res = client.post("/api/geo/sample-runs/auto-grounded", headers=headers, json={"limit": 1, "trials": 1})
     assert res.status_code == 400, res.text
     assert "DeepSeek" in res.json()["detail"]
