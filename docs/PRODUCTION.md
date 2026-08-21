@@ -220,6 +220,7 @@ powershell -File deploy/sync-from-local.ps1
 | 2026-08-21 | 产品/运维 | GEO 与分发发到 `4cf902c`（`sync-from-local.ps1 -Rebuild`）。客户说明按最近一次抽查看「有没有被提到」；分发默认渠道卡片；LinkedIn/X/Facebook 等官方接口只给客户跳转或自己发，不代登、不群发。 |
 | 2026-08-21 | 产品/运维 | 诊断目标发到 `b0c4b70`（`sync-from-local.ps1 -Rebuild`）。不再填 `美国 \| 北美 \| US \| en-US`；点选美英德日阿联酋澳。日文搜索词跟日本，英文跟美英德澳。 |
 | 2026-08-21 | 运维 | 收掉 Postgres 宿主机 5432 映射，发到 `29cd68a`。库只在 compose 网络给 backend 用。宿主机已无 5432；租户/账号数据仍在。 |
+| 2026-08-21 | 产品/运维 | 点选国家与登录加固发到 `f57e6b5`（`sync-from-local.ps1 -Rebuild`）。GEO/SEO/市场不再填 `en-US`；总览列表对齐 OPENISH；登录 5 次失败锁 15 分钟；分发 providers 需登录；开户用 `python -m app.provision_tenant`，无公开注册。 |
 
 ---
 

@@ -7,7 +7,7 @@
 
 约定：家里和公司**不会同时改**。换机器前必须把这边 push 完。
 
-最后更新：2026-08-21 18:28（公司。Postgres 5432 已从宿主机收掉，只留容器网）。
+最后更新：2026-08-21 19:32（公司。GEO/SEO 点选国家、登录限次、内部开户脚本已发版）。
 
 ---
 
@@ -214,15 +214,15 @@ git log -1 --oneline
 
 | 项 | 值 |
 | --- | --- |
-| 日期 | 2026-08-21 18:28 |
+| 日期 | 2026-08-21 19:32 |
 | 最后一台 | 公司 `E:\G-snipers海外版` |
 | 分支 | `main` |
-| 提交 | 生产 compose `29cd68a`（Postgres 不再映射 5432）。功能代码仍是 `b0c4b70`。文档本条。 |
+| 提交 | 生产代码 `f57e6b5`（GEO/SEO/市场点选国家；总览列表与摘要同一套未关闭状态；登录错 5 次锁 15 分钟；分发渠道列表要登录；内部 `python -m app.provision_tenant` 开户）。文档本条。 |
 | 已 push origin / upstream | 是。 |
-| 已发版生产 | **是。** `sync-from-local.ps1`（未重建镜像）。postgres 只显示 `5432/tcp`，宿主机 `ss` 无 5432。数据还在：2 个租户、2 个用户。 |
-| 接口实测 | 容器内 pg_isready 通过；backend 连库 tenants=2 users=2；错误密码登录 401；health/home 200。 |
-| 未完成 | Bing / IndexNow 可以等。不要再给 Postgres 映射 5432。不要把 `scraping_browser1` 填进 SERP 区。不要编询盘或 AI 引用。不要自动群发。 |
-| 下一台先做 | 家里先 `git pull origin main`。不要两边同时改。 |
+| 已发版生产 | **是。** `sync-from-local.ps1 -Rebuild`。演示客户仍是门锁站。`DEMO_LOGIN_ENABLED` 线上关。Postgres 仍不映射 5432。 |
+| 接口实测 | health 200；未登录看 `/api/distribution/providers` 为 401；宿主机无 5432。 |
+| 未完成 | GEO 复测闭环还没做。Bing / IndexNow 可等。不要公开注册。不要自动群发。不要把 `scraping_browser1` 填进 SERP 区。 |
+| 下一台先做 | 家里先 `git pull origin main`。不要两边同时改。不要提交下午那份审计里未推的总览改动。 |
 
 `www` 灰云、A 仍 `39.97.52.149`。`relay.weiyids.com` 橙云，不要 CNAME 回 `workers.dev`。不要开 Google Ads。不要在服务器 `git pull`。
 
