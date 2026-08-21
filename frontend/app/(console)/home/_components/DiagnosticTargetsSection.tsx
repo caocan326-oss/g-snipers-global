@@ -1,5 +1,6 @@
 import { Plus, Target, X } from "lucide-react";
 
+import { SiteSwitchBanner } from "@/components/SiteSwitchBanner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +17,10 @@ export function DiagnosticTargetsSection({
   targetForm,
   setTargetForm,
   saveTargets,
+  confirmSwitch,
+  cancelSwitch,
+  switchPending,
+  saving,
   note,
   error,
 }: {
@@ -23,6 +28,10 @@ export function DiagnosticTargetsSection({
   targetForm: TargetForm;
   setTargetForm: (value: TargetForm) => void;
   saveTargets: () => void;
+  confirmSwitch: () => void;
+  cancelSwitch: () => void;
+  switchPending: boolean;
+  saving: boolean;
   note: string;
   error: string;
 }) {
@@ -51,8 +60,23 @@ export function DiagnosticTargetsSection({
           </div>
           <p className="mt-1 text-sm text-slate-500">点国家、写买家会搜的词、填对手名字。国家码和语言不用人填。</p>
         </div>
-        <Button type="button" onClick={saveTargets}>保存诊断目标</Button>
+        <Button type="button" onClick={saveTargets} disabled={saving || switchPending}>
+          {saving ? "正在保存…" : "保存诊断目标"}
+        </Button>
       </div>
+      {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
+      {note ? <p className="mt-3 text-sm text-emerald-700">{note}</p> : null}
+      {switchPending ? (
+        <div className="mt-3">
+          <SiteSwitchBanner
+            currentOrigin={targets?.site_origin || ""}
+            nextOrigin={targetForm.site_origin.trim()}
+            busy={saving}
+            onConfirm={confirmSwitch}
+            onCancel={cancelSwitch}
+          />
+        </div>
+      ) : null}
       <div className="mt-4 grid gap-4 xl:grid-cols-[1fr_1.2fr]">
         <div className="space-y-4">
           <div>
@@ -62,6 +86,12 @@ export function DiagnosticTargetsSection({
               onChange={(e) => setTargetForm({ ...targetForm, site_origin: e.target.value })}
               placeholder="https://www.example.com"
             />
+            <p className="mt-1 text-xs text-slate-400">
+              已保存：{targets?.site_origin || "还没有"}
+              {targetForm.site_origin.trim() && targetForm.site_origin.trim() !== (targets?.site_origin || "")
+                ? "。输入框里是还没保存的新地址。"
+                : ""}
+            </p>
           </div>
           <div>
             <div className="mb-1 text-xs font-medium text-slate-500">目标国家</div>
@@ -163,8 +193,6 @@ export function DiagnosticTargetsSection({
           </div>
         </div>
       </div>
-      {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
-      {note ? <p className="mt-3 text-sm text-emerald-700">{note}</p> : null}
     </section>
   );
 }

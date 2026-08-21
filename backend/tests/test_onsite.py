@@ -110,6 +110,56 @@ def test_project_targets_replace_old_target_setup_when_site_changes(client: Test
     assert body["competitor_count"] == 0
 
 
+def test_project_targets_can_switch_origin_without_rewriting_keywords(client: TestClient, demo_user) -> None:
+    headers = auth_header(client)
+    first = client.put(
+        "/api/project-targets",
+        headers=headers,
+        json={
+            "site_origin": "https://www.snipers.com.cn",
+            "markets": [
+                {
+                    "name": "United States",
+                    "region": "North America",
+                    "country_code": "US",
+                    "primary_locale": "en-US",
+                    "status": "priority",
+                    "opportunity_score": 80,
+                }
+            ],
+            "keywords": [{"theme": "smart lock", "locale": "en-US", "country_code": "US"}],
+            "competitors": [{"name": "Igloohome", "website": "https://igloohome.co", "country_code": "US"}],
+        },
+    )
+    assert first.status_code == 200, first.text
+    blocked = client.put(
+        "/api/project-targets",
+        headers=headers,
+        json={"site_origin": "https://www.ugreen.com/", "markets": [], "keywords": [], "competitors": []},
+    )
+    assert blocked.status_code == 400
+    assert "确认" in blocked.json()["detail"]
+    switched = client.put(
+        "/api/project-targets",
+        headers=headers,
+        json={
+            "site_origin": "https://www.ugreen.com/",
+            "confirm_site_switch": True,
+            "markets": [],
+            "keywords": [],
+            "competitors": [],
+        },
+    )
+    assert switched.status_code == 200, switched.text
+    body = switched.json()
+    assert body["site_origin"] == "https://www.ugreen.com"
+    assert body["keyword_count"] == 0
+    assert body["competitor_count"] == 0
+    settings = client.get("/api/onsite/settings", headers=headers)
+    assert settings.status_code == 200
+    assert settings.json()["site_origin"] == "https://www.ugreen.com"
+
+
 def test_site_context_archive_restore_switches_seo_geo_and_execution(client: TestClient, demo_user) -> None:
     headers = auth_header(client)
     first = client.put(

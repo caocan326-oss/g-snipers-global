@@ -103,7 +103,7 @@ certbot --nginx -d www.weiyids.com -d weiyids.com
 | `/opt/g-snipers-overseas` | **正在跑的应用**（git checkout） |
 | `/opt/g-snipers-overseas/.env` | 线上密钥，**不进 git** |
 | `/opt/g-snipers-backups` | 旧的发版前代码 tar，仍在同一块盘上，不算异地 |
-| `/opt/g-snipers-db-exports` | 客户库导出落点（compose `BACKUP_HOST_DIR`）。定时默认关 |
+| `/opt/g-snipers-db-exports` | 客户库导出落点（compose `BACKUP_HOST_DIR`）。cron 每天 03:15 UTC 打一份 |
 | `/opt/g-snipers-overseas-backup-*.tgz` | 历史代码包（8 月中旬密集备份，可日后清理） |
 | `/opt/g-snipers-global` | 空壳，不要当发版目标 |
 | `/root/strapi-news.tar.gz` | 与本项目无关 |
@@ -191,7 +191,8 @@ powershell -File deploy/sync-from-local.ps1
 3. **不要用 `git reset --hard` 除非你明确要丢掉服务器上的临时改动。**
 4. Nginx / 证书不在每次发版里动。改反代先改 `/etc/nginx/sites-available/g-snipers`，`nginx -t` 再 reload，并回写 `deploy/nginx/g-snipers.live.conf` 与本档案日期。
 5. 发版前可打一份代码 tar：`tar -C /opt -czf /opt/g-snipers-backups/pre-$(date +%Y%m%d%H%M%S).tgz g-snipers-overseas --exclude=g-snipers-overseas/.git`。这不是数据库，也不在机器外。
-6. 客户库副本：管理员页 `/ops/backup` 可导出并下载。宿主机落点 `BACKUP_HOST_DIR`（建议 `/opt/g-snipers-db-exports`）。异地写 `BACKUP_OFFSITE_KIND=dir|scp`。`deploy/backup-postgres.sh` 打 Postgres 自定义格式。**定时默认关**，不要装 `deploy/backup-postgres.cron.example`，除非异地已经抄通过。
+6. 客户库副本：管理员页 `/ops/backup` 可导出并下载。宿主机落点 `BACKUP_HOST_DIR=/opt/g-snipers-db-exports`。`deploy/backup-postgres.sh` 打 Postgres 自定义格式。**2026-08-22 已装** `/etc/cron.d/g-snipers-backup`（每天 03:15 UTC）。cron 只写本机落点，不自动推到第二台云。出机器：在家里/公司跑 `powershell -File deploy/pull-db-backup.ps1`，落到仓库旁边的 `g-snipers-db-offsite/`（不进 git）。第一次已通：`gsnipers-db-20260821-173000.dump`（390KB，SHA256 `e1e2e7ea…c54ff1`）已拉到家里 `D:\workspace\g-snipers-db-offsite\`。`BACKUP_OFFSITE_KIND` 仍是 `none`（没有第二台可 scp 的机器）。
+7. 探活：UptimeRobot（托管，不自建）盯 `https://www.weiyids.com/api/health`。2026-08-22 已提交，**邮箱已确认，监控已在跑**。告警到 `caocan326@gmail.com`。没有原生微信；手机开 Gmail 推送，或后台加 Telegram。
 
 ---
 
@@ -228,6 +229,9 @@ powershell -File deploy/sync-from-local.ps1
 | 2026-08-21 | 产品 | 外部接口按客户按天限次。管理员 `/ops/usage` 设每天上限，看已用/还剩。默认：排名 15、博查 24、百炼 24、大模型 60、测速 8。GEO/SERP/测速用完返回 429。 |
 | 2026-08-21 | 产品 | 客户说明、站内诊断、GEO 抽查可下 PDF（Markdown → HTML → WeasyPrint）。发版必须 `-Rebuild`。 |
 | 2026-08-21 | 产品/运维 | 家里发到 `3a287c2`（`sync-from-local.ps1 -Rebuild`）。接口按天限次、客户 PDF、库副本页（定时关）。health 200；providers 未登录 401。 |
+| 2026-08-22 | 运维 | UptimeRobot 提交盯 `/api/health`，等 `caocan326@gmail.com` 点确认。库 dump 已拉到家里盘（与服务器 SHA256 一致）。已装 `/etc/cron.d/g-snipers-backup`。未配第二台 scp。 |
+| 2026-08-22 | 运维 | UptimeRobot 邮箱已确认，监控已在跑。交接写入 `HANDOVER.md` §4.1 / §4.2。 |
+| 2026-08-22 | 产品 | 换站保存不再静默失败：页内确认归档，写入新官网后自动抓取，灰字区分已保存/未保存。 |
 
 ---
 

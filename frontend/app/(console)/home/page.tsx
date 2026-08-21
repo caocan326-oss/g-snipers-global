@@ -4,15 +4,15 @@ import { useEffect, useMemo, useState } from "react";
 
 import {
   api,
-  confirmSiteSwitch,
   looksLikeSiteOrigin,
-  siteOriginHost,
   type ExecutionBoard,
   type GscAuthUrl,
   type GscStatus,
   type ProjectTargets,
+  type SiteArchive,
   type Workbench,
 } from "@/lib/api";
+import { crawlFinishedNote, isHostSwitch, recrawlSavedSite } from "@/lib/site-origin";
 
 import { emptyTargetForm, formFromTargets, projectTargetsPayload, reportReadyChecks, seoPerformanceVerdict } from "./_helpers";
 import { DeliveryBoundarySection } from "./_components/DeliveryBoundarySection";
@@ -23,6 +23,7 @@ import { PriorityAndDataSourceSection } from "./_components/PriorityAndDataSourc
 import { QuickLinksSection } from "./_components/QuickLinksSection";
 import { ReportReadinessSection } from "./_components/ReportReadinessSection";
 import { SeoPerformanceSection } from "./_components/SeoPerformanceSection";
+import { SiteArchivesSection } from "./_components/SiteArchivesSection";
 import { WorkbenchSummaryHeader } from "./_components/WorkbenchSummaryHeader";
 
 export default function HomePage() {
@@ -37,6 +38,10 @@ export default function HomePage() {
   const [days, setDays] = useState(28);
   const [targetForm, setTargetForm] = useState(emptyTargetForm);
   const [executionLoading, setExecutionLoading] = useState(false);
+  const [switchPending, setSwitchPending] = useState(false);
+  const [savingTargets, setSavingTargets] = useState(false);
+  const [archives, setArchives] = useState<SiteArchive[]>([]);
+  const [archiveBusyId, setArchiveBusyId] = useState("");
 
   useEffect(() => {
     api<Workbench>(`/api/dashboard/workbench?days=${days}`)
@@ -55,6 +60,7 @@ export default function HomePage() {
     api<GscStatus>("/api/onsite/gsc/status")
       .then(setGsc)
       .catch(() => undefined);
+    loadArchives();
   }, []);
 
   const reviewTotal = useMemo(() => {
@@ -122,33 +128,101 @@ export default function HomePage() {
       .finally(() => setExecutionLoading(false));
   }
 
+  function loadArchives() {
+    api<SiteArchive[]>("/api/site-context/archives")
+      .then(setArchives)
+      .catch(() => undefined);
+  }
+
   async function saveTargets() {
     setError("");
     setNote("");
-    try {
-      const payload = projectTargetsPayload(targetForm, targets);
-      if (!targetForm.site_origin.trim()) return setError("请先填写客户官网。");
-      if (!looksLikeSiteOrigin(targetForm.site_origin)) return setError("官网地址无效。请填写带域名的网址，例如 https://www.snipers.com.cn。");
+    if (!targetForm.site_origin.trim()) return setError("请先填写客户官网。");
+    if (!looksLikeSiteOrigin(targetForm.site_origin)) return setError("官网地址无效。请填写带域名的网址，例如 https://www.ugreen.com。");
+    if (isHostSwitch(targets?.site_origin || "", targetForm.site_origin)) {
+      setSwitchPending(true);
+      return;
+    }
+    await persistTargets(false);
+  }
+
+  function cancelSwitch() {
+    setSwitchPending(false);
+    setNote("没换站，还是当前网站。");
+  }
+
+  async function persistTargets(confirmSwitch: boolean) {
+    const payload = projectTargetsPayload(targetForm, targets);
+    if (!confirmSwitch) {
       if (!payload.markets.length) return setError("请至少点选 1 个目标国家。");
       if (!payload.keywords.length) return setError("请至少填写 1 个核心关键词。");
-      const currentHost = siteOriginHost(targets?.site_origin || "");
-      const nextHost = siteOriginHost(targetForm.site_origin);
-      const switching = Boolean(currentHost && nextHost && currentHost !== nextHost);
-      if (switching && !confirmSiteSwitch(targets?.site_origin || "", targetForm.site_origin.trim())) return;
+    }
+    setSavingTargets(true);
+    setError("");
+    setNote("");
+    try {
       const saved = await api<ProjectTargets>("/api/project-targets", {
         method: "PUT",
         body: JSON.stringify({
           site_origin: targetForm.site_origin,
-          ...payload,
-          confirm_site_switch: switching,
+          markets: payload.markets,
+          keywords: confirmSwitch ? [] : payload.keywords,
+          competitors: confirmSwitch ? [] : payload.competitors,
+          confirm_site_switch: confirmSwitch,
         }),
       });
       setTargets(saved);
       setTargetForm(formFromTargets(saved));
-      setNote(saved.note || "诊断目标已保存。");
+      setSwitchPending(false);
+      setNote(confirmSwitch || !targets?.site_origin ? "已保存，正在重新抓取。" : saved.note || "诊断目标已保存。");
+      if (confirmSwitch || !targets?.site_origin) {
+        try {
+          const session = await recrawlSavedSite();
+          setNote(crawlFinishedNote(session));
+        } catch (e) {
+          setNote("已保存。自动抓取没跑成，请到网站检查点「扩大页面范围」。");
+          setError(e instanceof Error ? e.message : "自动抓取失败");
+        }
+      }
       await reloadWorkbench();
+      loadArchives();
     } catch (e) {
       setError(e instanceof Error ? e.message : "诊断目标保存失败");
+    } finally {
+      setSavingTargets(false);
+    }
+  }
+
+  async function restoreArchive(item: SiteArchive) {
+    setArchiveBusyId(item.id);
+    setError("");
+    try {
+      const res = await api<{ note?: string }>(`/api/site-context/archives/${item.id}/restore`, { method: "POST" });
+      setNote(res.note || `已恢复 ${item.site_origin}`);
+      await reloadWorkbench();
+      loadArchives();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "恢复历史网站失败");
+    } finally {
+      setArchiveBusyId("");
+    }
+  }
+
+  async function deleteArchive(item: SiteArchive) {
+    if (!window.confirm(`删除历史网站 ${item.site_origin}？删了不能恢复。`)) return;
+    setArchiveBusyId(item.id);
+    setError("");
+    try {
+      await api(`/api/site-context/archives/${item.id}`, {
+        method: "DELETE",
+        body: JSON.stringify({ confirm: "DELETE" }),
+      });
+      setNote(`已删除历史网站 ${item.site_origin}`);
+      loadArchives();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "删除历史网站失败");
+    } finally {
+      setArchiveBusyId("");
     }
   }
 
@@ -168,6 +242,27 @@ export default function HomePage() {
     <div className="space-y-6">
       <WorkbenchSummaryHeader data={data} targets={targets} executiveSummary={executiveSummary} />
 
+      <DiagnosticTargetsSection
+        targets={targets}
+        targetForm={targetForm}
+        setTargetForm={setTargetForm}
+        saveTargets={saveTargets}
+        confirmSwitch={() => void persistTargets(true)}
+        cancelSwitch={cancelSwitch}
+        switchPending={switchPending}
+        saving={savingTargets}
+        note={note}
+        error={error}
+      />
+
+      <SiteArchivesSection
+        archives={archives}
+        archiveBusyId={archiveBusyId}
+        restoreArchive={restoreArchive}
+        deleteArchive={deleteArchive}
+        loadArchives={loadArchives}
+      />
+
       <PriorityQueueSection board={executionBoard} loading={executionLoading} error={executionError} reload={loadExecutionBoard} />
 
       <PillarsOverview
@@ -186,8 +281,6 @@ export default function HomePage() {
       <SeoPerformanceSection perf={perf} seoVerdict={seoVerdict} />
 
       <PriorityAndDataSourceSection data={data} gsc={gsc} untestedTotal={untestedTotal} perf={perf} authorizeGsc={authorizeGsc} />
-
-      <DiagnosticTargetsSection targets={targets} targetForm={targetForm} setTargetForm={setTargetForm} saveTargets={saveTargets} note={note} error={error} />
 
       <DeliveryBoundarySection data={data} days={days} setDays={setDays} />
 

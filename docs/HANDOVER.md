@@ -7,7 +7,7 @@
 
 约定：家里和公司**不会同时改**。换机器前必须把这边 push 完。
 
-最后更新：2026-08-21 22:55（家里。外部接口按客户按天限次已发生产。本机 / origin / upstream / 生产均为 `3a287c2`）。
+最后更新：2026-08-22 03:00（家里。换站保存已修，准备发版。异地副本见 §4.1。UptimeRobot 已确认。）。
 
 ---
 
@@ -181,6 +181,58 @@ git log -1 --oneline
 tar -C /opt -czf /opt/g-snipers-backups/pre-$(date +%Y%m%d%H%M%S).tgz g-snipers-overseas --exclude=g-snipers-overseas/.git
 ```
 
+这是代码 tar，同一块盘，不算客户库，也不算出机器。
+
+---
+
+## 4.1 客户库异地副本
+
+诊断历史、Fact Pack、竞品记录只在生产这一台 Postgres。宿主机 5432 不映射。
+
+| 地方 | 路径 | 说明 |
+| --- | --- | --- |
+| 生产本机落点 | `/opt/g-snipers-db-exports` | `BACKUP_HOST_DIR`。cron 每天 03:15 UTC 打一份 Postgres 自定义格式 |
+| 生产 cron | `/etc/cron.d/g-snipers-backup` | 2026-08-22 已装。日志 `/var/log/g-snipers-backup.log` |
+| 生产脚本 | `/opt/g-snipers-overseas/deploy/backup-postgres.sh` | 本机先写 dump，再按 `BACKUP_OFFSITE_*` 抄走 |
+| 异地（家里） | `D:\workspace\g-snipers-db-offsite\` | **在仓库外面**，不要进 git |
+| 异地（公司，拉过才有） | `E:\g-snipers-db-offsite\` | `pull-db-backup.ps1` 写在 clone 的上一级 |
+| 管理员页 | `/ops/backup` | 手导出 JSON.gz 并下载。定时开关只是状态，真正跑的是 cron |
+
+`BACKUP_OFFSITE_KIND` 仍是 `none`。没有第二台可 scp 的云。cron **不会**自动推到机器外面。出机器靠本机拉：
+
+```powershell
+powershell -File deploy/pull-db-backup.ps1
+```
+
+第一次已核对（2026-08-22，家里）：
+
+| 项 | 值 |
+| --- | --- |
+| 文件 | `gsnipers-db-20260821-173000.dump` |
+| 大小 | 398895 字节（约 390KB） |
+| SHA256 | `e1e2e7ead5371a3287f37aa7e194795a7c49b5f0e428616f6ecb551b03c54ff1` |
+| 服务器 | `/opt/g-snipers-db-exports/gsnipers-db-20260821-173000.dump` |
+| 家里 | `D:\workspace\g-snipers-db-offsite\gsnipers-db-20260821-173000.dump` |
+
+两边哈希一致，才算到了这台机器外面。公司那台如果还没有这份，在公司仓库根目录再跑一次 `pull-db-backup.ps1`。
+
+不要把 dump、`.json.gz` 提交进 git。数字细节也可以看 `docs/PRODUCTION.md` 第 7 节硬性规则第 6 条。
+
+---
+
+## 4.2 探活（UptimeRobot）
+
+不自建。托管盯 `https://www.weiyids.com/api/health`。2026-08-22 用官方 agent 接口提交，**邮箱已确认，监控已在跑**。
+
+| 项 | 值 |
+| --- | --- |
+| 地址 | `https://www.weiyids.com/api/health` |
+| 账号邮箱 / 告警 | `caocan326@gmail.com` |
+| 周期 | 免费档约 5 分钟 |
+| 微信 | 没有原生通道。手机开 Gmail 推送，或后台加 Telegram |
+
+挂了、恢复都会发这封邮箱。后台：https://uptimerobot.com/
+
 ---
 
 ## 5. 收工 / 换到另一台电脑之前
@@ -214,14 +266,14 @@ git log -1 --oneline
 
 | 项 | 值 |
 | --- | --- |
-| 日期 | 2026-08-21 22:55 |
+| 日期 | 2026-08-22 03:00 |
 | 最后一台 | 家里 `D:\workspace\G-snipers海外版` |
 | 分支 | `main` |
-| 提交 | 四处对齐 `3a287c2`。功能：① 管理员 `/ops/usage` 给每家客户设每天次数（排名 / 博查 / 百炼 / 大模型 / 测速），用完 429，不重试、不编造。② 客户说明、站内、GEO 可下 PDF。③ 管理员 `/ops/backup` 可手导出库；定时关。 |
-| 已 push origin / upstream | 是。本机 / origin / upstream / 生产均为 `3a287c2`。 |
-| 已发版生产 | **是。** `sync-from-local.ps1 -Rebuild`。Alembic `022_usage_quotas` 已跑。演示客户仍是门锁站。`DEMO_LOGIN_ENABLED` 线上关。Postgres 仍不映射 5432。库导出定时不要开。 |
-| 接口实测 | health 200；未登录 `/api/distribution/providers` 为 401；宿主机无 5432。 |
-| 未完成 | Bing / IndexNow 可等。不要公开注册。不要自动群发。不要把 `scraping_browser1` 填进 SERP 区。不要把「复测必须提到」写成完成标准。不要装备份 cron，除非异地抄已经通。 |
+| 提交 | 换站保存：页内确认归档、真写入新官网、说「已保存，正在重新抓取」。运维：§4.1 异地副本、§4.2 UptimeRobot。 |
+| 已 push origin / upstream | 本轮提交后推。 |
+| 已发版生产 | 本轮 `sync-from-local.ps1`。`DEMO_LOGIN_ENABLED` 仍关。Postgres 仍不映射 5432。 |
+| 接口实测 | 发完用绿联 `https://www.ugreen.com/` 再摸一遍保存。health 仍是探活目标。 |
+| 未完成 | 绿联实走还没在新保存上重跑。UptimeRobot 没有原生微信。自动 scp 到第二台云还没有。Bing / IndexNow 可等。不要公开注册。不要自动群发。 |
 | 下一台先做 | 公司先 `git pull origin main`。不要两边同时改。 |
 
 `www` 灰云、A 仍 `39.97.52.149`。`relay.weiyids.com` 橙云，不要 CNAME 回 `workers.dev`。不要开 Google Ads。不要在服务器 `git pull`。
@@ -241,3 +293,4 @@ git log -1 --oneline
 - 不要把 Postgres 的 5432 再映射到宿主机。
 - 不要配置 Google Ads。
 - 不要假设 `weiyids.com`（无 www）已经能开。正式地址是 https://www.weiyids.com 。
+- 不要把客户库 dump / `.json.gz` 提交进 git。异地副本在仓库旁边的 `g-snipers-db-offsite\`，见 §4.1。

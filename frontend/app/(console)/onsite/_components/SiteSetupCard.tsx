@@ -1,5 +1,6 @@
 import { ClipboardList, RefreshCcw } from "lucide-react";
 
+import { SiteSwitchBanner } from "@/components/SiteSwitchBanner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -7,8 +8,12 @@ import type { CrawlSession } from "@/lib/api";
 
 export function SiteSetupCard({
   origin,
+  savedOrigin,
   setOrigin,
   saveOrigin,
+  confirmSwitch,
+  cancelSwitch,
+  switchPending,
   setupSnipersTest,
   maxUrls,
   setMaxUrls,
@@ -18,10 +23,16 @@ export function SiteSetupCard({
   crawlSite,
   busyId,
   sessions,
+  note,
+  error,
 }: {
   origin: string;
+  savedOrigin: string;
   setOrigin: (value: string) => void;
   saveOrigin: () => void;
+  confirmSwitch: () => void;
+  cancelSwitch: () => void;
+  switchPending: boolean;
   setupSnipersTest: () => void;
   maxUrls: number;
   setMaxUrls: (value: number) => void;
@@ -31,7 +42,11 @@ export function SiteSetupCard({
   crawlSite: () => void;
   busyId: string;
   sessions: CrawlSession[];
+  note: string;
+  error: string;
 }) {
+  const saving = busyId === "save-origin" || busyId === "crawl-site";
+  const draftDiffers = Boolean(origin.trim() && origin.trim() !== savedOrigin);
   return (
     <Card id="onsite-site-setup" className="rounded-md">
       <CardHeader>
@@ -44,14 +59,30 @@ export function SiteSetupCard({
             value={origin}
             onChange={(e) => setOrigin(e.target.value)}
           />
-          <Button type="button" variant="outline" onClick={saveOrigin}>
-            保存网站
+          <Button type="button" variant="outline" onClick={saveOrigin} disabled={saving || switchPending}>
+            {saving ? "正在保存…" : "保存网站"}
           </Button>
-          <Button type="button" variant="outline" onClick={setupSnipersTest}>
+          <Button type="button" variant="outline" onClick={setupSnipersTest} disabled={saving}>
             使用演示网站
           </Button>
         </div>
-        <div className="grid gap-3 lg:grid-cols-[120px_120px_auto_auto_1fr]">
+        <p className="text-xs text-slate-500">
+          已保存：{savedOrigin || "还没有"}
+          {draftDiffers ? "。输入框里是还没保存的新地址，点「保存网站」才会换。" : ""}
+          {" · "}最多 {maxUrls} 页 · 深度 {maxDepth}
+        </p>
+        {error ? <p className="text-sm text-red-600">{error}</p> : null}
+        {note ? <p className="text-sm text-emerald-700">{note}</p> : null}
+        {switchPending ? (
+          <SiteSwitchBanner
+            currentOrigin={savedOrigin}
+            nextOrigin={origin.trim()}
+            busy={saving}
+            onConfirm={confirmSwitch}
+            onCancel={cancelSwitch}
+          />
+        ) : null}
+        <div className="grid gap-3 lg:grid-cols-[120px_120px_auto_auto]">
           <Input
             type="number"
             min={1}
@@ -68,7 +99,7 @@ export function SiteSetupCard({
             onChange={(e) => setMaxDepth(Number(e.target.value))}
             aria-label="最大深度"
           />
-          <Button type="button" onClick={fetchSite} variant="outline">
+          <Button type="button" onClick={fetchSite} variant="outline" disabled={saving}>
             <RefreshCcw className="mr-2 h-4 w-4" />
             查看已登记页面
           </Button>
@@ -76,9 +107,6 @@ export function SiteSetupCard({
             <ClipboardList className="mr-2 h-4 w-4" />
             扩大页面范围
           </Button>
-          <div className="text-xs text-slate-500">
-            当前：{origin || "未设置"} · 最多 {maxUrls} 页 · 深度 {maxDepth}
-          </div>
         </div>
         {sessions[0] ? (
           <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">

@@ -1,0 +1,4 @@
+# Installed after a dump was pulled off 39.97.52.149 onto a home machine.
+# Daily 03:15 UTC custom-format dump. Does not push off-box by itself.
+MAILTO=""
+15 3 * * * root cd /opt/g-snipers-overseas && /bin/sh deploy/backup-postgres.sh >> /var/log/g-snipers-backup.log 2>&1

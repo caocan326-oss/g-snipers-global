@@ -5,9 +5,7 @@ import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import {
   api,
   downloadApiFile,
-  confirmSiteSwitch,
   looksLikeSiteOrigin,
-  siteOriginHost,
   type AiAssist,
   type BingStatus,
   type ContentBrief,
@@ -33,6 +31,7 @@ import {
   type SitePage,
 } from "@/lib/api";
 import { explainServiceError } from "@/lib/errors";
+import { crawlFinishedNote, isHostSwitch, recrawlSavedSite } from "@/lib/site-origin";
 
 import { DiagnosisSection } from "./_components/DiagnosisSection";
 import { IssueBoard } from "./_components/IssueBoard";
@@ -93,6 +92,7 @@ export default function OnsiteBoardPage() {
   const [form, setForm] = useState({ path: "/", locale: "en-US", title: "" });
   const [origin, setOrigin] = useState("");
   const [savedOrigin, setSavedOrigin] = useState("");
+  const [switchPending, setSwitchPending] = useState(false);
   const [guide, setGuide] = useState<OnsiteGuide | null>(null);
   const [voicePending, setVoicePending] = useState(false);
 
@@ -247,21 +247,45 @@ export default function OnsiteBoardPage() {
 
   async function saveOrigin() {
     setError("");
+    setNote("");
+    if (!looksLikeSiteOrigin(origin)) {
+      setError("官网地址无效。请填写带域名的网址，例如 https://www.ugreen.com。");
+      return;
+    }
+    if (isHostSwitch(savedOrigin, origin)) {
+      setSwitchPending(true);
+      return;
+    }
+    await persistOrigin(origin, false);
+  }
+
+  function cancelSwitch() {
+    setSwitchPending(false);
+    setNote("没换站，还是当前网站。");
+  }
+
+  async function persistOrigin(nextOrigin: string, confirmSwitch: boolean) {
     setBusyId("save-origin");
+    setError("");
     try {
-      if (!looksLikeSiteOrigin(origin)) {
-        setError("官网地址无效。请填写带域名的网址，例如 https://www.snipers.com.cn。");
-        return;
-      }
-      const switching = Boolean(siteOriginHost(savedOrigin) && siteOriginHost(origin) && siteOriginHost(savedOrigin) !== siteOriginHost(origin));
-      if (switching && !confirmSiteSwitch(savedOrigin, origin.trim())) return;
       const res = await api<{ site_origin: string; note?: string }>("/api/onsite/settings", {
         method: "PATCH",
-        body: JSON.stringify({ site_origin: origin, confirm_site_switch: switching }),
+        body: JSON.stringify({ site_origin: nextOrigin, confirm_site_switch: confirmSwitch }),
       });
       setOrigin(res.site_origin);
       setSavedOrigin(res.site_origin);
-      setNote(res.note && !res.note.startsWith("只抓") ? res.note : `已保存客户官网：${res.site_origin}`);
+      setSwitchPending(false);
+      setNote(confirmSwitch || !savedOrigin ? "已保存，正在重新抓取。" : res.note && !res.note.startsWith("只抓") ? res.note : `已保存客户官网：${res.site_origin}`);
+      if (confirmSwitch || !savedOrigin) {
+        setBusyId("crawl-site");
+        try {
+          const session = await recrawlSavedSite(maxUrls, maxDepth);
+          setNote(crawlFinishedNote(session));
+        } catch (e) {
+          setNote("已保存。自动抓取没跑成，请再点「扩大页面范围」。");
+          setError(e instanceof Error ? e.message : "自动抓取失败");
+        }
+      }
       load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "保存官网失败");
@@ -273,8 +297,12 @@ export default function OnsiteBoardPage() {
   async function setupSnipersTest() {
     setError("");
     try {
-      const switching = Boolean(siteOriginHost(savedOrigin) && siteOriginHost(SNIPERS_TEST_ORIGIN) && siteOriginHost(savedOrigin) !== siteOriginHost(SNIPERS_TEST_ORIGIN));
-      if (switching && !confirmSiteSwitch(savedOrigin, SNIPERS_TEST_ORIGIN)) return;
+      const switching = isHostSwitch(savedOrigin, SNIPERS_TEST_ORIGIN);
+      if (switching) {
+        setOrigin(SNIPERS_TEST_ORIGIN);
+        setSwitchPending(true);
+        return;
+      }
       const saved = await api<{ site_origin: string }>("/api/onsite/settings", {
         method: "PATCH",
         body: JSON.stringify({ site_origin: SNIPERS_TEST_ORIGIN, confirm_site_switch: switching }),
@@ -796,8 +824,12 @@ export default function OnsiteBoardPage() {
 
       <SiteSetupCard
         origin={origin}
+        savedOrigin={savedOrigin}
         setOrigin={setOrigin}
         saveOrigin={saveOrigin}
+        confirmSwitch={() => void persistOrigin(origin, true)}
+        cancelSwitch={cancelSwitch}
+        switchPending={switchPending}
         setupSnipersTest={setupSnipersTest}
         maxUrls={maxUrls}
         setMaxUrls={setMaxUrls}
@@ -807,6 +839,8 @@ export default function OnsiteBoardPage() {
         crawlSite={crawlSite}
         busyId={busyId}
         sessions={sessions}
+        note={note}
+        error={error}
       />
 
       <TargetMarketsCard targetMarkets={targetMarkets} targetKeywords={targetKeywords} performance={performance} />
