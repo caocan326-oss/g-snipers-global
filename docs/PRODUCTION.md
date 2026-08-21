@@ -212,6 +212,7 @@ powershell -File deploy/sync-from-local.ps1
 | 2026-08-20 | 代码 | GSC 服务端调用改走 Cloudflare Worker 中转。浏览器授权仍直连 Google。不配 Google Ads。 |
 | 2026-08-20 | 代码 | 中转配上后，测速改走 Google PageSpeed（经 Worker）。未配中转时仍用 17CE。PageSpeed 可能超过 Nginx 默认 60s，发版时要把 `/api/` `proxy_read_timeout` 调到 180s。 |
 | 2026-08-21 | 运维 | `relay.weiyids.com` 橙云已通。生产 `.env` 的 `GOOGLE_RELAY_URL` 改为该地址（密钥未动）。`sync-from-local.ps1 -Rebuild` 发到 `6dad00d`。线上 Nginx `/api/` 超时已 180s。 |
+| 2026-08-21 | 运维 | 排名改走 Bright Data SERP API 区 `serp_api1`（`/request`）。不要用浏览器区 `scraping_browser1` 或 Dataset scrape。密钥未动。发到 `bacb349`，`excavator` 实测有自然结果。 |
 
 ---
 
