@@ -1,6 +1,6 @@
 # G-Snipers 海外版 · 生产档案
 
-最后更新：2026-08-20。  
+最后更新：2026-08-21。  
 这份文件是**唯一权威运维记录**。机器、仓库、域名有变动时，先改这里再动手。
 
 换机器开工、日常动作清单：先读 **`docs/HANDOVER.md`**（问「交接文档在哪里」就指这个文件）。
@@ -135,7 +135,7 @@ compose 会覆盖数据库地址为容器内：
 
 可选（空 = 未配置）：`LLM_*`、`PAGESPEED_API_KEY`、`GSC_*`、`GOOGLE_RELAY_URL`、`GOOGLE_RELAY_KEY`、`BING_*`、`INDEXNOW_*`、`BRIGHTDATA_*`、`DISTRIBUTION_*`、`PERPLEXITY_API_KEY`、`YOU_API_KEY`、`EXA_API_KEY`、`TAVILY_API_KEY`、`BOCHA_*`、`DASHSCOPE_*`
 
-北京访问不了 Google。GSC 换 token / 同步、以及 Google PageSpeed，必须走 Cloudflare Worker（`deploy/google-relay-worker/`）。`GOOGLE_RELAY_KEY` 只写服务器 `.env` 和 Cloudflare Secret。中转配上后测速不再走 17CE。
+北京访问不了 Google。GSC 换 token / 同步、以及 Google PageSpeed，必须走 Cloudflare Worker（`deploy/google-relay-worker/`）。生产中转地址是橙云 `https://relay.weiyids.com`，不要再用 `workers.dev`。`GOOGLE_RELAY_KEY` 只写服务器 `.env` 和 Cloudflare Secret。中转配上后测速不再走 17CE。
 
 禁止：`GOOGLE_ADS_*`。  
 禁止：把真实 Key、连接串、密码写进仓库或这份档案。
@@ -211,6 +211,7 @@ powershell -File deploy/sync-from-local.ps1
 | 2026-08-20 | 产品/运维 | 北京出不去 Google PageSpeed。测速改 17CE 海外 HTTP（`CE17_USER` / `CE17_API_PWD` 只在服务器 `.env`）。工作台不再让人填。排名仍 Bright Data。 |
 | 2026-08-20 | 代码 | GSC 服务端调用改走 Cloudflare Worker 中转。浏览器授权仍直连 Google。不配 Google Ads。 |
 | 2026-08-20 | 代码 | 中转配上后，测速改走 Google PageSpeed（经 Worker）。未配中转时仍用 17CE。PageSpeed 可能超过 Nginx 默认 60s，发版时要把 `/api/` `proxy_read_timeout` 调到 180s。 |
+| 2026-08-21 | 运维 | `relay.weiyids.com` 橙云已通。生产 `.env` 的 `GOOGLE_RELAY_URL` 改为该地址（密钥未动）。`sync-from-local.ps1 -Rebuild` 发到 `6dad00d`。线上 Nginx `/api/` 超时已 180s。 |
 
 ---
 
