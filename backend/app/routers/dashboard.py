@@ -354,7 +354,7 @@ def workbench(
     issues = (
         db.query(OnsiteIssue)
         .join(SitePage, SitePage.id == OnsiteIssue.page_id)
-        .filter(OnsiteIssue.tenant_id == user.tenant_id, OnsiteIssue.status.in_(["open", "drafted"]))
+        .filter(OnsiteIssue.tenant_id == user.tenant_id, OnsiteIssue.status.in_(OPENISH))
         .all()
     )
     issues = sorted(issues, key=lambda i: (ISSUE_RANK.get(i.severity, 9), ISSUE_RANK.get(i.risk, 9), i.created_at))

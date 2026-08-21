@@ -7,7 +7,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { CountryPicker } from "@/components/CountryPicker";
 import { api, type Market, type SeoPage } from "@/lib/api";
+import { countryByCode, countryLabel, localeForCode } from "@/lib/countries";
 
 const statusLabel: Record<string, string> = {
   idea: "选题",
@@ -32,7 +34,7 @@ export default function SeoListPage() {
   const [markets, setMarkets] = useState<Market[]>([]);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
-  const [form, setForm] = useState({ title: "", target_keyword: "", locale: "en-US", market_id: "" });
+  const [form, setForm] = useState({ title: "", target_keyword: "", country_code: "US", market_id: "" });
 
   function load() {
     const q = status ? `?status=${status}` : "";
@@ -54,7 +56,9 @@ export default function SeoListPage() {
       const created = await api<SeoPage>("/api/seo-pages", {
         method: "POST",
         body: JSON.stringify({
-          ...form,
+          title: form.title,
+          target_keyword: form.target_keyword,
+          locale: markets.find((m) => m.id === form.market_id)?.primary_locale || localeForCode(form.country_code),
           market_id: form.market_id || null,
         }),
       });
@@ -88,7 +92,7 @@ export default function SeoListPage() {
               <tr>
                 <th className="px-5 py-3 font-medium">选题</th>
                 <th className="px-5 py-3 font-medium">关键词</th>
-                <th className="px-5 py-3 font-medium">语言</th>
+                <th className="px-5 py-3 font-medium">国家</th>
                 <th className="px-5 py-3 font-medium">状态</th>
               </tr>
             </thead>
@@ -107,7 +111,7 @@ export default function SeoListPage() {
                     </Link>
                   </td>
                   <td className="px-5 py-3 text-slate-600">{p.target_keyword}</td>
-                  <td className="px-5 py-3">{p.locale}</td>
+                  <td className="px-5 py-3">{countryLabel(p.locale)}</td>
                   <td className="px-5 py-3">
                     <Badge tone={statusTone[p.status]}>{statusLabel[p.status] ?? p.status}</Badge>
                   </td>
@@ -123,7 +127,7 @@ export default function SeoListPage() {
           <CardTitle>新建选题</CardTitle>
         </CardHeader>
         <CardContent>
-          <form className="grid gap-3 md:grid-cols-5" onSubmit={onCreate}>
+          <form className="grid gap-3 md:grid-cols-2" onSubmit={onCreate}>
             <Input
               placeholder="内容标题"
               value={form.title}
@@ -136,23 +140,38 @@ export default function SeoListPage() {
               onChange={(e) => setForm({ ...form, target_keyword: e.target.value })}
               required
             />
-            <Input
-              placeholder="语言，例如 en-US"
-              value={form.locale}
-              onChange={(e) => setForm({ ...form, locale: e.target.value })}
-            />
-            <select
-              className="h-9 rounded-md border border-slate-200 px-2 text-sm"
-              value={form.market_id}
-              onChange={(e) => setForm({ ...form, market_id: e.target.value })}
-            >
-              <option value="">暂不绑定市场</option>
-              {markets.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name}
-                </option>
-              ))}
-            </select>
+            <div className="md:col-span-2">
+              <div className="mb-1 text-xs text-slate-500">这篇按哪个国家写</div>
+              <CountryPicker
+                value={form.country_code}
+                onChange={(country_code) => {
+                  const match = markets.find((m) => m.country_code.toUpperCase() === country_code);
+                  setForm({ ...form, country_code, market_id: match?.id || "" });
+                }}
+              />
+            </div>
+            {markets.length ? (
+              <select
+                className="h-9 rounded-md border border-slate-200 px-2 text-sm"
+                value={form.market_id}
+                onChange={(e) => {
+                  const market = markets.find((m) => m.id === e.target.value);
+                  setForm({
+                    ...form,
+                    market_id: e.target.value,
+                    country_code: market?.country_code.toUpperCase() || form.country_code,
+                  });
+                }}
+              >
+                <option value="">不绑定已有市场，只按上面的国家</option>
+                {markets.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                    {countryByCode(m.country_code) ? "" : ` · ${m.country_code}`}
+                  </option>
+                ))}
+              </select>
+            ) : null}
             <Button type="submit">创建并编辑</Button>
           </form>
           {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}

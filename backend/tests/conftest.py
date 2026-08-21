@@ -13,6 +13,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.auth import hash_password
 from app.database import Base, get_db
+from app.login_guard import reset_login_guard
 from app.main import app
 from app.models import Tenant, User
 
@@ -22,6 +23,13 @@ engine = create_engine(
     poolclass=StaticPool,
 )
 TestingSession = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+
+@pytest.fixture(autouse=True)
+def _clear_login_guard() -> Generator[None, None, None]:
+    reset_login_guard()
+    yield
+    reset_login_guard()
 
 
 @pytest.fixture()

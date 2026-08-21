@@ -6,9 +6,9 @@ import { FormEvent, useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { CountryPicker } from "@/components/CountryPicker";
 import { api, type Market } from "@/lib/api";
+import { countryByCode, countryLabel } from "@/lib/countries";
 
 const statusTone: Record<string, "green" | "amber" | "default"> = {
   priority: "green",
@@ -25,12 +25,7 @@ const statusLabel: Record<string, string> = {
 export default function InsightsPage() {
   const [markets, setMarkets] = useState<Market[]>([]);
   const [error, setError] = useState("");
-  const [form, setForm] = useState({
-    name: "",
-    region: "亚太",
-    country_code: "",
-    primary_locale: "en-US",
-  });
+  const [countryCode, setCountryCode] = useState("US");
 
   function load() {
     api<Market[]>("/api/markets").then(setMarkets).catch((e) => setError(e.message));
@@ -44,8 +39,18 @@ export default function InsightsPage() {
     e.preventDefault();
     setError("");
     try {
-      await api("/api/markets", { method: "POST", body: JSON.stringify({ ...form, status: "watching" }) });
-      setForm({ ...form, name: "", country_code: "" });
+      const country = countryByCode(countryCode);
+      if (!country) return setError("请先点选一个国家。");
+      await api("/api/markets", {
+        method: "POST",
+        body: JSON.stringify({
+          name: country.name,
+          region: country.region,
+          country_code: country.code,
+          primary_locale: country.locale,
+          status: "watching",
+        }),
+      });
       load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "创建失败");
@@ -79,7 +84,7 @@ export default function InsightsPage() {
                     <span className="text-xs font-normal text-slate-400">{m.country_code}</span>
                   </CardTitle>
                   <p className="mt-1 text-xs text-slate-500">
-                    {m.region} · {m.primary_locale}
+                    {m.region} · {countryLabel(m.country_code || m.primary_locale)}
                   </p>
                 </div>
                 <Badge tone={statusTone[m.status] ?? "default"}>{statusLabel[m.status] ?? m.status}</Badge>
@@ -100,33 +105,9 @@ export default function InsightsPage() {
           <CardTitle>新增客户目标市场</CardTitle>
         </CardHeader>
         <CardContent>
-          <form className="grid gap-3 md:grid-cols-5" onSubmit={onCreate}>
-            <div>
-              <Label>市场名称</Label>
-              <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
-            </div>
-            <div>
-              <Label>大区</Label>
-              <Input value={form.region} onChange={(e) => setForm({ ...form, region: e.target.value })} />
-            </div>
-            <div>
-              <Label>国家码</Label>
-              <Input
-                value={form.country_code}
-                onChange={(e) => setForm({ ...form, country_code: e.target.value.toUpperCase() })}
-                required
-              />
-            </div>
-            <div>
-              <Label>主要语言</Label>
-              <Input
-                value={form.primary_locale}
-                onChange={(e) => setForm({ ...form, primary_locale: e.target.value })}
-              />
-            </div>
-            <div className="flex items-end">
-              <Button type="submit">添加市场</Button>
-            </div>
+          <form className="space-y-3" onSubmit={onCreate}>
+            <CountryPicker value={countryCode} onChange={setCountryCode} />
+            <Button type="submit">添加市场</Button>
           </form>
           {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
         </CardContent>

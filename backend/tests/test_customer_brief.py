@@ -4,6 +4,36 @@ from app.models import OnsiteIssue, SitePage, Tenant
 from tests.conftest import auth_header
 
 
+def test_workbench_lists_same_openish_issues_as_summary(client: TestClient, demo_user, db) -> None:
+    tenant = db.get(Tenant, demo_user.tenant_id)
+    tenant.site_origin = "https://www.example.com"
+    page = SitePage(
+        tenant_id=demo_user.tenant_id,
+        path="/applied",
+        locale="en-US",
+        title="Applied",
+        crawl_status="ok",
+    )
+    db.add(page)
+    db.flush()
+    issue = OnsiteIssue(
+        tenant_id=demo_user.tenant_id,
+        page_id=page.id,
+        category="tdk",
+        title="首页标题过长",
+        status="draft_applied",
+        severity="critical",
+        risk="high",
+    )
+    db.add(issue)
+    db.commit()
+
+    headers = auth_header(client)
+    workbench = client.get("/api/dashboard/workbench?days=28", headers=headers).json()
+    assert workbench["summary"]["onsite_open_critical"] == 1
+    assert any(item["id"] == issue.id for item in workbench["seo_items"])
+
+
 def test_customer_brief_empty_tenant_stays_untested(client: TestClient, demo_user) -> None:
     headers = auth_header(client)
     res = client.get("/api/dashboard/customer-brief", headers=headers)

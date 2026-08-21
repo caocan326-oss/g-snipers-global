@@ -119,6 +119,18 @@ def test_demo_login_can_be_disabled(client: TestClient, demo_user, monkeypatch) 
     assert "演示账号已关闭" in blocked.json()["detail"]
 
 
+def test_login_locks_after_five_failures(client: TestClient) -> None:
+    email = "lockout@example.com"
+    for _ in range(4):
+        res = client.post("/api/auth/login", json={"email": email, "password": "wrong"})
+        assert res.status_code == 401
+    fifth = client.post("/api/auth/login", json={"email": email, "password": "wrong"})
+    assert fifth.status_code == 429
+    assert "15 分钟" in fifth.json()["detail"]
+    again = client.post("/api/auth/login", json={"email": email, "password": "wrong"})
+    assert again.status_code == 429
+
+
 def test_boot_does_not_require_google_ads_env(client: TestClient, monkeypatch) -> None:
     for key in (
         "GOOGLE_ADS_CLIENT_ID",

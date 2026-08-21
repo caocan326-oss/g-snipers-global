@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { api, type SeoPage, type WorkOrder } from "@/lib/api";
+import { countryLabel } from "@/lib/countries";
 
 const steps = ["outline", "draft", "meta", "review"] as const;
 const stepLabel: Record<string, string> = {
@@ -140,7 +141,7 @@ export default function SeoEditorPage() {
         </Link>
         <div className="mt-2 flex flex-wrap items-center gap-3">
           <h1 className="text-2xl font-semibold">{page.title}</h1>
-          <Badge>{page.locale}</Badge>
+          <Badge>{countryLabel(page.locale)}</Badge>
           <Badge tone="brand">{page.status}</Badge>
         </div>
         <p className="mt-1 text-sm text-slate-500">

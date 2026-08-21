@@ -1,11 +1,7 @@
 import type { GscStatus, ProjectTargets, Workbench, WorkbenchSeoPerformance } from "@/lib/api";
+import { DIAGNOSTIC_COUNTRIES, type DiagnosticCountry } from "@/lib/countries";
 
-export type DiagnosticCountry = {
-  code: string;
-  name: string;
-  region: string;
-  locale: string;
-};
+export { DIAGNOSTIC_COUNTRIES, type DiagnosticCountry };
 
 export type TargetCompetitorDraft = { name: string; website: string };
 
@@ -16,15 +12,6 @@ export type TargetForm = {
   keywords: string;
   competitors: TargetCompetitorDraft[];
 };
-
-export const DIAGNOSTIC_COUNTRIES: DiagnosticCountry[] = [
-  { code: "US", name: "美国", region: "北美", locale: "en-US" },
-  { code: "GB", name: "英国", region: "欧洲", locale: "en-GB" },
-  { code: "DE", name: "德国", region: "欧洲", locale: "de-DE" },
-  { code: "JP", name: "日本", region: "亚太", locale: "ja-JP" },
-  { code: "AE", name: "阿联酋", region: "中东", locale: "en-AE" },
-  { code: "AU", name: "澳大利亚", region: "亚太", locale: "en-AU" },
-];
 
 export const emptyTargetForm: TargetForm = {
   site_origin: "",

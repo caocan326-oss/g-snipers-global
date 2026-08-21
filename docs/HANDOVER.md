@@ -109,6 +109,14 @@ docker compose up --build
 
 演示登录（只用于演示租户）：`am@demo.gsnipers.com` / `demo1234`。
 
+上第二个客户不要手插库。在仓库 `backend` 目录：
+
+```powershell
+python -m app.provision_tenant --name "客户名" --email am@customer.com --password "至少8位" --site https://www.customer.com
+```
+
+不要做公开注册页。
+
 3. 改完在本机看 `git status`、`git diff`，确认没有把 `.env`、私钥、密钥加进去。
 4. 用户明确要求提交时才 commit。不要主动 commit。
 5. 提交后立刻推两个远端（镜像必须跟着权威源）：

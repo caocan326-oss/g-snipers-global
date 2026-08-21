@@ -3,8 +3,10 @@ import { FormEvent } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CountryPicker } from "@/components/CountryPicker";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { countryLabel } from "@/lib/countries";
 import type { GeoPrompt } from "@/lib/api";
 
 import { diagnosisOptions, displayRate, evidenceLabel, obsLabel, obsTone } from "../_helpers";
@@ -100,8 +102,8 @@ export function SamplePromptsPanel({
   setObs,
 }: {
   prompts: GeoPrompt[];
-  form: { prompt_text: string; locale: string };
-  setForm: (form: { prompt_text: string; locale: string }) => void;
+  form: { prompt_text: string; country_code: string };
+  setForm: (form: { prompt_text: string; country_code: string }) => void;
   addPrompt: (e: FormEvent) => void;
   aiPrompt: (id: string) => void;
   setDiagnosis: (promptId: string, diagnosis: string) => void;
@@ -114,7 +116,7 @@ export function SamplePromptsPanel({
           <CardHeader>
             <CardTitle className="text-base">{p.prompt_text}</CardTitle>
             <p className="text-xs text-slate-500">
-              来源 {p.prompt_key || "自定义"} · 类型 {p.prompt_type || "自定义"} · 问题组 {p.prompt_pack_id || "自定义"} · {p.locale} · 被提到 {displayRate(p.mention_rate)} · 给出官网 {displayRate(p.cite_rate)} · 已核对 {displayRate(p.verified_citation_rate)} · 竞品 {displayRate(p.competitor_rate)}
+              {countryLabel(p.locale)} · 被提到 {displayRate(p.mention_rate)} · 给出官网 {displayRate(p.cite_rate)} · 已核对 {displayRate(p.verified_citation_rate)} · 竞品 {displayRate(p.competitor_rate)}
             </p>
             {p.evidence ? <pre className="mt-2 whitespace-pre-wrap text-xs text-slate-500">{p.evidence}</pre> : null}
             <div className="mt-2 flex items-center gap-2">
@@ -146,18 +148,18 @@ export function SamplePromptsPanel({
           <CardTitle>新增买家问题</CardTitle>
         </CardHeader>
         <CardContent>
-          <form className="grid gap-3 md:grid-cols-3" onSubmit={addPrompt}>
+          <form className="space-y-3" onSubmit={addPrompt}>
             <Input
-              className="md:col-span-2"
               placeholder="例如：Which supplier is reliable for industrial pumps in the US?"
               value={form.prompt_text}
               onChange={(e) => setForm({ ...form, prompt_text: e.target.value })}
               required
             />
-            <div className="flex gap-2">
-              <Input value={form.locale} onChange={(e) => setForm({ ...form, locale: e.target.value })} />
-              <Button type="submit">添加</Button>
+            <div>
+              <div className="mb-1 text-xs text-slate-500">这个问题按哪个国家记</div>
+              <CountryPicker value={form.country_code} onChange={(country_code) => setForm({ ...form, country_code })} />
             </div>
+            <Button type="submit">添加</Button>
           </form>
         </CardContent>
       </Card>

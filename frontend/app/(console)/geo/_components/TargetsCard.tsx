@@ -14,7 +14,7 @@ export function TargetsCard({ targets }: { targets: ProjectTargets | null }) {
           <div className="mt-2 flex flex-wrap gap-2">
             {(targets?.markets ?? []).slice(0, 6).map((market) => (
               <Badge key={market.id} tone={market.status === "priority" ? "brand" : "default"}>
-                {market.name} · {market.primary_locale}
+                {market.name}
               </Badge>
             ))}
             {targets?.markets.length ? null : <span className="text-sm text-slate-500">未设置</span>}

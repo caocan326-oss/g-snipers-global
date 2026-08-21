@@ -31,6 +31,8 @@ import { SampleRunsCard } from "./_components/SampleRunsCard";
 import { TargetsCard } from "./_components/TargetsCard";
 import { TabNav } from "./_components/TabNav";
 import { TicketsPanel, type TicketForm } from "./_components/TicketsPanel";
+import { localeForCode } from "@/lib/countries";
+
 import { geoEvidenceVerdict, type Tab } from "./_helpers";
 
 export default function GeoPage() {
@@ -46,7 +48,7 @@ export default function GeoPage() {
   const [pageId, setPageId] = useState("");
   const [items, setItems] = useState<GeoChecklistItem[]>([]);
   const [error, setError] = useState("");
-  const [form, setForm] = useState({ prompt_text: "", locale: "en-US" });
+  const [form, setForm] = useState({ prompt_text: "", country_code: "US" });
   const [ticketForm, setTicketForm] = useState<TicketForm>({
     prompt_id: "",
     title: "",
@@ -84,7 +86,15 @@ export default function GeoPage() {
     loadRuns();
     loadAssets();
     api<SeoPage[]>("/api/seo-pages").then(setPages).catch(() => undefined);
-    api<ProjectTargets>("/api/project-targets").then(setTargets).catch(() => undefined);
+    api<ProjectTargets>("/api/project-targets")
+      .then((res) => {
+        setTargets(res);
+        const preferred = res.markets.find((market) => market.status === "priority") ?? res.markets[0];
+        if (preferred?.country_code) {
+          setForm((current) => (current.prompt_text ? current : { ...current, country_code: preferred.country_code.toUpperCase() }));
+        }
+      })
+      .catch(() => undefined);
     api<GeoProviderStatusList>("/api/geo/providers/status").then(setProviders).catch(() => undefined);
   }, []);
 
@@ -122,8 +132,8 @@ export default function GeoPage() {
 
   async function addPrompt(e: FormEvent) {
     e.preventDefault();
-    await api("/api/geo/prompts", { method: "POST", body: JSON.stringify(form) });
-    setForm({ prompt_text: "", locale: "en-US" });
+    await api("/api/geo/prompts", { method: "POST", body: JSON.stringify({ prompt_text: form.prompt_text, locale: localeForCode(form.country_code) }) });
+    setForm({ prompt_text: "", country_code: form.country_code });
     loadPrompts();
   }
 

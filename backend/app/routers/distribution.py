@@ -108,7 +108,7 @@ def _job_out(row: DistributionJob) -> DistributionJobOut:
 
 
 @router.get("/providers", response_model=list[ProviderOut])
-def list_providers() -> list[ProviderOut]:
+def list_providers(_user: User = Depends(get_current_user)) -> list[ProviderOut]:
     return [
         ProviderOut(
             key=p.key,

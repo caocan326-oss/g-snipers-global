@@ -5,6 +5,8 @@ from tests.conftest import auth_header
 
 def test_providers_unconfigured_and_send_gates(client: TestClient, demo_user) -> None:
     headers = auth_header(client)
+    anon = client.get("/api/distribution/providers")
+    assert anon.status_code == 401
     providers = client.get("/api/distribution/providers", headers=headers)
     assert providers.status_code == 200
     assert len(providers.json()) == 3

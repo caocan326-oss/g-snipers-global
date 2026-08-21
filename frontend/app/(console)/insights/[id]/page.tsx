@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { api, type ChainFeed, type MarketDetail } from "@/lib/api";
+import { countryLabel } from "@/lib/countries";
 
 export default function MarketDetailPage() {
   const params = useParams<{ id: string }>();
@@ -59,7 +60,7 @@ export default function MarketDetailPage() {
     e.preventDefault();
     await api(`/api/markets/${params.id}/demand-signals`, {
       method: "POST",
-      body: JSON.stringify({ ...signal, source: "manual" }),
+      body: JSON.stringify({ ...signal, locale: market?.primary_locale || signal.locale, source: "manual" }),
     });
     setSignal({ theme: "", locale: market?.primary_locale ?? "en-US", intensity: 3, intent: "informational" });
     load();
@@ -105,7 +106,7 @@ export default function MarketDetailPage() {
           <span className="text-base font-normal text-slate-400">{market.country_code}</span>
         </h1>
         <p className="mt-1 text-sm text-slate-500">
-          {market.region} · {market.primary_locale} · 可转为 SEO、GEO 和站外跟进任务
+          {market.region} · {countryLabel(market.country_code || market.primary_locale)} · 可转为 SEO、GEO 和站外跟进任务
         </p>
         {market.notes ? <p className="mt-2 text-sm text-slate-600">{market.notes}</p> : null}
       </div>
@@ -218,7 +219,7 @@ export default function MarketDetailPage() {
               <li key={s.id} className="rounded-md border border-slate-100 p-3">
                 <div className="font-medium">{s.theme}</div>
                 <div className="mt-1 flex flex-wrap gap-2 text-xs text-slate-500">
-                  <Badge>{s.locale}</Badge>
+                  <Badge>{countryLabel(s.locale)}</Badge>
                   <Badge tone="blue">{s.intent}</Badge>
                   <span>来源 {s.source}</span>
                 </div>
@@ -236,18 +237,13 @@ export default function MarketDetailPage() {
               </li>
             ))}
           </ul>
-          <form className="grid gap-2 md:grid-cols-5" onSubmit={addSignal}>
+          <form className="grid gap-2 md:grid-cols-4" onSubmit={addSignal}>
             <Input
               className="md:col-span-2"
               placeholder="主题 / 买家会问的原句"
               value={signal.theme}
               onChange={(e) => setSignal({ ...signal, theme: e.target.value })}
               required
-            />
-            <Input
-              placeholder="语言"
-              value={signal.locale}
-              onChange={(e) => setSignal({ ...signal, locale: e.target.value })}
             />
             <select
               className="h-9 rounded-md border border-slate-200 px-2 text-sm"
