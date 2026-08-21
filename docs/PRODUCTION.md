@@ -114,7 +114,7 @@ Docker Compose 项目名：`g-snipers-overseas`
 | --- | --- | --- |
 | `g-snipers-overseas-frontend-1` | 3000 | Next.js |
 | `g-snipers-overseas-backend-1` | 8000 | FastAPI（启动时 alembic + seed） |
-| `…-postgres-1` | 5432 | Postgres 16。**5432 对公网暴露**，只靠弱口令，后续应收掉端口映射 |
+| `…-postgres-1` | 无宿主机端口 | Postgres 16。只在 compose 网络里给 backend 用，不映射 5432。本机查库：`docker compose exec postgres psql -U gsnipers` |
 
 `FRONTEND_ORIGIN` 必须从 `.env` 读。生产应为 `https://www.weiyids.com`。compose 里不要再写死 `http://localhost:3000`。
 
@@ -227,5 +227,6 @@ powershell -File deploy/sync-from-local.ps1
 - 不要把 `C0.pem`、`g_snipers_deploy`、线上 `.env` 提交进 git。
 - 不要把 `/opt/g-snipers-global` 当成发版目录。
 - 不要在没读这份档案时再「重新部署一套」。
+- 不要把 Postgres 的 5432 再映射到宿主机或公网。库只给 compose 网络里的 backend 用。
 - 不要配置 Google Ads。
 - 不要假设 `weiyids.com`（无 www）已经能开。

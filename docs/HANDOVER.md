@@ -230,5 +230,6 @@ git log -1 --oneline
 - 不要把 `/opt/g-snipers-global` 当发版目录。
 - 不要从本机 rsync 整目录覆盖生产。
 - 不要用 `git reset --hard` 除非你明确要丢掉那边的临时改动。
+- 不要把 Postgres 的 5432 再映射到宿主机。
 - 不要配置 Google Ads。
 - 不要假设 `weiyids.com`（无 www）已经能开。正式地址是 https://www.weiyids.com 。
