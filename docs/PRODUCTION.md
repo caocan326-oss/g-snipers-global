@@ -227,6 +227,7 @@ powershell -File deploy/sync-from-local.ps1
 | 2026-08-21 | 代码 | 客户库可导出：管理员 `/ops/backup`、落点 `BACKUP_HOST_DIR`、可选异地 dir/SCP、`deploy/backup-postgres.sh`。定时默认关，未装 cron。 |
 | 2026-08-21 | 产品 | 外部接口按客户按天限次。管理员 `/ops/usage` 设每天上限，看已用/还剩。默认：排名 15、博查 24、百炼 24、大模型 60、测速 8。GEO/SERP/测速用完返回 429。 |
 | 2026-08-21 | 产品 | 客户说明、站内诊断、GEO 抽查可下 PDF（Markdown → HTML → WeasyPrint）。发版必须 `-Rebuild`。 |
+| 2026-08-21 | 产品/运维 | 家里发到 `3a287c2`（`sync-from-local.ps1 -Rebuild`）。接口按天限次、客户 PDF、库副本页（定时关）。health 200；providers 未登录 401。 |
 
 ---
 
