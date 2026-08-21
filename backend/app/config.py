@@ -36,8 +36,9 @@ class Settings(BaseSettings):
     indexnow_key_location: str = ""
     brightdata_browser_ws: str = ""
     brightdata_dataset_api_key: str = ""
-    brightdata_serp_dataset_id: str = "gd_mfz5x93lmsjjjylob"
-    brightdata_serp_endpoint: str = "https://api.brightdata.com/datasets/v3/scrape"
+    brightdata_serp_zone: str = ""
+    brightdata_serp_dataset_id: str = ""
+    brightdata_serp_endpoint: str = "https://api.brightdata.com/request"
     onsite_render_js_enabled: bool = True
     onsite_render_timeout_ms: int = 30000
     perplexity_api_key: str = ""

@@ -246,7 +246,7 @@ def _integration_settings_out(db: Session, tenant_id: str) -> IntegrationSetting
         ),
         brightdata_serp_configured=bool(
             _integration_value(db, tenant_id, "brightdata_dataset_api_key")
-            and _integration_value(db, tenant_id, "brightdata_serp_dataset_id")
+            and _integration_value(db, tenant_id, "brightdata_serp_zone")
         ),
     )
 

@@ -84,6 +84,7 @@ export default function OnsiteBoardPage() {
     ce17_user: "",
     ce17_api_pwd: "",
     brightdata_dataset_api_key: "",
+    brightdata_serp_zone: "",
     brightdata_serp_dataset_id: "",
     brightdata_serp_endpoint: "",
   });
@@ -462,6 +463,7 @@ export default function OnsiteBoardPage() {
         ce17_user: "",
         ce17_api_pwd: "",
         brightdata_dataset_api_key: "",
+        brightdata_serp_zone: "",
         brightdata_serp_dataset_id: "",
         brightdata_serp_endpoint: "",
       });

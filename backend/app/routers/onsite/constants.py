@@ -36,6 +36,7 @@ INTEGRATION_FIELDS = {
     "ce17_user": ("17CE 账号", "ce17_user"),
     "ce17_api_pwd": ("17CE api_pwd", "ce17_api_pwd"),
     "brightdata_dataset_api_key": ("排名检查 API Key", "brightdata_dataset_api_key"),
+    "brightdata_serp_zone": ("排名检查 SERP 区", "brightdata_serp_zone"),
     "brightdata_serp_dataset_id": ("排名检查数据集 ID", "brightdata_serp_dataset_id"),
     "brightdata_serp_endpoint": ("排名检查接口地址", "brightdata_serp_endpoint"),
 }

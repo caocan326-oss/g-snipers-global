@@ -826,6 +826,7 @@ class IntegrationSettingsIn(BaseModel):
     ce17_user: str | None = None
     ce17_api_pwd: str | None = None
     brightdata_dataset_api_key: str | None = None
+    brightdata_serp_zone: str | None = None
     brightdata_serp_dataset_id: str | None = None
     brightdata_serp_endpoint: str | None = None
     clear_keys: list[str] = []

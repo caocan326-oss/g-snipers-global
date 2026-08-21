@@ -129,7 +129,7 @@ def _performance_summary(db: Session, user: User) -> SeoPerformanceSummaryOut:
 def _serp_configured(db: Session, tenant_id: str) -> bool:
     return bool(
         _integration_value(db, tenant_id, "brightdata_dataset_api_key")
-        and _integration_value(db, tenant_id, "brightdata_serp_dataset_id")
+        and _integration_value(db, tenant_id, "brightdata_serp_zone")
     )
 
 
@@ -199,7 +199,7 @@ def _extract_organic_results(data: object, limit: int) -> list[dict[str, str | i
         url = str(item.get("link") or item.get("url") or item.get("href") or item.get("displayed_link") or "").strip()
         if not url:
             continue
-        position_raw = item.get("position") or item.get("rank") or idx
+        position_raw = item.get("position") or item.get("global_rank") or item.get("rank") or idx
         try:
             position = int(position_raw)
         except (TypeError, ValueError):
@@ -218,13 +218,15 @@ def _extract_organic_results(data: object, limit: int) -> list[dict[str, str | i
     return rows
 
 
-def _brightdata_serp_url(keyword: str, *, country: str, locale: str) -> str:
+def _brightdata_serp_url(keyword: str, *, country: str, locale: str, device: str = "desktop") -> str:
     language = locale.split("-", 1)[0].lower() if locale else "en"
-    query = [("q", keyword)]
+    query = [("q", keyword), ("brd_json", "1")]
     if country.strip():
         query.append(("gl", country.strip().lower()))
     if language:
         query.append(("hl", language))
+    if device == "mobile":
+        query.append(("brd_mobile", "1"))
     return f"{BRIGHTDATA_SERP_SEARCH_URL}?{urlencode(query)}"
 
 
@@ -238,39 +240,28 @@ def _fetch_brightdata_serp(
     device: str,
     limit: int,
 ) -> list[dict[str, str | int]]:
-    language = locale.split("-", 1)[0].lower() if locale else ""
+    api_key = _integration_value(db, tenant_id, "brightdata_dataset_api_key")
+    zone = _integration_value(db, tenant_id, "brightdata_serp_zone")
+    if not api_key or not zone:
+        raise RuntimeError("未配置 Bright Data SERP 区或 API Key。")
+    endpoint = _integration_value(db, tenant_id, "brightdata_serp_endpoint") or settings.brightdata_serp_endpoint
     payload = {
-        "input": [
-            {
-                "url": _brightdata_serp_url(keyword, country=country, locale=locale),
-                "keyword": keyword,
-                "language": language,
-                "country": country.strip().upper(),
-                "uule": "",
-                "brd_mobile": "1" if device == "mobile" else "",
-                "tbs": "",
-                "tbm": "",
-                "nfpr": "",
-                "index": "",
-            }
-        ],
-        "limit_per_input": limit,
-    }
-    params = {
-        "dataset_id": _integration_value(db, tenant_id, "brightdata_serp_dataset_id"),
-        "notify": "false",
-        "include_errors": "true",
+        "zone": zone,
+        "url": _brightdata_serp_url(keyword, country=country, locale=locale, device=device),
+        "format": "raw",
     }
     headers = {
-        "Authorization": f"Bearer {_integration_value(db, tenant_id, 'brightdata_dataset_api_key')}",
+        "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
     }
-    endpoint = _integration_value(db, tenant_id, "brightdata_serp_endpoint") or "https://api.brightdata.com/datasets/v3/scrape"
-    with httpx.Client(timeout=90, headers=headers) as client:
-        response = client.post(endpoint, params=params, json=payload)
+    with httpx.Client(timeout=60, headers=headers) as client:
+        response = client.post(endpoint, json=payload)
         response.raise_for_status()
         data = response.json()
-    return _extract_organic_results(data, limit)
+    rows = _extract_organic_results(data, limit)
+    if not rows:
+        raise RuntimeError("Bright Data SERP 区没有返回自然结果。")
+    return rows
 
 
 def _serp_run_out(run: SerpRun, results: list[SerpResult] | None = None) -> SerpRunOut:
@@ -610,7 +601,7 @@ def run_serp(
         return SerpRunBatchOut(
             status="未配置",
             configured=False,
-            note="服务器未配置 Bright Data Dataset SERP API。请配置 BRIGHTDATA_DATASET_API_KEY / BRIGHTDATA_SERP_DATASET_ID。",
+            note="服务器未配置 Bright Data SERP API。请配置 BRIGHTDATA_DATASET_API_KEY / BRIGHTDATA_SERP_ZONE。",
         )
     keywords = _target_serp_keywords(db, user, body.keywords, limit=min(5, body.limit))
     if not keywords:

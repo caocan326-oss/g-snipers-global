@@ -22,6 +22,7 @@ type IntegrationForm = {
   ce17_user: string;
   ce17_api_pwd: string;
   brightdata_dataset_api_key: string;
+  brightdata_serp_zone: string;
   brightdata_serp_dataset_id: string;
   brightdata_serp_endpoint: string;
 };
@@ -160,9 +161,9 @@ export function PerformanceDataCard({
                   onChange={(e) => setIntegrationForm({ ...integrationForm, brightdata_dataset_api_key: e.target.value })}
                 />
                 <Input
-                  placeholder="排名数据集 ID，默认 gd_mfz5x93lmsjjjylob"
-                  value={integrationForm.brightdata_serp_dataset_id}
-                  onChange={(e) => setIntegrationForm({ ...integrationForm, brightdata_serp_dataset_id: e.target.value })}
+                  placeholder="SERP 区名，和 Bright Data 控制台里的 SERP API 区一致"
+                  value={integrationForm.brightdata_serp_zone}
+                  onChange={(e) => setIntegrationForm({ ...integrationForm, brightdata_serp_zone: e.target.value })}
                 />
               </div>
               {integrations?.fields.some((field) => field.configured) ? (
