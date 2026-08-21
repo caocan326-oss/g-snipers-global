@@ -242,7 +242,7 @@ export default function GeoPage() {
 
   async function retestSameQuestions() {
     const latest = runs[0];
-    const promptIds = [...new Set((latest?.results ?? []).map((row) => row.prompt_id).filter(Boolean))];
+    const promptIds = Array.from(new Set((latest?.results ?? []).map((row) => row.prompt_id).filter(Boolean)));
     if (!promptIds.length) {
       setError("还没有上一批买家问题，先抽查一次再复测。");
       return;
