@@ -232,6 +232,7 @@ powershell -File deploy/sync-from-local.ps1
 | 2026-08-22 | 运维 | UptimeRobot 提交盯 `/api/health`，等 `caocan326@gmail.com` 点确认。库 dump 已拉到家里盘（与服务器 SHA256 一致）。已装 `/etc/cron.d/g-snipers-backup`。未配第二台 scp。 |
 | 2026-08-22 | 运维 | UptimeRobot 邮箱已确认，监控已在跑。交接写入 `HANDOVER.md` §4.1 / §4.2。 |
 | 2026-08-22 | 产品 | 换站保存不再静默失败：页内确认归档，写入新官网后自动抓取，灰字区分已保存/未保存。 |
+| 2026-08-22 | 产品/运维 | 家里发到 `57dd516`（`sync-from-local.ps1 -Rebuild`）。换站保存、交接 §4.1 / §4.2。 |
 
 ---
 

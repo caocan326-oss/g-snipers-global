@@ -7,7 +7,7 @@
 
 约定：家里和公司**不会同时改**。换机器前必须把这边 push 完。
 
-最后更新：2026-08-22 03:00（家里。换站保存已修，准备发版。异地副本见 §4.1。UptimeRobot 已确认。）。
+最后更新：2026-08-22 03:12（家里。换站保存已发到 `57dd516`。异地副本见 §4.1。UptimeRobot 已确认。）。
 
 ---
 
@@ -266,13 +266,13 @@ git log -1 --oneline
 
 | 项 | 值 |
 | --- | --- |
-| 日期 | 2026-08-22 03:00 |
+| 日期 | 2026-08-22 03:12 |
 | 最后一台 | 家里 `D:\workspace\G-snipers海外版` |
 | 分支 | `main` |
-| 提交 | 换站保存：页内确认归档、真写入新官网、说「已保存，正在重新抓取」。运维：§4.1 异地副本、§4.2 UptimeRobot。 |
-| 已 push origin / upstream | 本轮提交后推。 |
-| 已发版生产 | 本轮 `sync-from-local.ps1`。`DEMO_LOGIN_ENABLED` 仍关。Postgres 仍不映射 5432。 |
-| 接口实测 | 发完用绿联 `https://www.ugreen.com/` 再摸一遍保存。health 仍是探活目标。 |
+| 提交 | 四处对齐 `57dd516`。换站保存：页内确认归档、真写入新官网、说「已保存，正在重新抓取」。运维：§4.1 异地副本、§4.2 UptimeRobot。 |
+| 已 push origin / upstream | 是。 |
+| 已发版生产 | **是。** `sync-from-local.ps1 -Rebuild`。`DEMO_LOGIN_ENABLED` 仍关。Postgres 仍不映射 5432。 |
+| 接口实测 | health 发版后应 200。请用绿联 `https://www.ugreen.com/` 再摸一遍保存。 |
 | 未完成 | 绿联实走还没在新保存上重跑。UptimeRobot 没有原生微信。自动 scp 到第二台云还没有。Bing / IndexNow 可等。不要公开注册。不要自动群发。 |
 | 下一台先做 | 公司先 `git pull origin main`。不要两边同时改。 |
 
