@@ -8,6 +8,7 @@ import { FileText, Gauge, Globe2, HardDrive, LayoutDashboard, ListChecks, MapPin
 
 import { Button } from "@/components/ui/button";
 import { api, clearToken, getToken, type AiStatus, type User } from "@/lib/api";
+import { isAuthFailure } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 
 const nav = [
@@ -35,6 +36,7 @@ export default function ConsoleLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [ai, setAi] = useState<AiStatus | null>(null);
+  const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
     if (!getToken()) {
@@ -43,10 +45,18 @@ export default function ConsoleLayout({ children }: { children: ReactNode }) {
     }
     api<User>("/api/auth/me")
       .then((u) => {
+        setLoadError("");
         setUser(u);
         api<AiStatus>("/api/ai/status").then(setAi).catch(() => undefined);
       })
-      .catch(() => router.replace("/login"));
+      .catch((err) => {
+        const message = err instanceof Error ? err.message : "";
+        if (isAuthFailure(message)) {
+          router.replace("/login");
+          return;
+        }
+        setLoadError("服务暂时不可用，请刷新页面重试。");
+      });
   }, [router]);
 
   const extraNav = user?.role === "admin" ? adminNav : [];
@@ -201,7 +211,10 @@ export default function ConsoleLayout({ children }: { children: ReactNode }) {
             </nav>
           </div>
         </header>
-        <main className="min-w-0 px-4 py-5 sm:px-5 lg:px-8 lg:py-6">{children}</main>
+        <main className="min-w-0 px-4 py-5 sm:px-5 lg:px-8 lg:py-6">
+          {loadError ? <p className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{loadError}</p> : null}
+          {children}
+        </main>
       </div>
     </div>
   );

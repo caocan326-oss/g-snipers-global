@@ -1,6 +1,11 @@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { GeoSampleRun } from "@/lib/api";
+import type { GeoSampleResult, GeoSampleRun } from "@/lib/api";
+
+function otherCitations(result: GeoSampleResult) {
+  const shops = result.marketplace_citations ?? [];
+  return result.third_party_citations.filter((url) => !shops.includes(url));
+}
 
 export function SampleRunsCard({ runs }: { runs: GeoSampleRun[] }) {
   return (
@@ -32,13 +37,17 @@ export function SampleRunsCard({ runs }: { runs: GeoSampleRun[] }) {
               <div>官网来源已核对：{run.verified_citation_rate}</div>
             </div>
             <div className="mt-3 space-y-3">
-              {run.results.map((result) => (
+              {run.results.map((result) => {
+                const shops = result.marketplace_citations ?? [];
+                const other = otherCitations(result);
+                return (
                 <div key={result.id} className="rounded-md bg-slate-50 p-3 text-sm">
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge tone={result.mentioned ? "blue" : "default"}>{result.mentioned ? "被提到" : "未提到"}</Badge>
                     <Badge tone={result.owned_citations.length ? "green" : "default"}>
                       {result.owned_citations.length ? "有官网链接" : "没有官网链接"}
                     </Badge>
+                    {shops.length ? <Badge tone="default">有购物页，不算官网</Badge> : null}
                     <span className="text-xs text-slate-500">{result.engine_label ?? result.engine}</span>
                   </div>
                   {result.answer_excerpt ? (
@@ -46,14 +55,18 @@ export function SampleRunsCard({ runs }: { runs: GeoSampleRun[] }) {
                   ) : (
                     <p className="mt-2 text-xs text-slate-400">这条没有回答摘录，看导出记录。</p>
                   )}
-                  {result.third_party_citations.length ? (
-                    <p className="mt-2 text-xs text-slate-500">外来网址：{result.third_party_citations.join("；")}</p>
-                  ) : null}
                   {result.owned_citations.length ? (
                     <p className="mt-2 text-xs text-slate-500">疑似官网：{result.owned_citations.join("；")}</p>
                   ) : null}
+                  {shops.length ? (
+                    <p className="mt-2 text-xs text-slate-500">购物页（不算官网）：{shops.join("；")}</p>
+                  ) : null}
+                  {other.length ? (
+                    <p className="mt-2 text-xs text-slate-500">其它外来网址：{other.join("；")}</p>
+                  ) : null}
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )) : <p className="text-sm text-slate-500">还没有检查批次。记下一条回答后，可以点击“保存当前记录”。</p>}

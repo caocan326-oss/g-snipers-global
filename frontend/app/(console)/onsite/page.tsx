@@ -284,9 +284,8 @@ export default function OnsiteBoardPage() {
         try {
           const session = await recrawlSavedSite(maxUrls, maxDepth);
           setNote(crawlFinishedNote(session));
-        } catch (e) {
+        } catch {
           setNote("已保存。自动抓取没跑成，请再点「扩大页面范围」。");
-          setError(e instanceof Error ? e.message : "自动抓取失败");
         }
       }
       load();

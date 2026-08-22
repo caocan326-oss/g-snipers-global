@@ -33,7 +33,7 @@ from .common import (
     _dump_list,
     _evidence_tier,
     _extract_urls,
-    _is_owned_url,
+    _citation_buckets,
     _json_list,
     _root_domain,
     _run_out,
@@ -123,8 +123,7 @@ def create_sample_run_from_observations(
         citations = _split_urls(obs.citation_urls or "") + [
             u for u in _extract_urls(excerpt) if u not in _split_urls(obs.citation_urls or "")
         ]
-        owned = [url for url in citations if _is_owned_url(url, root, [])]
-        third_party = [url for url in citations if url not in owned]
+        owned, third_party = _citation_buckets(citations, root)
         tier = _evidence_tier(obs)
         evidence_id = f"ev_{run.id[:8]}_{obs.id[:8]}"
         result = GeoSampleResult(
@@ -255,8 +254,7 @@ def _execute_auto_sample(
             citations = sampled.citations if sampled.web_grounded else []
             if not citations and sampled.web_grounded:
                 citations = _extract_urls(text)
-            owned = [url for url in citations if _is_owned_url(url, root, [])]
-            third_party = [url for url in citations if url not in owned]
+            owned, third_party = _citation_buckets(citations, root)
             mentioned, brand_hits = _brand_mentioned(text, brand_names)
             evidence_id = f"ev_{run.id[:8]}_{prompt.id[:8]}_{sampled.engine}_{trial}"
             db.add(

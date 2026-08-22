@@ -664,6 +664,7 @@ class GeoSampleResultOut(BaseModel):
     citations: list[str] = []
     owned_citations: list[str] = []
     third_party_citations: list[str] = []
+    marketplace_citations: list[str] = []
     brand_hits: str = ""
     competitor_hits: str = ""
     verification_status: str

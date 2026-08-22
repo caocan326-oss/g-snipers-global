@@ -6,6 +6,7 @@ from urllib.parse import urlparse
 from sqlalchemy import func
 from sqlalchemy.orm import Session, selectinload
 
+from app.geo_citations import is_owned_url, marketplace_urls, split_citations
 from app.geo_helpers import DIAGNOSES, ENGINE_LABELS, ENGINES, engine_region
 from app.geo_loop import HANDOFF_LABELS, ticket_customer_note, ticket_handoff, ticket_live_url, ticket_paste
 from app.models import (
@@ -76,11 +77,21 @@ def _root_domain(domain: str) -> str:
 
 
 def _is_owned_url(url: str, root: str, aliases: list[str]) -> bool:
-    host = _host(url)
-    if not host or not root:
-        return False
-    normalized_aliases = {_root_domain(a) for a in aliases if a}
-    return host == root or host.endswith("." + root) or host in normalized_aliases
+    return is_owned_url(url, root, aliases)
+
+
+def _citation_buckets(urls: list[str], root: str, aliases: list[str] | None = None) -> tuple[list[str], list[str]]:
+    owned, _marketplace, _other = split_citations(urls, root, aliases)
+    owned_set = set(owned)
+    third_party: list[str] = []
+    seen: set[str] = set()
+    for url in urls:
+        value = (url or "").strip()
+        if not value or value in seen or value in owned_set:
+            continue
+        seen.add(value)
+        third_party.append(value)
+    return owned, third_party
 
 
 def _tenant_brand_names(tenant: Tenant | None) -> list[str]:
@@ -221,6 +232,7 @@ def _result_out(row: GeoSampleResult) -> GeoSampleResultOut:
         citations=_json_list(row.citations_json),
         owned_citations=_json_list(row.owned_citations_json),
         third_party_citations=_json_list(row.third_party_citations_json),
+        marketplace_citations=marketplace_urls(_json_list(row.third_party_citations_json)),
         brand_hits=row.brand_hits or "",
         competitor_hits=row.competitor_hits or "",
         verification_status=row.verification_status,

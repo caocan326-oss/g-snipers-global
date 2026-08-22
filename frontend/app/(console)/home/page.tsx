@@ -179,9 +179,8 @@ export default function HomePage() {
         try {
           const session = await recrawlSavedSite();
           setNote(crawlFinishedNote(session));
-        } catch (e) {
+        } catch {
           setNote("已保存。自动抓取没跑成，请到网站检查点「扩大页面范围」。");
-          setError(e instanceof Error ? e.message : "自动抓取失败");
         }
       }
       await reloadWorkbench();

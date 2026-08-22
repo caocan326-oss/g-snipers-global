@@ -26,6 +26,11 @@ const TECHNICAL_HINTS = [
 const HAS_CJK = /[\u4e00-\u9fff]/;
 
 export const UNEXPECTED_FAILURE = "这次没办成，请再试一次。系统没有悄悄做完。";
+export const SERVICE_UNAVAILABLE = "现在连不上服务，不是你的网络问题，请稍后再试。";
+
+export function isAuthFailure(message: string): boolean {
+  return /未登录|登录已失效|用户不存在/.test(message || "");
+}
 
 function looksTechnical(message: string): boolean {
   const lower = message.toLowerCase();
@@ -34,7 +39,11 @@ function looksTechnical(message: string): boolean {
 
 export function explainRequestError(message: string, status?: number): string {
   const text = (message || "").trim();
-  if (status && status >= 500) {
+  if (!status) {
+    if (!text || looksTechnical(text)) return SERVICE_UNAVAILABLE;
+    return text;
+  }
+  if (status >= 500) {
     if (HAS_CJK.test(text) && !looksTechnical(text)) return text;
     return UNEXPECTED_FAILURE;
   }

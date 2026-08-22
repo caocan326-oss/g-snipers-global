@@ -50,10 +50,7 @@ export async function api<T>(path: string, init: RequestInit & { timeoutMs?: num
     if (error instanceof DOMException && error.name === "AbortError") {
       throw new Error("请求超时，请稍后重试。测速和排名检查不会在后台偷偷完成。");
     }
-    if (error instanceof Error) {
-      throw new Error(explainRequestError(error.message));
-    }
-    throw new Error(explainRequestError(""));
+    throw new Error(explainRequestError(error instanceof Error ? error.message : ""));
   } finally {
     if (timer) window.clearTimeout(timer);
   }
@@ -95,10 +92,7 @@ export async function downloadApiFile(path: string, filename: string, timeoutMs 
     if (error instanceof DOMException && error.name === "AbortError") {
       throw new Error("下载超时，请稍后重试。");
     }
-    if (error instanceof Error) {
-      throw new Error(explainRequestError(error.message));
-    }
-    throw new Error(explainRequestError(""));
+    throw new Error(explainRequestError(error instanceof Error ? error.message : ""));
   } finally {
     window.clearTimeout(timer);
   }
@@ -758,6 +752,7 @@ export type GeoSampleResult = {
   citations: string[];
   owned_citations: string[];
   third_party_citations: string[];
+  marketplace_citations?: string[];
   brand_hits: string;
   competitor_hits: string;
   verification_status: string;

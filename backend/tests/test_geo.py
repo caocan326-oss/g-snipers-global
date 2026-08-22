@@ -377,7 +377,7 @@ def test_geo_sample_run_freezes_manual_observations_as_evidence(client: TestClie
             "status": "verified",
             "surface": "manual_ai_answer",
             "response_excerpt": "Example is listed with https://example.com/pumps as a source.",
-            "citation_urls": "https://example.com/pumps https://industry.example.org/list",
+            "citation_urls": "https://example.com/pumps https://industry.example.org/list https://item.jd.com/100112",
             "brand_mentions": "Example",
             "competitor_mentions": "Pump Rival",
             "interpretation_note": "人工核验 URL 可访问。",
@@ -400,7 +400,8 @@ def test_geo_sample_run_freezes_manual_observations_as_evidence(client: TestClie
     assert result["prompt_type"] == "custom"
     assert result["evidence_id"].startswith("ev_")
     assert result["owned_citations"] == ["https://example.com/pumps"]
-    assert result["third_party_citations"] == ["https://industry.example.org/list"]
+    assert result["third_party_citations"] == ["https://industry.example.org/list", "https://item.jd.com/100112"]
+    assert result["marketplace_citations"] == ["https://item.jd.com/100112"]
     assert result["verification_status"] == "passed"
     assert result["prompt_text_hash"]
     assert result["answer_text_hash"]
