@@ -818,10 +818,10 @@ def test_geo_summary_does_not_compare_two_providers_in_the_same_click(client: Te
     prompts = client.get("/api/geo/prompts", headers=headers).json()
     card = next(row for row in prompts if row["id"] == prompt.id)
     assert "提到了品牌，没有给出官网" in card["sample_verdict"]
-    assert "bocha 提到" in card["sample_verdict"]
-    assert "tavily 未提到" in card["sample_verdict"]
+    assert "博查 提到" in card["sample_verdict"]
+    assert "Tavily 未提到" in card["sample_verdict"]
     assert card["mention_rate"] == "50.0%"
-    assert "100W USB-C" in summary["latest_mention_split"] or "bocha 提到" in summary["latest_mention_split"]
+    assert "Tavily 未提到" in summary["latest_mention_split"] or "博查 提到" in summary["latest_mention_split"]
 
 
 def test_geo_grounded_batch_requires_a_live_source(client: TestClient, demo_user, monkeypatch) -> None:
@@ -1040,8 +1040,8 @@ def test_same_question_title_stays_full_and_follows_latest_sample(client: TestCl
     summary = client.get("/api/geo/summary", headers=headers).json()
     assert summary["latest_sampled"] == 2
     assert summary["latest_mentioned"] == 1
-    assert "tavily 提到" in summary["latest_mention_split"]
-    assert "bocha 未提到" in summary["latest_mention_split"]
+    assert "Tavily 提到" in summary["latest_mention_split"]
+    assert "博查 未提到" in summary["latest_mention_split"]
 
     prompts = client.get("/api/geo/prompts", headers=headers).json()
     card = next(row for row in prompts if row["id"] == prompt.id)
@@ -1052,9 +1052,15 @@ def test_same_question_title_stays_full_and_follows_latest_sample(client: TestCl
     this_week = next(section for section in brief["sections"] if section["key"] == "this_week")
     assert any(question in item and "提到了品牌" in item and "没提到我们" not in item for item in this_week["items"])
     assert "其中 1 条提到品牌" in brief["headline"]
-    assert "tavily 提到" in brief["markdown"] or "tavily 提到" in brief["headline"]
+    assert "Tavily 提到" in brief["markdown"] or "Tavily 提到" in brief["headline"]
+    assert "博查 未提到" in brief["markdown"]
+    assert "tavily 提到" not in brief["markdown"]
+    assert "bocha 未提到" not in brief["markdown"]
 
     board = client.get("/api/execution/items", headers=headers).json()
     geo_item = next(item for item in board["items"] if item["id"] == ticket.id)
     assert question in geo_item["title"]
     assert "提到了品牌" in geo_item["title"]
+    assert geo_item["sample_note"].startswith("1 / 2 提到")
+    assert "Tavily 提到" in geo_item["sample_note"]
+    assert "博查 未提到" in geo_item["sample_note"]

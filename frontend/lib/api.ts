@@ -821,6 +821,7 @@ export type GeoTicket = {
   recommended_action: string;
   retest_method: string;
   retest_result: string;
+  sample_note?: string;
   blocked_reason: string;
   status: string;
   verified_note: string | null;
@@ -1148,6 +1149,7 @@ export type ExecutionItem = {
   recommended_action: string;
   retest_method: string;
   retest_result: string;
+  sample_note?: string;
   result_url: string;
   blocked_reason: string;
   updated_at: string | null;

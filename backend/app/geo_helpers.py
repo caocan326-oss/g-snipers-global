@@ -22,6 +22,9 @@ ENGINE_LABELS = {
     "doubao": "豆包",
     "kimi": "Kimi",
     "tongyi": "通义",
+    "tavily": "Tavily",
+    "bocha": "博查",
+    "bailian": "百炼",
 }
 
 CHECKLIST_DEFS = (

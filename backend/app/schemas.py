@@ -497,6 +497,7 @@ class GeoTicketOut(BaseModel):
     recommended_action: str = ""
     retest_method: str = ""
     retest_result: str = ""
+    sample_note: str = ""
     blocked_reason: str = ""
     status: str
     verified_note: str | None
@@ -1449,6 +1450,7 @@ class ExecutionItemOut(BaseModel):
     recommended_action: str = ""
     retest_method: str = ""
     retest_result: str = ""
+    sample_note: str = ""
     result_url: str = ""
     blocked_reason: str = ""
     updated_at: datetime | None = None

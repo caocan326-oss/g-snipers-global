@@ -377,7 +377,7 @@ def _prompt_out(row: GeoPrompt, sample_verdict: str = "", sample_rows: list[GeoS
     )
 
 
-def _ticket_out(row: GeoTicket) -> GeoTicketOut:
+def _ticket_out(row: GeoTicket, sample_note: str = "") -> GeoTicketOut:
     return GeoTicketOut(
         id=row.id,
         prompt_id=row.prompt_id,
@@ -391,6 +391,7 @@ def _ticket_out(row: GeoTicket) -> GeoTicketOut:
         recommended_action=row.recommended_action or "补对应页或发出一张站外卡。我们不代改线上、不代发。",
         retest_method=row.retest_method or "对同一买家问题再抽查一次，只记有没有变化，不要求这次必须提到。",
         retest_result=row.retest_result or "",
+        sample_note=sample_note,
         blocked_reason=row.blocked_reason or "",
         status=row.status,
         verified_note=row.verified_note,

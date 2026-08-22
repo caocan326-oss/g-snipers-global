@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session, selectinload
 
+from app.geo_helpers import ENGINE_LABELS
 from app.models import GeoPrompt, GeoSampleResult, GeoSampleRun, GeoTicket, SitePage, SourcePlatform
 from app.official_apis import OFFICIAL_APIS
 
@@ -182,16 +183,21 @@ def prompt_sample_verdict(rows: list[GeoSampleResult]) -> str:
     return f"{head}{split}"
 
 
+def engine_label(engine: str) -> str:
+    key = (engine or "").strip()
+    return ENGINE_LABELS.get(key, key or "未知源")
+
+
 def mention_split_note(rows: list[GeoSampleResult]) -> str:
     if not rows:
         return ""
     bits: list[str] = []
     for row in rows:
-        engine = row.engine or "未知源"
+        label = engine_label(row.engine or "")
         if row.mentioned:
-            bits.append(f"{engine} 提到")
+            bits.append(f"{label} 提到")
         else:
-            bits.append(f"{engine} 未提到")
+            bits.append(f"{label} 未提到")
     return "（" + "；".join(bits) + "。）"
 
 
@@ -200,6 +206,30 @@ def mention_split_for_runs(runs: list[GeoSampleRun]) -> str:
     for run in runs:
         rows.extend(list(getattr(run, "results", None) or []))
     return mention_split_note(rows)
+
+
+def prompt_sample_tally(rows: list[GeoSampleResult]) -> str:
+    if not rows:
+        return ""
+    mentioned = sum(1 for row in rows if row.mentioned)
+    return f"{mentioned} / {len(rows)} 提到{mention_split_note(rows)}"
+
+
+def latest_prompt_rows(db: Session, tenant_id: str) -> dict[str, list[GeoSampleResult]]:
+    recent = (
+        db.query(GeoSampleRun)
+        .options(selectinload(GeoSampleRun.results))
+        .filter(GeoSampleRun.tenant_id == tenant_id)
+        .order_by(GeoSampleRun.started_at.desc())
+        .limit(12)
+        .all()
+    )
+    latest, _previous = pick_sample_batches(recent)
+    by_prompt: dict[str, list[GeoSampleResult]] = {}
+    for run in latest:
+        for row in list(getattr(run, "results", None) or []):
+            by_prompt.setdefault(row.prompt_id, []).append(row)
+    return by_prompt
 
 
 def compare_runs_note(latest: GeoSampleRun | None, previous: GeoSampleRun | None) -> str:

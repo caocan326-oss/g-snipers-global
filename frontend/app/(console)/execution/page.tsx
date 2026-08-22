@@ -39,6 +39,7 @@ function ItemCard({ item }: { item: ExecutionItem }) {
               </div>
               <h3 className="mt-2 font-semibold text-slate-950">{item.title}</h3>
               {item.subtitle ? <p className="mt-1 text-sm text-slate-500">{item.subtitle}</p> : null}
+              {item.sample_note ? <p className="mt-1 text-sm text-slate-700">这一轮 {item.sample_note}</p> : null}
               <div className="mt-3 grid gap-2 text-sm md:grid-cols-3">
                 <div className="rounded-md bg-slate-50 p-3">
                   <div className="text-xs font-medium text-slate-500">负责人</div>

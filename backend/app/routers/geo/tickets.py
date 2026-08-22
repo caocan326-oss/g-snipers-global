@@ -7,7 +7,7 @@ from app.ai_engine import assist_geo_ticket
 from app.auth import get_current_user
 from app.database import get_db
 from app.geo_helpers import DIAGNOSES, TICKET_STATUSES
-from app.geo_loop import refresh_open_tickets_from_samples
+from app.geo_loop import latest_prompt_rows, prompt_sample_tally, refresh_open_tickets_from_samples
 from app.models import GeoPrompt, GeoTicket, User
 from app.risk import require_confirm
 from app.schemas import AiAssistOut, AiStepIn, GeoTicketCreate, GeoTicketOut, GeoTicketVerifyIn
@@ -20,13 +20,14 @@ from .common import _ticket_out
 def list_tickets(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> list[GeoTicketOut]:
     if refresh_open_tickets_from_samples(db, user.tenant_id):
         db.commit()
+    by_prompt = latest_prompt_rows(db, user.tenant_id)
     rows = (
         db.query(GeoTicket)
         .filter(GeoTicket.tenant_id == user.tenant_id)
         .order_by(GeoTicket.created_at.desc())
         .all()
     )
-    return [_ticket_out(r) for r in rows]
+    return [_ticket_out(r, sample_note=prompt_sample_tally(by_prompt.get(r.prompt_id, []))) for r in rows]
 
 
 @router.post("/tickets", response_model=GeoTicketOut, status_code=201)

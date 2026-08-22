@@ -46,6 +46,7 @@ export function TicketsPanel({
               <p className="mt-1 text-xs text-slate-500">
                 判断 {diagnosisLabel[t.diagnosis] ?? t.diagnosis_label} · {ticketStatus[t.status] ?? t.status}
               </p>
+              {t.sample_note ? <p className="mt-1 text-xs text-slate-700">这一轮 {t.sample_note}</p> : null}
             </div>
             <Badge tone={t.status === "done" ? "green" : t.status === "reopened" ? "red" : "amber"}>
               {ticketStatus[t.status] ?? t.status}

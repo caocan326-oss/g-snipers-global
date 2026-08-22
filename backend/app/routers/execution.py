@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.auth import get_current_user
 from app.database import get_db
-from app.geo_loop import HONEST_ACCEPTANCE, HONEST_RETEST, geo_href, refresh_open_tickets_from_samples
+from app.geo_loop import HONEST_ACCEPTANCE, HONEST_RETEST, geo_href, latest_prompt_rows, prompt_sample_tally, refresh_open_tickets_from_samples
 from app.models import BacklinkGap, GeoTicket, OnsiteIssue, SitePage, User
 from app.routers.onsite.common import _category_label, _page_short, _plain_title
 from app.schemas import ExecutionBoardOut, ExecutionItemOut
@@ -59,14 +59,17 @@ def list_execution_items(user: User = Depends(get_current_user), db: Session = D
 
     if refresh_open_tickets_from_samples(db, user.tenant_id):
         db.commit()
+    by_prompt = latest_prompt_rows(db, user.tenant_id)
     geo_rows = db.query(GeoTicket).filter(GeoTicket.tenant_id == user.tenant_id, ~GeoTicket.status.in_(GEO_CLOSED)).all()
     for ticket in geo_rows:
+        sample_note = prompt_sample_tally(by_prompt.get(ticket.prompt_id, []))
         items.append(
             ExecutionItemOut(
                 id=ticket.id,
                 source_module="geo",
                 title=ticket.title,
                 subtitle=ticket.rationale or ticket.diagnosis,
+                sample_note=sample_note,
                 href=geo_href(ticket),
                 status=ticket.status,
                 priority=ticket.priority or "P2",
