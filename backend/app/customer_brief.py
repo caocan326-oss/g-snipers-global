@@ -8,7 +8,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session, selectinload
 
 from app.models import GeoTicket, Inquiry, OnsiteIssue, SeoPerformanceRow, SerpRun, SitePage, Tenant, User
-from app.geo_loop import refresh_open_tickets_from_samples
+from app.geo_loop import refresh_open_tickets_from_samples, ticket_handoff
 from app.routers.geo.prompts import geo_summary
 from app.routers.onsite.common import (
     _active_issue,
@@ -208,12 +208,19 @@ def build_customer_brief(user: User, db: Session) -> CustomerBriefOut:
     for ticket in tickets:
         if len(this_week) >= 3:
             break
-        this_week.append(ticket.title)
+        action = (ticket.recommended_action or "").strip()
+        this_week.append(f"{ticket.title} {action}".strip() if action else ticket.title)
     if not this_week:
         this_week.append("对照已有记录，整理给客户的说明，并安排下一轮复查。")
     this_week = this_week[:3]
 
     retest: list[str] = []
+    geo_waiting = [ticket for ticket in tickets if ticket_handoff(ticket) in {"drafted", "sent"}]
+    geo_live = [ticket for ticket in tickets if ticket_handoff(ticket) == "live"]
+    if geo_waiting:
+        retest.append("AI 搜索改法还在工作台或已发给客户。客户页没上线、帖没发出前不要再测。工作台打勾不是官网已改。")
+    if geo_live:
+        retest.append("有客户说已上线或帖已发出的项，用同一买家问题再抽查一次。只记变化，不承诺这次会提到。")
     if waiting:
         retest.append(
             f"工作台记了 {len(waiting)} 处「已改 / 人工上线」，还要再打开页面核对。"

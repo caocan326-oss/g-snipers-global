@@ -344,6 +344,16 @@ export default function GeoPage() {
     loadTickets();
   }
 
+  async function setHandoff(id: string, handoff: "drafted" | "sent" | "live") {
+    setError("");
+    try {
+      await api(`/api/geo/tickets/${id}/handoff`, { method: "POST", body: JSON.stringify({ handoff, note: confirmNote }) });
+      loadTickets();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "进度没记上");
+    }
+  }
+
   async function generateLlms() {
     await api("/api/geo/assets/llms.txt/generate", { method: "POST" });
     loadAssets();
@@ -473,6 +483,7 @@ export default function GeoPage() {
           aiTicket={aiTicket}
           verifyTicket={verifyTicket}
           reopenTicket={reopenTicket}
+          setHandoff={setHandoff}
         />
       ) : null}
 

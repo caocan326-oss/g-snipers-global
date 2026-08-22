@@ -26,6 +26,7 @@ export function TicketsPanel({
   aiTicket,
   verifyTicket,
   reopenTicket,
+  setHandoff,
 }: {
   tickets: GeoTicket[];
   prompts: GeoPrompt[];
@@ -35,6 +36,7 @@ export function TicketsPanel({
   aiTicket: (id: string) => void;
   verifyTicket: (id: string, confirmed: boolean) => void;
   reopenTicket: (id: string) => void;
+  setHandoff: (id: string, handoff: "drafted" | "sent" | "live") => void;
 }) {
   return (
     <div className="space-y-4">
@@ -47,6 +49,7 @@ export function TicketsPanel({
                 判断 {diagnosisLabel[t.diagnosis] ?? t.diagnosis_label} · {ticketStatus[t.status] ?? t.status}
               </p>
               {t.sample_note ? <p className="mt-1 text-xs text-slate-700">这一轮 {t.sample_note}</p> : null}
+              {t.handoff_label ? <p className="mt-1 text-xs font-medium text-slate-800">{t.handoff_label}</p> : null}
             </div>
             <Badge tone={t.status === "done" ? "green" : t.status === "reopened" ? "red" : "amber"}>
               {ticketStatus[t.status] ?? t.status}
@@ -54,7 +57,7 @@ export function TicketsPanel({
           </CardHeader>
           <CardContent className="space-y-2">
             <p className="text-sm text-slate-600">理由：{t.rationale}</p>
-            {t.recommended_action ? <p className="text-sm text-slate-600">改法：{t.recommended_action}</p> : null}
+            {t.recommended_action ? <p className="text-sm leading-6 text-slate-700">给客户：{t.recommended_action}</p> : null}
             <p className="text-sm text-slate-600">完成标准：{t.acceptance_criteria}</p>
             {t.retest_method ? <p className="text-sm text-slate-600">复查：{t.retest_method}</p> : null}
             {t.retest_result ? <p className="text-sm text-slate-700">复测记录：{t.retest_result}</p> : null}
@@ -62,19 +65,29 @@ export function TicketsPanel({
             {t.evidence ? <pre className="whitespace-pre-wrap text-xs text-slate-500">{t.evidence}</pre> : null}
             {t.ai_review ? <p className="text-sm text-slate-600">初审：{t.ai_review}</p> : null}
             <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant={t.handoff === "drafted" ? "default" : "outline"} onClick={() => setHandoff(t.id, "drafted")}>
+                已写改法
+              </Button>
+              <Button size="sm" variant={t.handoff === "sent" ? "default" : "outline"} onClick={() => setHandoff(t.id, "sent")}>
+                已发给客户
+              </Button>
+              <Button size="sm" variant={t.handoff === "live" ? "default" : "outline"} onClick={() => setHandoff(t.id, "live")}>
+                客户已上线
+              </Button>
               <Button size="sm" onClick={() => aiTicket(t.id)}>
                 AI 初审
               </Button>
               <Button size="sm" variant="outline" onClick={() => verifyTicket(t.id, false)}>
                 未确认
               </Button>
-              <Button size="sm" onClick={() => verifyTicket(t.id, true)}>
+              <Button size="sm" onClick={() => verifyTicket(t.id, t.handoff === "live")} disabled={t.handoff !== "live"}>
                 确认完成
               </Button>
               <Button size="sm" variant="ghost" onClick={() => reopenTicket(t.id)}>
                 复查后重开
               </Button>
             </div>
+            <p className="text-[11px] text-slate-400">「客户已上线」是客户经理登记，不是官网已改的证明。没到这一步不能验收，也不能当成再测条件已经满足。</p>
           </CardContent>
         </Card>
       ))}

@@ -7,6 +7,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session, selectinload
 
 from app.geo_helpers import DIAGNOSES, ENGINE_LABELS, ENGINES, engine_region
+from app.geo_loop import HANDOFF_LABELS, ticket_handoff
 from app.models import (
     Competitor,
     GeoObservation,
@@ -392,6 +393,8 @@ def _ticket_out(row: GeoTicket, sample_note: str = "") -> GeoTicketOut:
         retest_method=row.retest_method or "对同一买家问题再抽查一次，只记有没有变化，不要求这次必须提到。",
         retest_result=row.retest_result or "",
         sample_note=sample_note,
+        handoff=ticket_handoff(row),
+        handoff_label=HANDOFF_LABELS[ticket_handoff(row)],
         blocked_reason=row.blocked_reason or "",
         status=row.status,
         verified_note=row.verified_note,

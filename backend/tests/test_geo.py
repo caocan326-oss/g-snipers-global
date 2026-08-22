@@ -186,6 +186,32 @@ def test_geo_ticket_verify_requires_confirm_and_can_reopen(client: TestClient, d
     )
     assert denied.status_code == 400
 
+    too_soon = client.post(
+        f"/api/geo/tickets/{ticket_id}/verify",
+        headers=headers,
+        json={"confirmed": True, "note": "还没上线"},
+    )
+    assert too_soon.status_code == 400
+    assert "还没到验收" in too_soon.json()["detail"]
+
+    sent = client.post(
+        f"/api/geo/tickets/{ticket_id}/handoff",
+        headers=headers,
+        json={"handoff": "sent"},
+    )
+    assert sent.status_code == 200
+    assert sent.json()["handoff"] == "sent"
+    assert "发给客户" in sent.json()["handoff_label"]
+
+    live = client.post(
+        f"/api/geo/tickets/{ticket_id}/handoff",
+        headers=headers,
+        json={"handoff": "live"},
+    )
+    assert live.status_code == 200
+    assert live.json()["handoff"] == "live"
+    assert live.json()["status"] == "verify"
+
     verified = client.post(
         f"/api/geo/tickets/{ticket_id}/verify",
         headers=headers,
@@ -1064,3 +1090,11 @@ def test_same_question_title_stays_full_and_follows_latest_sample(client: TestCl
     assert geo_item["sample_note"].startswith("1 / 2 提到")
     assert "Tavily 提到" in geo_item["sample_note"]
     assert "博查 未提到" in geo_item["sample_note"]
+    assert "博查这条按中文网页看" in geo_item["sample_note"]
+    assert "请客户改这一页" in geo_item["recommended_action"]
+    assert "https://www.ugreen.com" in geo_item["recommended_action"]
+    assert geo_item["handoff"] == "drafted"
+    assert "还没发给客户" in geo_item["handoff_label"]
+    assert any("请客户改这一页" in item for item in this_week["items"])
+    retest = next(section for section in brief["sections"] if section["key"] == "retest")
+    assert any("客户页没上线" in item for item in retest["items"])

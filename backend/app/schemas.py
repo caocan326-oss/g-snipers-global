@@ -498,6 +498,8 @@ class GeoTicketOut(BaseModel):
     retest_method: str = ""
     retest_result: str = ""
     sample_note: str = ""
+    handoff: str = "drafted"
+    handoff_label: str = ""
     blocked_reason: str = ""
     status: str
     verified_note: str | None
@@ -512,6 +514,11 @@ class GeoTicketOut(BaseModel):
 
 class GeoTicketVerifyIn(BaseModel):
     confirmed: bool = False
+    note: str | None = None
+
+
+class GeoTicketHandoffIn(BaseModel):
+    handoff: str
     note: str | None = None
 
 
@@ -1451,6 +1458,8 @@ class ExecutionItemOut(BaseModel):
     retest_method: str = ""
     retest_result: str = ""
     sample_note: str = ""
+    handoff: str = ""
+    handoff_label: str = ""
     result_url: str = ""
     blocked_reason: str = ""
     updated_at: datetime | None = None

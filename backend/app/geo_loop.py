@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from sqlalchemy.orm import Session, selectinload
 
 from app.geo_helpers import ENGINE_LABELS
-from app.models import GeoPrompt, GeoSampleResult, GeoSampleRun, GeoTicket, SitePage, SourcePlatform
+from app.models import GeoPrompt, GeoSampleResult, GeoSampleRun, GeoTicket, SitePage, SourcePlatform, Tenant
 from app.official_apis import OFFICIAL_APIS
 
 HONEST_ACCEPTANCE = (
@@ -20,8 +20,14 @@ HONEST_ACCEPTANCE = (
     "抽查只记有没有变化：上次没有 → 这次有 / 这次仍没有。"
     "提到才算提到，不要求这次必须提到。"
 )
-HONEST_RETEST = "对同一买家问题再跑一轮联网抽查，记下提到、给出官网、只推竞品。结果只作记录，不作为完成条件。"
+HONEST_RETEST = "对同一买家问题再跑一轮联网抽查，记下提到、给出官网、只推竞品。结果只作记录，不作为完成条件。只有客户页已上线或帖已发出后才再测；工作台打勾不算官网已改。"
 VERIFY_ACCEPTANCE = "打开抽查里给出的网址，记下能不能打开、是不是客户页。核对完再标已核验。不要求下一次抽查必须提到。"
+HANDOFFS = ("drafted", "sent", "live")
+HANDOFF_LABELS = {
+    "drafted": "工作台已写改法，还没发给客户",
+    "sent": "已把改法发给客户，客户页还没上线",
+    "live": "客户说页已上线或帖已发出，可以再测同一问",
+}
 
 _STOP = {
     "the",
@@ -208,11 +214,13 @@ def mention_split_for_runs(runs: list[GeoSampleRun]) -> str:
     return mention_split_note(rows)
 
 
-def prompt_sample_tally(rows: list[GeoSampleResult]) -> str:
+def prompt_sample_tally(rows: list[GeoSampleResult], prompt: GeoPrompt | None = None) -> str:
     if not rows:
         return ""
     mentioned = sum(1 for row in rows if row.mentioned)
-    return f"{mentioned} / {len(rows)} 提到{mention_split_note(rows)}"
+    note = f"{mentioned} / {len(rows)} 提到{mention_split_note(rows)}"
+    caveat = overseas_source_note(rows, prompt)
+    return f"{note}{caveat}" if caveat else note
 
 
 def latest_prompt_rows(db: Session, tenant_id: str) -> dict[str, list[GeoSampleResult]]:
@@ -321,6 +329,64 @@ def page_label(page: SitePage | None) -> str:
     return f"{title}（{path}）"
 
 
+def page_url(db: Session, tenant_id: str, page: SitePage | None) -> str:
+    tenant = db.get(Tenant, tenant_id)
+    origin = ((tenant.site_origin if tenant else "") or "").rstrip("/")
+    path = (page.path if page else "/") or "/"
+    if not path.startswith("/"):
+        path = f"/{path}"
+    return f"{origin}{path}" if origin else path
+
+
+def _english_buyer_question(prompt: GeoPrompt | None) -> bool:
+    if prompt is None:
+        return False
+    locale = (prompt.locale or "").lower()
+    if locale.startswith("en"):
+        return True
+    text = prompt.prompt_text or ""
+    letters = len(re.findall(r"[A-Za-z]", text))
+    cjk = len(re.findall(r"[\u4e00-\u9fff]", text))
+    return letters >= 12 and letters > cjk
+
+
+def overseas_source_note(rows: list[GeoSampleResult], prompt: GeoPrompt | None) -> str:
+    if not rows or not _english_buyer_question(prompt):
+        return ""
+    if any((row.engine or "") == "bocha" for row in rows):
+        return "博查这条按中文网页看，不写成海外 AI 结论。"
+    return ""
+
+
+def parse_ticket_evidence(ticket: GeoTicket) -> dict:
+    try:
+        data = json.loads(ticket.evidence or "")
+    except json.JSONDecodeError:
+        data = None
+    return data if isinstance(data, dict) else {}
+
+
+def ticket_handoff(ticket: GeoTicket) -> str:
+    value = str(parse_ticket_evidence(ticket).get("handoff") or "drafted")
+    return value if value in HANDOFFS else "drafted"
+
+
+def set_ticket_handoff(ticket: GeoTicket, handoff: str) -> None:
+    if handoff not in HANDOFFS:
+        raise ValueError(handoff)
+    payload = parse_ticket_evidence(ticket)
+    payload["handoff"] = handoff
+    ticket.evidence = json.dumps(payload, ensure_ascii=False, indent=2)
+    if ticket.status in {"done", "closed", "ignored"}:
+        return
+    if handoff == "sent":
+        ticket.status = "in_progress"
+    elif handoff == "live":
+        ticket.status = "verify"
+    elif handoff == "drafted" and ticket.status == "in_progress":
+        ticket.status = "open"
+
+
 def loop_ticket_spec(
     db: Session,
     tenant_id: str,
@@ -328,11 +394,14 @@ def loop_ticket_spec(
     kind: str,
     *,
     third_party: bool = False,
+    sample_rows: list[GeoSampleResult] | None = None,
 ) -> dict:
     page = suggest_page(db, tenant_id, prompt.prompt_text)
     channel_name, _channel_href = suggest_channel(db, tenant_id)
     short = short_prompt(prompt.prompt_text)
     page_bit = page_label(page)
+    url = page_url(db, tenant_id, page)
+    question = " ".join((prompt.prompt_text or "").split()) or short
     titles = {
         "absent": f"买家问「{short}」时没提到我们",
         "no_owned": f"买家问「{short}」时提到了品牌，但没给出官网",
@@ -345,15 +414,29 @@ def loop_ticket_spec(
         "competitor": "competitor_dominated",
         "unverified": "mentioned",
     }
+    page_ask = f"请客户改这一页：{page_bit} {url}。" if page else "还没有对应页，请客户先补一页再写这个问题。"
+    close = "我们不代改官网、不代发。工作台打勾不算官网已改。再测只记变化，不要求这次必须提到。"
     actions = {
-        "absent": f"先改 {page_bit}，把这个问题写清楚。同时在站外分发打开「{channel_name}」发出去。我们不代改线上、不代发。",
-        "no_owned": f"在 {page_bit} 补可引用的事实和官网链接。也可以在「{channel_name}」发一条指向该页。我们不代发。",
-        "competitor": f"在 {page_bit} 补对照说明。也可以在「{channel_name}」发出客户自己的说法。我们不代发。",
-        "unverified": "打开抽查里给出的网址，记下能不能打开、是不是客户页。核对完再标已核验。",
+        "absent": (
+            f"{page_ask}把买家问「{question}」写清楚，并放上这条官网链接：{url}。"
+            f"站外打开「{channel_name}」，发一条指向该页。{close}"
+        ),
+        "no_owned": (
+            f"{page_ask}页里补能回答「{question}」的可引用事实，并放上这条官网链接：{url}。"
+            f"站外打开「{channel_name}」，发一条指向该页。{close}"
+        ),
+        "competitor": (
+            f"{page_ask}补和别人的对照说明，并放上这条官网链接：{url}。"
+            f"站外打开「{channel_name}」，发出客户自己的说法，指向该页。{close}"
+        ),
+        "unverified": "打开抽查里给出的网址，记下能不能打开、是不是客户页。核对完再标已核验。外来网址不能算官网。",
     }
-    rationale = f"对应页：{page_bit} · 渠道：{channel_name}"
-    if third_party and kind == "absent":
-        rationale += "。回答里出现了外来网址，没有我们。"
+    rationale = f"对应页：{page_bit} · 官网：{url} · 渠道：{channel_name}"
+    if third_party and kind in {"absent", "no_owned"}:
+        rationale += "。回答里出现了外来网址，不能写成给出了官网。"
+    caveat = overseas_source_note(sample_rows or [], prompt)
+    if caveat:
+        rationale += f"。{caveat}"
     return {
         "title": titles[kind],
         "diagnosis": diagnoses[kind],
@@ -368,10 +451,25 @@ def loop_ticket_spec(
             "prompt_id": prompt.id,
             "page_id": page.id if page else "",
             "page_path": page.path if page else "",
+            "page_url": url,
             "channel": channel_name,
+            "handoff": "drafted",
             "honest_loop": True,
         },
     }
+
+
+def apply_loop_spec(ticket: GeoTicket, spec: dict, *, keep_handoff: bool = True) -> None:
+    handoff = ticket_handoff(ticket) if keep_handoff else "drafted"
+    ticket.title = spec["title"]
+    ticket.diagnosis = spec["diagnosis"]
+    ticket.rationale = spec["rationale"]
+    ticket.recommended_action = spec["recommended_action"]
+    ticket.acceptance_criteria = spec["acceptance_criteria"]
+    ticket.retest_method = spec["retest_method"]
+    evidence = dict(spec["evidence"])
+    evidence["handoff"] = handoff
+    ticket.evidence = json.dumps(evidence, ensure_ascii=False, indent=2)
 
 
 def kinds_from_sample_rows(rows: list[GeoSampleResult]) -> list[str]:
@@ -429,12 +527,15 @@ def write_ticket_retest(
                 prompt,
                 kinds[0],
                 third_party=any(_third_party(row) for row in rows),
+                sample_rows=rows,
             )
-            if ticket.title != spec["title"] or ticket.diagnosis != spec["diagnosis"]:
-                ticket.title = spec["title"]
-                ticket.diagnosis = spec["diagnosis"]
-                ticket.rationale = spec["rationale"]
-                ticket.recommended_action = spec["recommended_action"]
+            if (
+                ticket.title != spec["title"]
+                or ticket.diagnosis != spec["diagnosis"]
+                or ticket.rationale != spec["rationale"]
+                or ticket.recommended_action != spec["recommended_action"]
+            ):
+                apply_loop_spec(ticket, spec, keep_handoff=True)
                 changed = True
         if previous_runs:
             note = compare_prompt_note(rows, previous_by.get(ticket.prompt_id, []))

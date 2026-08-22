@@ -822,6 +822,8 @@ export type GeoTicket = {
   retest_method: string;
   retest_result: string;
   sample_note?: string;
+  handoff?: string;
+  handoff_label?: string;
   blocked_reason: string;
   status: string;
   verified_note: string | null;
@@ -1150,6 +1152,8 @@ export type ExecutionItem = {
   retest_method: string;
   retest_result: string;
   sample_note?: string;
+  handoff?: string;
+  handoff_label?: string;
   result_url: string;
   blocked_reason: string;
   updated_at: string | null;

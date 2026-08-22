@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.auth import get_current_user
 from app.database import get_db
-from app.geo_loop import kinds_from_sample_rows, loop_ticket_spec, pick_sample_batches, write_ticket_retest
+from app.geo_loop import apply_loop_spec, kinds_from_sample_rows, loop_ticket_spec, pick_sample_batches, write_ticket_retest
 from app.geo_providers import GeoProviderError, configured_implemented_grounded
 from app.models import (
     GeoObservation,
@@ -396,8 +396,24 @@ def create_grounded_batch_runs(
     )
 
 
-def _add_loop_ticket(db: Session, user: User, prompt: GeoPrompt, kind: str, *, third_party: bool, made: list[GeoTicket]) -> str:
-    spec = loop_ticket_spec(db, user.tenant_id, prompt, kind, third_party=third_party)
+def _add_loop_ticket(
+    db: Session,
+    user: User,
+    prompt: GeoPrompt,
+    kind: str,
+    *,
+    third_party: bool,
+    made: list[GeoTicket],
+    sample_rows: list[GeoSampleResult] | None = None,
+) -> str:
+    spec = loop_ticket_spec(
+        db,
+        user.tenant_id,
+        prompt,
+        kind,
+        third_party=third_party,
+        sample_rows=sample_rows,
+    )
     existing = (
         db.query(GeoTicket)
         .filter(
@@ -409,13 +425,7 @@ def _add_loop_ticket(db: Session, user: User, prompt: GeoPrompt, kind: str, *, t
         .first()
     )
     if existing:
-        existing.title = spec["title"]
-        existing.diagnosis = spec["diagnosis"]
-        existing.rationale = spec["rationale"]
-        existing.recommended_action = spec["recommended_action"]
-        existing.acceptance_criteria = spec["acceptance_criteria"]
-        existing.retest_method = spec["retest_method"]
-        existing.evidence = json.dumps(spec["evidence"], ensure_ascii=False, indent=2)
+        apply_loop_spec(existing, spec, keep_handoff=True)
         db.flush()
         if existing not in made:
             made.append(existing)
@@ -481,7 +491,9 @@ def draft_tickets_from_evidence(
             kinds = kinds_from_sample_rows(rows)
             if not kinds:
                 continue
-            result = _add_loop_ticket(db, user, prompt, kinds[0], third_party=third_party, made=made)
+            result = _add_loop_ticket(
+                db, user, prompt, kinds[0], third_party=third_party, made=made, sample_rows=rows
+            )
             if result == "created":
                 created += 1
             else:
