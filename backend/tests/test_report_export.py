@@ -30,6 +30,23 @@ def test_customer_brief_pdf_uses_html_renderer(client, demo_user, monkeypatch) -
     assert "filename*=UTF-8''" in res.headers["content-disposition"]
 
 
+def test_pdf_response_returns_503_when_renderer_fails(monkeypatch) -> None:
+    from fastapi import HTTPException
+
+    from app import report_export
+
+    def boom(html: str) -> bytes:
+        raise RuntimeError("PDF 渲染不可用。服务器镜像需要安装 WeasyPrint 依赖。")
+
+    monkeypatch.setattr(report_export, "html_to_pdf", boom)
+    try:
+        report_export.pdf_response(title="说明", markdown_text="# 标题", filename="x.pdf")
+        raise AssertionError("渲染失败时不该成功")
+    except HTTPException as exc:
+        assert exc.status_code == 503
+        assert "PDF 渲染不可用" in str(exc.detail)
+
+
 def test_onsite_and_geo_pdf_endpoints(client, demo_user, monkeypatch) -> None:
     from app import report_export
 

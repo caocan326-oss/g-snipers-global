@@ -158,23 +158,33 @@ export default function GeoPage() {
   }
 
   async function downloadGeoReport() {
+    setError("");
     const date = new Date().toISOString().slice(0, 10);
-    await downloadApiFile("/api/geo/report.pdf", `AI搜索说明-${date}.pdf`);
-    setNote("AI 搜索说明（PDF）已下载。");
+    try {
+      await downloadApiFile("/api/geo/report.pdf", `AI搜索说明-${date}.pdf`);
+      setNote("AI 搜索说明（PDF）已下载。");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "AI 搜索说明下载失败");
+    }
   }
 
   async function downloadGeoTable() {
-    const report = await api<GeoReportTable>("/api/geo/report-table");
-    const blob = new Blob([report.csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = report.filename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-    setNote("AI 搜索检查记录已下载。");
+    setError("");
+    try {
+      const report = await api<GeoReportTable>("/api/geo/report-table");
+      const blob = new Blob([report.csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = report.filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      setNote("AI 搜索检查记录已下载。");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "检查记录下载失败");
+    }
   }
 
   async function createEvidenceRun() {

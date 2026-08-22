@@ -5,6 +5,7 @@ from __future__ import annotations
 from urllib.parse import quote
 
 import markdown
+from fastapi import HTTPException
 from fastapi.responses import Response
 
 REPORT_STYLE = """
@@ -65,7 +66,10 @@ def html_to_pdf(html: str) -> bytes:
 
 def pdf_response(*, title: str, markdown_text: str, filename: str) -> Response:
     html = markdown_to_report_html(title=title, markdown_text=markdown_text)
-    data = html_to_pdf(html)
+    try:
+        data = html_to_pdf(html)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     ascii_name = "report.pdf"
     return Response(
         content=data,
