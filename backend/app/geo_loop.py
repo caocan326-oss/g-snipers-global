@@ -28,6 +28,14 @@ HANDOFF_LABELS = {
     "sent": "已把改法发给客户，客户页还没上线",
     "live": "客户说页已上线或帖已发出，可以再测同一问",
 }
+CUSTOMER_CLOSE = "我们不代改官网、不代发。改完告诉我，我再用同一问看一次。不保证这次被提到。"
+_WORKBENCH_PHRASES = (
+    "我们不代改官网、不代发。",
+    "工作台打勾不算官网已改。",
+    "工作台打勾不是官网已改。",
+    "再测只记变化，不要求这次必须提到。",
+    "我们不代改线上、不代发。",
+)
 
 _STOP = {
     "the",
@@ -371,6 +379,82 @@ def ticket_handoff(ticket: GeoTicket) -> str:
     return value if value in HANDOFFS else "drafted"
 
 
+def customer_note(
+    *,
+    kind: str,
+    question: str,
+    page_bit: str,
+    url: str,
+    channel: str,
+) -> str:
+    question = " ".join((question or "").split()) or "这个问题"
+    if kind == "unverified":
+        return "抽查里给出的网址还没打开核对。外来网址不能算官网。"
+    lines: list[str] = []
+    if page_bit and not page_bit.startswith("还没有对应页"):
+        lines.append(f"请改这一页：{page_bit}")
+        if url:
+            lines.append(url)
+    elif url:
+        lines.append(f"请改这一页：{url}")
+    else:
+        lines.append("还没有对应页，请先补一页再写这个问题。")
+    asks = {
+        "absent": f"页里写清买家问的「{question}」，并放上官网链接。",
+        "no_owned": f"页里补能回答「{question}」的事实，并放上官网链接。",
+        "competitor": f"页里补和别人的对照，并放上官网链接。",
+    }
+    if kind in asks:
+        lines.append(asks[kind])
+    if channel and kind in asks:
+        lines.append(f"站外在「{channel}」发一条指向该页。")
+    return "\n".join(lines)
+
+
+def _slim_stored_action(raw: str) -> str:
+    text = (raw or "").replace("请客户改这一页", "请改这一页")
+    for phrase in _WORKBENCH_PHRASES:
+        text = text.replace(phrase, "")
+    return " ".join(text.split())
+
+
+def ticket_customer_note(ticket: GeoTicket, prompt: GeoPrompt | None = None) -> str:
+    ev = parse_ticket_evidence(ticket)
+    prompt = prompt if prompt is not None else getattr(ticket, "prompt", None)
+    kind = str(ev.get("kind") or "")
+    if kind not in {"absent", "no_owned", "competitor", "unverified"}:
+        kind = {"absent": "absent", "mentioned": "no_owned", "competitor_dominated": "competitor"}.get(
+            ticket.diagnosis, "no_owned"
+        )
+    question = " ".join(((prompt.prompt_text if prompt else "") or "").split())
+    if not question:
+        found = re.search(r"「([^」]+)」", ticket.title or "")
+        question = found.group(1) if found else ""
+    page_bit = str(ev.get("page_label") or "").strip()
+    if not page_bit:
+        page_bit = str(ev.get("page_path") or "").strip()
+    url = str(ev.get("page_url") or "").strip()
+    channel = str(ev.get("channel") or "").strip()
+    if ev.get("kind") or page_bit or url:
+        return customer_note(kind=kind, question=question, page_bit=page_bit, url=url, channel=channel)
+    slim = _slim_stored_action(ticket.recommended_action)
+    return slim or ticket.title
+
+
+def ticket_paste(ticket: GeoTicket, prompt: GeoPrompt | None = None) -> str:
+    note = ticket_customer_note(ticket, prompt)
+    parts = [ticket.title.strip(), note.strip(), CUSTOMER_CLOSE]
+    return "\n\n".join(part for part in parts if part)
+
+
+def weekly_paste(tenant_name: str, items: list[str]) -> str:
+    name = (tenant_name or "客户").strip() or "客户"
+    if not items:
+        return f"{name} 这周还没有要改的三处。\n\n{CUSTOMER_CLOSE}"
+    numbered = "\n\n".join(f"{index}. {item}" for index, item in enumerate(items, 1))
+    return f"{name} 这周请改这几处：\n\n{numbered}\n\n{CUSTOMER_CLOSE}"
+
+
 def status_for_handoff(handoff: str) -> str:
     return {"drafted": "open", "sent": "in_progress", "live": "verify"}.get(handoff, "open")
 
@@ -439,23 +523,18 @@ def loop_ticket_spec(
         "competitor": "competitor_dominated",
         "unverified": "mentioned",
     }
-    page_ask = f"请客户改这一页：{page_bit} {url}。" if page else "还没有对应页，请客户先补一页再写这个问题。"
-    close = "我们不代改官网、不代发。工作台打勾不算官网已改。再测只记变化，不要求这次必须提到。"
-    actions = {
-        "absent": (
-            f"{page_ask}把买家问「{question}」写清楚，并放上这条官网链接：{url}。"
-            f"站外打开「{channel_name}」，发一条指向该页。{close}"
-        ),
-        "no_owned": (
-            f"{page_ask}页里补能回答「{question}」的可引用事实，并放上这条官网链接：{url}。"
-            f"站外打开「{channel_name}」，发一条指向该页。{close}"
-        ),
-        "competitor": (
-            f"{page_ask}补和别人的对照说明，并放上这条官网链接：{url}。"
-            f"站外打开「{channel_name}」，发出客户自己的说法，指向该页。{close}"
-        ),
-        "unverified": "打开抽查里给出的网址，记下能不能打开、是不是客户页。核对完再标已核验。外来网址不能算官网。",
-    }
+    note_page = page_bit if page else ""
+    note_url = url if page else ""
+    actions = {}
+    for action_kind in ("absent", "no_owned", "competitor", "unverified"):
+        note = customer_note(
+            kind=action_kind,
+            question=question,
+            page_bit=note_page,
+            url=note_url,
+            channel=channel_name,
+        )
+        actions[action_kind] = note if action_kind == "unverified" else f"{note}\n{CUSTOMER_CLOSE}"
     rationale = f"对应页：{page_bit} · 官网：{url} · 渠道：{channel_name}"
     if third_party and kind in {"absent", "no_owned"}:
         rationale += "。回答里出现了外来网址，不能写成给出了官网。"
@@ -476,6 +555,7 @@ def loop_ticket_spec(
             "prompt_id": prompt.id,
             "page_id": page.id if page else "",
             "page_path": page.path if page else "",
+            "page_label": page_bit if page else "",
             "page_url": url,
             "channel": channel_name,
             "handoff": "drafted",

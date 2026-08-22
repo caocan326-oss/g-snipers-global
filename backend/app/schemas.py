@@ -144,6 +144,7 @@ class CustomerBriefOut(BaseModel):
     generated_at: datetime
     untested: list[str] = []
     this_week: list[str] = []
+    paste_text: str = ""
     sections: list[CustomerBriefSection] = []
 
 
@@ -495,6 +496,8 @@ class GeoTicketOut(BaseModel):
     priority: str = "P2"
     owner_hint: str = ""
     recommended_action: str = ""
+    customer_note: str = ""
+    customer_paste: str = ""
     retest_method: str = ""
     retest_result: str = ""
     sample_note: str = ""
@@ -1455,6 +1458,8 @@ class ExecutionItemOut(BaseModel):
     acceptance_criteria: str = ""
     evidence: str = ""
     recommended_action: str = ""
+    customer_note: str = ""
+    customer_paste: str = ""
     retest_method: str = ""
     retest_result: str = ""
     sample_note: str = ""

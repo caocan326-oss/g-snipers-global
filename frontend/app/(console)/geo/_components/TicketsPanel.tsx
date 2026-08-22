@@ -1,4 +1,4 @@
-import { FormEvent } from "react";
+import { FormEvent, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -6,6 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import type { GeoPrompt, GeoTicket } from "@/lib/api";
+
+import { copyText } from "@/lib/utils";
 
 import { diagnosisLabel, diagnosisOptions, ticketStatus } from "../_helpers";
 
@@ -38,6 +40,7 @@ export function TicketsPanel({
   reopenTicket: (id: string) => void;
   setHandoff: (id: string, handoff: "drafted" | "sent" | "live") => void;
 }) {
+  const [copied, setCopied] = useState("");
   return (
     <div className="space-y-4">
       {tickets.map((t) => (
@@ -57,7 +60,14 @@ export function TicketsPanel({
           </CardHeader>
           <CardContent className="space-y-2">
             <p className="text-sm text-slate-600">理由：{t.rationale}</p>
-            {t.recommended_action ? <p className="text-sm leading-6 text-slate-700">给客户：{t.recommended_action}</p> : null}
+            {t.customer_note ? (
+              <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+                <p className="text-xs font-medium text-slate-500">给客户的短稿</p>
+                <pre className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-800">{t.customer_note}</pre>
+              </div>
+            ) : t.recommended_action ? (
+              <p className="text-sm leading-6 text-slate-700">给客户：{t.recommended_action}</p>
+            ) : null}
             <p className="text-sm text-slate-600">完成标准：{t.acceptance_criteria}</p>
             {t.retest_method ? <p className="text-sm text-slate-600">复查：{t.retest_method}</p> : null}
             {t.retest_result ? <p className="text-sm text-slate-700">复测记录：{t.retest_result}</p> : null}
@@ -65,6 +75,16 @@ export function TicketsPanel({
             {t.evidence ? <pre className="whitespace-pre-wrap text-xs text-slate-500">{t.evidence}</pre> : null}
             {t.ai_review ? <p className="text-sm text-slate-600">初审：{t.ai_review}</p> : null}
             <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={async () => {
+                  const ok = await copyText(t.customer_paste || t.customer_note || t.recommended_action || "");
+                  setCopied(ok ? t.id : "");
+                }}
+              >
+                {copied === t.id ? "已复制" : "复制短稿"}
+              </Button>
               <Button size="sm" variant={t.handoff === "drafted" ? "default" : "outline"} onClick={() => setHandoff(t.id, "drafted")}>
                 已写改法
               </Button>

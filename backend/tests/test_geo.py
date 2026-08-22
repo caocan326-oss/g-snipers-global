@@ -980,6 +980,29 @@ def test_geo_summary_compare_note_and_ticket_retest(client: TestClient, demo_use
     assert geo_item["href"].startswith("/onsite/") or geo_item["href"] in {"/offsite", "/geo"}
 
 
+def test_customer_note_is_short_and_skips_workbench_jargon() -> None:
+    from app.geo_loop import CUSTOMER_CLOSE, customer_note, weekly_paste
+
+    question = "Which brand makes the best 100W USB-C charger for laptops?"
+    note = customer_note(
+        kind="no_owned",
+        question=question,
+        page_bit="UGREEN Nexode 100W Charger（/products/usa-65585）",
+        url="https://www.ugreen.com/products/usa-65585",
+        channel="LinkedIn Company Page",
+    )
+    assert "请改这一页" in note
+    assert "usa-65585" in note
+    assert question in note
+    assert "LinkedIn Company Page" in note
+    assert "工作台" not in note
+    assert "可引用事实" not in note
+    paste = weekly_paste("UGREEN", ["紧急：页面缺少给搜索看的说明（agents.md）", note])
+    assert paste.startswith("UGREEN 这周请改这几处：")
+    assert "1. 紧急：" in paste
+    assert paste.endswith(CUSTOMER_CLOSE)
+
+
 def test_short_prompt_keeps_full_charger_question() -> None:
     from app.geo_loop import short_prompt
 
@@ -1107,11 +1130,17 @@ def test_same_question_title_stays_full_and_follows_latest_sample(client: TestCl
     assert "Tavily 提到" in geo_item["sample_note"]
     assert "博查 未提到" in geo_item["sample_note"]
     assert "博查这条按中文网页看" in geo_item["sample_note"]
-    assert "请客户改这一页" in geo_item["recommended_action"]
+    assert "请改这一页" in geo_item["customer_note"]
+    assert "https://www.ugreen.com" in geo_item["customer_note"]
+    assert "工作台打勾" not in geo_item["customer_note"]
+    assert "请改这一页" in geo_item["recommended_action"]
     assert "https://www.ugreen.com" in geo_item["recommended_action"]
     assert geo_item["handoff"] == "drafted"
     assert "还没发给客户" in geo_item["handoff_label"]
-    assert any("请客户改这一页" in item for item in this_week["items"])
+    assert any("请改这一页" in item and "100W" in item for item in this_week["items"])
+    assert "这周请改这几处" in brief["paste_text"]
+    assert "工作台打勾" not in brief["paste_text"]
+    assert "不保证这次被提到" in brief["paste_text"]
     retest = next(section for section in brief["sections"] if section["key"] == "retest")
     assert any("客户页没上线" in item for item in retest["items"])
 

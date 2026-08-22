@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Download, FileSpreadsheet, FileText, ShieldCheck } from "lucide-react";
+import { Copy, Download, FileSpreadsheet, FileText, ShieldCheck } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +15,7 @@ import {
   type SeoReportTable,
   type Workbench,
 } from "@/lib/api";
+import { copyText } from "@/lib/utils";
 
 function downloadText(filename: string, content: string, type: string) {
   const blob = new Blob([content], { type });
@@ -46,6 +47,20 @@ export default function ReportDeliveryPage() {
       })
       .catch((e) => setError(e.message));
   }, []);
+
+  async function copyPaste() {
+    if (!brief?.paste_text) {
+      setError("没有可复制的短稿。");
+      return;
+    }
+    setError("");
+    try {
+      await copyText(brief.paste_text);
+      setNote("短稿已复制，可直接贴微信或邮件。");
+    } catch {
+      setError("复制失败，请手动选中短稿。");
+    }
+  }
 
   async function downloadBrief() {
     if (!brief) return;
@@ -136,7 +151,11 @@ export default function ReportDeliveryPage() {
             <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-500">{brief.headline}</p>
           </div>
           <div className="flex flex-col gap-2 sm:min-w-[220px]">
-            <Button onClick={downloadBrief} disabled={busy === "brief"}>
+            <Button onClick={copyPaste} disabled={!brief.paste_text}>
+              <Copy className="mr-2 h-4 w-4" />
+              复制给客户
+            </Button>
+            <Button variant="outline" onClick={downloadBrief} disabled={busy === "brief"}>
               <FileText className="mr-2 h-4 w-4" />
               {busy === "brief" ? "下载中…" : "下载本周说明（PDF）"}
             </Button>
@@ -145,6 +164,18 @@ export default function ReportDeliveryPage() {
         {note ? <p className="mt-3 text-sm text-emerald-700">{note}</p> : null}
         {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
       </section>
+
+      {brief.paste_text ? (
+        <Card className="rounded-md">
+          <CardHeader>
+            <CardTitle>发给客户的短稿</CardTitle>
+            <p className="text-sm leading-6 text-slate-500">微信 / 邮件用这一段。工作台说明和下方三处留给你们自己看。</p>
+          </CardHeader>
+          <CardContent>
+            <pre className="whitespace-pre-wrap rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-6 text-slate-800">{brief.paste_text}</pre>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <section className="grid gap-4 lg:grid-cols-2">
         {brief.sections.map((section) => (
@@ -155,7 +186,7 @@ export default function ReportDeliveryPage() {
             </CardHeader>
             <CardContent className="space-y-2">
               {section.items.map((item) => (
-                <div key={item} className="rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-700">
+                <div key={item} className="whitespace-pre-wrap rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-700">
                   {item}
                 </div>
               ))}

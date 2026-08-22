@@ -308,5 +308,9 @@ def test_customer_brief_keeps_geo_ticket_in_this_week_when_onsite_is_full(client
 
     headers = auth_header(client)
     body = client.get("/api/dashboard/customer-brief", headers=headers).json()
-    assert any("100W USB-C" in item and "请客户改这一页" in item for item in body["this_week"])
+    assert any("100W USB-C" in item and "请改这一页" in item for item in body["this_week"])
     assert sum(1 for item in body["this_week"] if "紧急" in item) <= 2
+    assert "这周请改这几处" in body["paste_text"]
+    assert "1." in body["paste_text"]
+    assert "工作台打勾" not in body["paste_text"]
+    assert "发给客户的短稿" in body["markdown"]

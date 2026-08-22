@@ -304,6 +304,7 @@ export type CustomerBrief = {
   generated_at: string;
   untested: string[];
   this_week: string[];
+  paste_text?: string;
   sections: CustomerBriefSection[];
 };
 
@@ -819,6 +820,8 @@ export type GeoTicket = {
   priority: string;
   owner_hint: string;
   recommended_action: string;
+  customer_note?: string;
+  customer_paste?: string;
   retest_method: string;
   retest_result: string;
   sample_note?: string;
@@ -1149,6 +1152,8 @@ export type ExecutionItem = {
   acceptance_criteria: string;
   evidence: string;
   recommended_action: string;
+  customer_note?: string;
+  customer_paste?: string;
   retest_method: string;
   retest_result: string;
   sample_note?: string;

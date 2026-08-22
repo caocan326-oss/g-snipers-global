@@ -12,7 +12,9 @@ from app.geo_loop import (
     prompt_sample_tally,
     reconcile_open_ticket_status,
     refresh_open_tickets_from_samples,
+    ticket_customer_note,
     ticket_handoff,
+    ticket_paste,
 )
 from app.models import BacklinkGap, GeoTicket, OnsiteIssue, SitePage, User
 from app.routers.onsite.common import _category_label, _page_short, _plain_title
@@ -95,6 +97,8 @@ def list_execution_items(user: User = Depends(get_current_user), db: Session = D
                 acceptance_criteria=ticket.acceptance_criteria or HONEST_ACCEPTANCE,
                 evidence=ticket.evidence or "",
                 recommended_action=ticket.recommended_action or "补对应页或发出一张站外卡。我们不代改线上、不代发。",
+                customer_note=ticket_customer_note(ticket, ticket.prompt),
+                customer_paste=ticket_paste(ticket, ticket.prompt),
                 retest_method=ticket.retest_method or HONEST_RETEST,
                 retest_result=ticket.retest_result or ticket.verified_note or "",
                 blocked_reason=ticket.blocked_reason or "",

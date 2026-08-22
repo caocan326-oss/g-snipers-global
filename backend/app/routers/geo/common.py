@@ -7,7 +7,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session, selectinload
 
 from app.geo_helpers import DIAGNOSES, ENGINE_LABELS, ENGINES, engine_region
-from app.geo_loop import HANDOFF_LABELS, ticket_handoff
+from app.geo_loop import HANDOFF_LABELS, ticket_customer_note, ticket_handoff, ticket_paste
 from app.models import (
     Competitor,
     GeoObservation,
@@ -390,6 +390,8 @@ def _ticket_out(row: GeoTicket, sample_note: str = "") -> GeoTicketOut:
         priority=row.priority or "P2",
         owner_hint=row.owner_hint or "内容运营 / 客户经理",
         recommended_action=row.recommended_action or "补对应页或发出一张站外卡。我们不代改线上、不代发。",
+        customer_note=ticket_customer_note(row, getattr(row, "prompt", None)),
+        customer_paste=ticket_paste(row, getattr(row, "prompt", None)),
         retest_method=row.retest_method or "对同一买家问题再抽查一次，只记有没有变化，不要求这次必须提到。",
         retest_result=row.retest_result or "",
         sample_note=sample_note,

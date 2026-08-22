@@ -8,7 +8,13 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session, selectinload
 
 from app.models import GeoTicket, Inquiry, OnsiteIssue, SeoPerformanceRow, SerpRun, SitePage, Tenant, User
-from app.geo_loop import reconcile_open_ticket_status, refresh_open_tickets_from_samples, ticket_handoff
+from app.geo_loop import (
+    reconcile_open_ticket_status,
+    refresh_open_tickets_from_samples,
+    ticket_customer_note,
+    ticket_handoff,
+    weekly_paste,
+)
 from app.routers.geo.prompts import geo_summary
 from app.routers.onsite.common import (
     _active_issue,
@@ -205,8 +211,8 @@ def build_customer_brief(user: User, db: Session) -> CustomerBriefOut:
         this_week.append("查看已登记网站的页面。")
     geo_lines: list[str] = []
     for ticket in tickets[:1]:
-        action = (ticket.recommended_action or "").strip()
-        geo_lines.append(f"{ticket.title} {action}".strip() if action else ticket.title)
+        note = ticket_customer_note(ticket, ticket.prompt)
+        geo_lines.append(f"{ticket.title}\n{note}".strip() if note else ticket.title)
     onsite_slots = max(0, 3 - len(this_week) - len(geo_lines))
     for issue in priority_issues[:onsite_slots]:
         this_week.append(f"{_severity_label(issue.severity)}：{_plain_title(issue.title)}（{_page_short(issue.page)}）")
@@ -275,7 +281,12 @@ def build_customer_brief(user: User, db: Session) -> CustomerBriefOut:
         for item in section.items:
             lines.append(f"- {item}")
         lines.append("")
+    paste_text = weekly_paste(tenant.name if tenant else "", this_week)
     lines += [
+        "## 发给客户的短稿",
+        "",
+        paste_text,
+        "",
         "## 写法提醒",
         "",
         "- 尚未检查的不按 0 计算，也不编造排名或推荐。",
@@ -292,5 +303,6 @@ def build_customer_brief(user: User, db: Session) -> CustomerBriefOut:
         generated_at=generated,
         untested=untested,
         this_week=this_week,
+        paste_text=paste_text,
         sections=sections,
     )
