@@ -7,7 +7,7 @@
 
 约定：家里和公司**不会同时改**。换机器前必须把这边 push 完。
 
-最后更新：2026-08-22 03:31（家里。三地对齐 `9d2781c`。百炼见 §4.3。）。
+最后更新：2026-08-22 11:22（家里。四处对齐 `038c770`。绿联身份见 §4.4。）。
 
 ---
 
@@ -116,6 +116,8 @@ python -m app.provision_tenant --name "客户名" --email am@customer.com --pass
 ```
 
 不要做公开注册页。
+
+官网已经不是 snipers 时，容器启动 seed **不会**再灌门锁演示。它会把客户名改成跟域名走（`www.ugreen.com` → `UGREEN`），并清掉门锁问句/示例。有抽查记录时必须先删 `geo_sample_results`，否则 backend 起不来（502）。
 
 3. 改完在本机看 `git status`、`git diff`，确认没有把 `.env`、私钥、密钥加进去。
 4. 用户明确要求提交时才 commit。不要主动 commit。
@@ -247,6 +249,20 @@ DeepSeek 仍只做分析，不算联网引用。
 
 ---
 
+## 4.4 绿联实走后的身份
+
+生产当前官网是 `https://www.ugreen.com`。`038c770` 起：
+
+- 登录和 `/` 进 `/home`，不再进分发。
+- 换站或 seed 会把演示门锁客户名改成跟域名走。
+- 用量：博查/改法等外部调用**成功后再记账并立刻提交**，超时不会把已用滚回 0。顶栏写「今天已用：0/24」。
+- 写出改法按钮旁有「已写 / 还剩」。
+- GEO 来源卡不再印 `BOCHA_API_KEY` 这类键名。
+
+IndexNow / GSC 同步灰着是没配钥匙和授权，不要当故障改。
+
+---
+
 ## 5. 收工 / 换到另一台电脑之前
 
 必须做完，另一台才能开工。
@@ -278,14 +294,14 @@ git log -1 --oneline
 
 | 项 | 值 |
 | --- | --- |
-| 日期 | 2026-08-22 03:31 |
+| 日期 | 2026-08-22 11:22 |
 | 最后一台 | 家里 `D:\workspace\G-snipers海外版` |
 | 分支 | `main` |
-| 提交 | 四处对齐 `9d2781c`。百炼不进默认「都测」见 §4.3；seed 可重复跑。换站保存仍在。运维：§4.1 / §4.2。 |
+| 提交 | 四处对齐 `038c770`。绿联身份、用量、写改法进度见 §4.4。百炼见 §4.3。运维：§4.1 / §4.2。 |
 | 已 push origin / upstream | 是。 |
-| 已发版生产 | **是。** `sync-from-local.ps1 -Rebuild`。`DEMO_LOGIN_ENABLED` 仍关。Postgres 仍不映射 5432。 |
-| 接口实测 | seed / geo / usage 31 通过。发完 health 必须 200。 |
-| 未完成 | 绿联实走还没在新保存上重跑。UptimeRobot 没有原生微信。自动 scp 到第二台云还没有。Bing / IndexNow 可等。不要公开注册。不要自动群发。 |
+| 已发版生产 | **是。** `sync-from-local.ps1 -Rebuild` 两次：先 `ddd1f34` seed 因抽查外键 502，随即 `038c770` 修好。`DEMO_LOGIN_ENABLED` 仍关。Postgres 仍不映射 5432。 |
+| 接口实测 | 用量 / GEO / 站内 / 开户 75 通过；seed 外键补测 26 通过。发完 health 200。 |
+| 未完成 | IndexNow / GSC 仍要配钥匙和授权才会亮。UptimeRobot 没有原生微信。自动 scp 到第二台云还没有。不要公开注册。不要自动群发。 |
 | 下一台先做 | 公司先 `git pull origin main`。不要两边同时改。 |
 
 `www` 灰云、A 仍 `39.97.52.149`。`relay.weiyids.com` 橙云，不要 CNAME 回 `workers.dev`。不要开 Google Ads。不要在服务器 `git pull`。

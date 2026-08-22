@@ -1,6 +1,6 @@
 # G-Snipers 海外版 · 生产档案
 
-最后更新：2026-08-21。  
+最后更新：2026-08-22。  
 这份文件是**唯一权威运维记录**。机器、仓库、域名有变动时，先改这里再动手。
 
 换机器开工、日常动作清单：先读 **`docs/HANDOVER.md`**（问「交接文档在哪里」就指这个文件）。
@@ -237,6 +237,7 @@ powershell -File deploy/sync-from-local.ps1
 | 2026-08-22 | 产品/运维 | 家里发到 `d51b54b`（`sync-from-local.ps1 -Rebuild`）。百炼默认不进都测。 |
 | 2026-08-22 | 修复 | seed 重复插入 `cite_checklist` 会让 backend 起不来。缺问句再 seed 时跳过已有资产。 |
 | 2026-08-22 | 产品/运维 | 家里发到 `9d2781c`（`sync-from-local.ps1 -Rebuild`）。百炼默认不进都测；seed 修复 502。 |
+| 2026-08-22 | 产品/运维 | 家里发到 `038c770`（`sync-from-local.ps1 -Rebuild`）。绿联实走：客户名跟官网、登录进首页、用量成功后再记账；写出改法有进度。`ddd1f34` 曾因删门锁问句碰到 `geo_sample_results` 外键 502，随即修好。 |
 
 ---
 
