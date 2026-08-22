@@ -1,6 +1,17 @@
 from sqlalchemy import select
 
-from app.models import DemandSignal, GeoAsset, GeoObservation, GeoPrompt, GeoTicket, OnsiteIssue, SitePage, Tenant
+from app.models import (
+    DemandSignal,
+    GeoAsset,
+    GeoObservation,
+    GeoPrompt,
+    GeoSampleResult,
+    GeoSampleRun,
+    GeoTicket,
+    OnsiteIssue,
+    SitePage,
+    Tenant,
+)
 from app.onsite_inventory import DEMO_LEFTOVER_PATHS, purge_demo_leftover_pages
 from app.seed import seed
 
@@ -97,6 +108,28 @@ def test_seed_does_not_reinject_lock_demo_onto_live_origin(db) -> None:
     tenant = db.scalar(select(Tenant).where(Tenant.name == "演示客户 · 智能门锁出海"))
     assert tenant is not None
     tenant.site_origin = "https://www.ugreen.com"
+    lock_prompt = (
+        db.query(GeoPrompt)
+        .filter(GeoPrompt.tenant_id == tenant.id, GeoPrompt.prompt_text.ilike("%smart lock%"))
+        .first()
+    )
+    assert lock_prompt is not None
+    run = GeoSampleRun(tenant_id=tenant.id, config_hash="lock-demo", status="done")
+    db.add(run)
+    db.flush()
+    db.add(
+        GeoSampleResult(
+            tenant_id=tenant.id,
+            run_id=run.id,
+            prompt_id=lock_prompt.id,
+            evidence_id="ev_lock_leftover",
+            engine="bocha",
+            web_grounded="true",
+            prompt_text_hash="a" * 64,
+            answer_text_hash="b" * 64,
+            answer_excerpt="lock leftover",
+        )
+    )
     db.commit()
     seed(db)
     db.refresh(tenant)

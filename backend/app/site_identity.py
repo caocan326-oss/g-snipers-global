@@ -6,7 +6,7 @@ from urllib.parse import urlparse
 
 from sqlalchemy.orm import Session
 
-from app.models import BacklinkGap, DemandSignal, GeoObservation, GeoPrompt, GeoTicket, Tenant
+from app.models import BacklinkGap, DemandSignal, GeoObservation, GeoPrompt, GeoSampleResult, GeoTicket, Tenant
 from app.onsite_fetch import OriginError, normalize_origin, origin_host
 
 DEMO_TENANT_NAME = "演示客户 · 智能门锁出海"
@@ -66,6 +66,7 @@ def adopt_live_site(db: Session, tenant: Tenant) -> str:
     for prompt in prompts:
         text = (prompt.prompt_text or "").lower()
         if any(marker.lower() in text for marker in LOCK_PROMPT_MARKERS):
+            db.query(GeoSampleResult).filter(GeoSampleResult.prompt_id == prompt.id).delete(synchronize_session=False)
             db.query(GeoObservation).filter(GeoObservation.prompt_id == prompt.id).delete(synchronize_session=False)
             db.query(GeoTicket).filter(GeoTicket.prompt_id == prompt.id).delete(synchronize_session=False)
             db.delete(prompt)
