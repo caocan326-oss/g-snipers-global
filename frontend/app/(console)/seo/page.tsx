@@ -97,6 +97,13 @@ export default function SeoListPage() {
               </tr>
             </thead>
             <tbody>
+              {pages.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="px-5 py-8 text-center text-slate-500">
+                    还没有选题。下面可以新建一条。
+                  </td>
+                </tr>
+              ) : null}
               {pages.map((p) => (
                 <tr
                   key={p.id}

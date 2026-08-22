@@ -60,7 +60,7 @@ export function HeroSection({
             用买家会问的问题，看 AI 回答里有没有提到客户、有没有给出官网、是不是只在推荐竞品。没有联网来源的结果只作分析参考。
           </p>
           <div className="mt-2">
-            <UsageTodayBar meters={["bocha", "bailian", "tavily", "llm"]} />
+            <UsageTodayBar meters={["bocha", "bailian", "tavily", "llm"]} refreshToken={busyAction} />
           </div>
         </div>
         <div className="grid w-full gap-2 text-sm md:grid-cols-3 xl:w-[560px]">

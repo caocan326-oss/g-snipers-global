@@ -188,6 +188,102 @@ def test_record_drops_remaining_for_each_meter(demo_user, db) -> None:
     db.commit()
 
 
+def _fake_httpx_client(response):
+    class FakeClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def post(self, *args, **kwargs):
+            return response
+
+    return FakeClient
+
+
+def test_record_current_survives_later_rollback(demo_user, db) -> None:
+    from app.models import Tenant
+    from app.usage import record_current, set_usage_tenant, used_today
+
+    set_usage_tenant(demo_user.tenant_id, db)
+    record_current("bocha", 1)
+    tenant = db.get(Tenant, demo_user.tenant_id)
+    tenant.name = "SHOULD_REVERT"
+    db.rollback()
+    db.expire_all()
+    assert used_today(db, demo_user.tenant_id, "bocha") == 1
+    assert db.get(Tenant, demo_user.tenant_id).name == "测试租户"
+
+
+def test_bocha_counts_only_after_http_success(demo_user, db, monkeypatch) -> None:
+    from app import geo_providers
+    from app.usage import set_usage_tenant, used_today
+
+    set_usage_tenant(demo_user.tenant_id, db)
+    monkeypatch.setattr(geo_providers.settings, "bocha_api_key", "test-key")
+
+    class Fail:
+        status_code = 500
+        text = "nope"
+
+    monkeypatch.setattr(geo_providers.httpx, "Client", _fake_httpx_client(Fail()))
+    try:
+        geo_providers._call_bocha("best lock")
+        raise AssertionError("博查失败时不该当成功")
+    except geo_providers.GeoProviderError:
+        pass
+    assert used_today(db, demo_user.tenant_id, "bocha") == 0
+
+    class Ok:
+        status_code = 200
+
+        def json(self):
+            return {"data": {"webPages": {"value": [{"url": "https://a.example", "name": "A", "snippet": "s"}]}}}
+
+    monkeypatch.setattr(geo_providers.httpx, "Client", _fake_httpx_client(Ok()))
+    geo_providers._call_bocha("best lock")
+    db.rollback()
+    db.expire_all()
+    assert used_today(db, demo_user.tenant_id, "bocha") == 1
+
+
+def test_llm_counts_only_after_http_success(demo_user, db, monkeypatch) -> None:
+    from app import llm
+    from app.usage import set_usage_tenant, used_today
+
+    set_usage_tenant(demo_user.tenant_id, db)
+    monkeypatch.setattr(llm.settings, "llm_api_key", "test-key")
+
+    class Fail:
+        status_code = 500
+        text = "nope"
+
+        def json(self):
+            return {}
+
+    monkeypatch.setattr(llm.httpx, "Client", _fake_httpx_client(Fail()))
+    result = llm.complete(system="s", user="u")
+    assert result.status == llm.ERROR
+    assert used_today(db, demo_user.tenant_id, "llm") == 0
+
+    class Ok:
+        status_code = 200
+
+        def json(self):
+            return {"choices": [{"message": {"content": "hello"}}]}
+
+    monkeypatch.setattr(llm.httpx, "Client", _fake_httpx_client(Ok()))
+    result = llm.complete(system="s", user="u")
+    assert result.status == llm.OK
+    db.rollback()
+    db.expire_all()
+    assert used_today(db, demo_user.tenant_id, "llm") == 1
+
+
 def test_admin_cannot_set_quota_for_missing_tenant(client: TestClient, demo_user, db) -> None:
     _admin(db)
     headers = auth_header(client, email="admin@demo.gsnipers.com", password="admin1234")

@@ -9,6 +9,7 @@ from app.database import get_db
 from app.geo_helpers import ENGINES
 from app.onsite_fetch import normalize_origin, OriginError
 from app.site_context import SiteSwitchError, prepare_site_switch
+from app.site_identity import DEMO_TENANT_NAME
 from app.models import (
     BacklinkGap,
     Competitor,
@@ -167,6 +168,7 @@ def _project_targets_out(db: Session, user: User, note: str = "") -> ProjectTarg
     has_origin = bool(tenant and tenant.site_origin)
     readiness = "ready" if has_origin and markets and keyword_count else "needs_targets"
     return ProjectTargetsOut(
+        tenant_name=tenant.name if tenant else "",
         site_origin=tenant.site_origin if tenant else "",
         markets=details,
         target_market_count=len(target_markets),
@@ -254,6 +256,10 @@ def save_project_targets(
     if tenant and requested_origin is not None:
         tenant.site_origin = requested_origin
     site_changed = bool(switch["changed"])
+    if tenant and body.tenant_name and body.tenant_name.strip():
+        typed = body.tenant_name.strip()[:200]
+        if not site_changed or typed != DEMO_TENANT_NAME:
+            tenant.name = typed
 
     markets = db.query(Market).filter(Market.tenant_id == user.tenant_id).all()
     markets_by_id = {market.id: market for market in markets}

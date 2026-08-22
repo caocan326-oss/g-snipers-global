@@ -66,6 +66,11 @@ export default function InquiriesPage() {
 
   async function create(e: FormEvent) {
     e.preventDefault();
+    if (!form.contact.trim()) {
+      setError("请填写联系人或邮箱。");
+      return;
+    }
+    setError("");
     await api("/api/inquiries", {
       method: "POST",
       body: JSON.stringify({
@@ -121,12 +126,11 @@ export default function InquiriesPage() {
             <CardTitle>登记询盘</CardTitle>
           </CardHeader>
           <CardContent>
-            <form className="grid gap-3 md:grid-cols-2" onSubmit={create}>
+            <form className="grid gap-3 md:grid-cols-2" onSubmit={create} noValidate>
               <Input
                 placeholder="联系人 / 邮箱"
                 value={form.contact}
                 onChange={(e) => setForm({ ...form, contact: e.target.value })}
-                required
               />
               <Input
                 placeholder="来源，例如谷歌自然搜索"

@@ -6,6 +6,7 @@ export { DIAGNOSTIC_COUNTRIES, type DiagnosticCountry };
 export type TargetCompetitorDraft = { name: string; website: string };
 
 export type TargetForm = {
+  tenant_name: string;
   site_origin: string;
   country_codes: string[];
   extraMarkets: DiagnosticCountry[];
@@ -14,6 +15,7 @@ export type TargetForm = {
 };
 
 export const emptyTargetForm: TargetForm = {
+  tenant_name: "",
   site_origin: "",
   country_codes: [],
   extraMarkets: [],
@@ -133,6 +135,7 @@ export function formFromTargets(targets: ProjectTargets | null): TargetForm {
     }
   }
   return {
+    tenant_name: targets?.tenant_name || "",
     site_origin: targets?.site_origin || "",
     country_codes,
     extraMarkets,

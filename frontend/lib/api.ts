@@ -570,6 +570,7 @@ export type MarketDetail = Market & {
 };
 
 export type ProjectTargets = {
+  tenant_name: string;
   site_origin: string;
   markets: MarketDetail[];
   target_market_count: number;

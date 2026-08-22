@@ -65,10 +65,10 @@ def complete(*, system: str, user: str) -> LlmResult:
         "Authorization": f"Bearer {settings.llm_api_key}",
         "Content-Type": "application/json",
     }
-    try:
-        from app.usage import UsageLimitError, record_current
+    from app.usage import UsageLimitError, assert_current, record_current
 
-        record_current("llm", 1)
+    try:
+        assert_current("llm", 1)
     except UsageLimitError:
         raise
     try:
@@ -83,8 +83,11 @@ def complete(*, system: str, user: str) -> LlmResult:
             .get("content", "")
             or ""
         ).strip()
+        record_current("llm", 1)
         if not text:
             return LlmResult(True, UNTESTED, "", "模型无输出，保持未测。")
         return LlmResult(True, OK, text, "")
+    except UsageLimitError:
+        raise
     except Exception as exc:  # noqa: BLE001 — gateway must not crash the app
         return LlmResult(True, ERROR, "", f"LLM 调用失败：{exc}。未编造结果。")

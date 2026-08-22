@@ -153,6 +153,7 @@ def test_project_targets_can_switch_origin_without_rewriting_keywords(client: Te
     assert switched.status_code == 200, switched.text
     body = switched.json()
     assert body["site_origin"] == "https://www.ugreen.com"
+    assert body["tenant_name"] == "UGREEN"
     assert body["keyword_count"] == 0
     assert body["competitor_count"] == 0
     settings = client.get("/api/onsite/settings", headers=headers)

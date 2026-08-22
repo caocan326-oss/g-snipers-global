@@ -17,10 +17,10 @@ export function ProviderStatusCard({ providers }: { providers: GeoProviderStatus
         {(providers?.providers ?? []).map((provider) => (
           <div key={provider.key} className="rounded-md border border-slate-200 p-3">
             <div className="flex items-center justify-between gap-2">
-              <div className="truncate text-sm font-medium text-slate-800">{provider.label}</div>
-              <Badge tone={provider.configured ? "green" : "amber"}>
-                {provider.configured ? "已配置" : "未配置"}
-              </Badge>
+              <div className="truncate text-sm font-medium text-slate-800" title={provider.label}>
+                {provider.label}
+              </div>
+              <Badge tone={provider.configured ? "green" : "amber"}>{provider.configured ? "已配置" : "未配置"}</Badge>
             </div>
             <div className="mt-2 flex flex-wrap gap-2">
               <Badge tone={provider.web_grounded ? "blue" : "default"}>
@@ -29,7 +29,6 @@ export function ProviderStatusCard({ providers }: { providers: GeoProviderStatus
               <Badge tone={provider.role === "analysis" ? "brand" : "default"}>{providerRoleLabel[provider.role] ?? provider.role}</Badge>
             </div>
             <p className="mt-2 line-clamp-3 text-xs text-slate-500">{provider.note}</p>
-            <p className="mt-2 text-[11px] text-slate-400">配置项：{provider.env_var}</p>
           </div>
         ))}
       </CardContent>

@@ -65,9 +65,8 @@ export default function HomePage() {
 
   const reviewTotal = useMemo(() => {
     if (executionBoard) return executionBoard.total_open;
-    if (!data) return 0;
-    return data.summary.onsite_open_critical + data.summary.onsite_open_high + data.summary.geo_tickets_open + data.summary.offsite_gaps;
-  }, [data, executionBoard]);
+    return 0;
+  }, [executionBoard]);
 
   if (loadError) return <p className="text-sm text-red-600">{loadError}</p>;
   if (!data) return <p className="text-sm text-slate-500">加载中…</p>;
@@ -164,6 +163,7 @@ export default function HomePage() {
       const saved = await api<ProjectTargets>("/api/project-targets", {
         method: "PUT",
         body: JSON.stringify({
+          tenant_name: targetForm.tenant_name,
           site_origin: targetForm.site_origin,
           markets: payload.markets,
           keywords: confirmSwitch ? [] : payload.keywords,

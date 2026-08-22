@@ -198,10 +198,10 @@ def _call_bocha(prompt_text: str) -> GeoProviderResult:
     if not settings.bocha_api_key:
         raise GeoProviderError("未配置 BOCHA_API_KEY，不能执行博查搜索采样。")
     payload = {"query": prompt_text, "freshness": "noLimit", "summary": True, "count": 10}
-    from app.usage import UsageLimitError, record_current
+    from app.usage import UsageLimitError, assert_current, record_current
 
     try:
-        record_current("bocha", 1)
+        assert_current("bocha", 1)
     except UsageLimitError:
         raise
     try:
@@ -216,6 +216,7 @@ def _call_bocha(prompt_text: str) -> GeoProviderResult:
         data = response.json()
     except httpx.HTTPError as exc:
         raise GeoProviderError(f"博查请求失败：{str(exc)[:200]}") from exc
+    record_current("bocha", 1)
 
     pages = (((data.get("data") or {}).get("webPages") or {}).get("value") or [])
     urls: list[str] = []
@@ -271,10 +272,10 @@ def _call_tavily(prompt_text: str, region_hint: str = "") -> GeoProviderResult:
     country = _tavily_country(region_hint)
     if country:
         payload["country"] = country
-    from app.usage import UsageLimitError, record_current
+    from app.usage import UsageLimitError, assert_current, record_current
 
     try:
-        record_current("tavily", 1)
+        assert_current("tavily", 1)
     except UsageLimitError:
         raise
     try:
@@ -289,6 +290,7 @@ def _call_tavily(prompt_text: str, region_hint: str = "") -> GeoProviderResult:
         data = response.json()
     except httpx.HTTPError as exc:
         raise GeoProviderError(f"Tavily 请求失败：{str(exc)[:200]}") from exc
+    record_current("tavily", 1)
 
     pages = data.get("results") or []
     urls: list[str] = []
@@ -340,10 +342,10 @@ def _call_bailian(prompt_text: str, model: str = "", region_hint: str = "") -> G
             },
         },
     }
-    from app.usage import UsageLimitError, record_current
+    from app.usage import UsageLimitError, assert_current, record_current
 
     try:
-        record_current("bailian", 1)
+        assert_current("bailian", 1)
     except UsageLimitError:
         raise
     try:
@@ -361,6 +363,7 @@ def _call_bailian(prompt_text: str, model: str = "", region_hint: str = "") -> G
 
     if data.get("code") and data.get("code") not in {"", "Success", "success"}:
         raise GeoProviderError(f"百炼返回 {data.get('code')}: {str(data.get('message') or '')[:200]}")
+    record_current("bailian", 1)
 
     urls = _bailian_urls(data)
     answer = _bailian_answer(data)

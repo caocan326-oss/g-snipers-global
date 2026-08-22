@@ -26,7 +26,7 @@ export default function LoginPage() {
         body: JSON.stringify({ email, password }),
       });
       setToken(data.access_token);
-      router.replace("/distribution");
+      router.replace("/home");
     } catch (err) {
       setError(err instanceof Error ? err.message : "登录失败");
     } finally {

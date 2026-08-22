@@ -181,12 +181,27 @@ def record(db: Session, tenant_id: str, meter: str, need: int = 1) -> MeterSnaps
     return snapshot(db, tenant_id, meter)
 
 
+def assert_current(meter: str, need: int = 1) -> None:
+    tenant_id = current_tenant_id()
+    db = _DB.get()
+    if not tenant_id or db is None:
+        return
+    assert_can(db, tenant_id, meter, need)
+
+
 def record_current(meter: str, need: int = 1) -> None:
+    """Count a successful paid call and commit it now.
+
+    Later failures in the same request must not erase this count. This also
+    commits other pending work on the request session; call only after the
+    vendor has already answered.
+    """
     tenant_id = current_tenant_id()
     db = _DB.get()
     if not tenant_id or db is None:
         return
     record(db, tenant_id, meter, need)
+    db.commit()
 
 
 def raise_http(exc: UsageLimitError) -> None:

@@ -26,7 +26,7 @@ const internalNav = [
 ];
 
 const adminNav = [
-  { href: "/ops/backup", label: "数据副本", note: "导出 / 异地落点 / 定时关着", icon: HardDrive },
+  { href: "/ops/backup", label: "数据副本", note: "导出客户库 / 每天定时打一份", icon: HardDrive },
   { href: "/ops/usage", label: "接口用量", note: "每家客户每天能打几次", icon: Gauge },
 ];
 
@@ -141,7 +141,7 @@ export default function ConsoleLayout({ children }: { children: ReactNode }) {
         </nav>
         <div className="border-t border-white/10 px-4 py-4">
           <div className="text-[11px] uppercase tracking-wide text-slate-500">当前客户</div>
-          <div className="mt-1 truncate text-sm font-medium text-white">{user?.tenant_name || "未选择客户"}</div>
+          <div className="mt-1 truncate text-sm font-medium text-white">{user ? user.tenant_name || "未登记客户名" : "读取客户…"}</div>
           <p className="mt-1 text-xs leading-5 text-slate-400">你在看这家客户，不是被检查的人。</p>
           <div className="mt-2 truncate text-xs text-slate-500">
             {user?.name ?? "…"} · {user?.role === "admin" ? "管理员" : "客户经理"}
@@ -164,7 +164,7 @@ export default function ConsoleLayout({ children }: { children: ReactNode }) {
           <div className="px-4 py-3">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <div className="text-sm font-semibold text-slate-950">当前客户：{user?.tenant_name || "未选择"}</div>
+                <div className="text-sm font-semibold text-slate-950">当前客户：{user ? user.tenant_name || "未登记客户名" : "读取客户…"}</div>
                 <div className="mt-0.5 text-xs text-slate-500">{activeNav.label} · 你在看客户，不是被检查的人</div>
               </div>
               <Button

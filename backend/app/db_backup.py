@@ -125,5 +125,5 @@ def status() -> dict[str, Any]:
         "offsite_scp_set": bool(settings.backup_offsite_scp.strip()),
         "latest": dumps[0] if dumps else None,
         "dumps": dumps[:20],
-        "note": "定时备份默认关闭。点导出会在本机落点留一份；配了异地目录或 SCP 会再抄一份出去。",
+        "note": "每天会在服务器打一份库副本。点导出再下载一份到你这台电脑。",
     }

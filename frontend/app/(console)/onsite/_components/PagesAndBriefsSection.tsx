@@ -25,7 +25,7 @@ export function PagesAndBriefsSection({
   briefs: ContentBrief[];
 }) {
   return (
-    <div className="grid gap-6 xl:grid-cols-[1fr_0.9fr]">
+    <div id="onsite-pages" className="grid gap-6 xl:grid-cols-[1fr_0.9fr]">
       <Card className="rounded-md">
         <CardHeader>
         <CardTitle>登记重点页面</CardTitle>

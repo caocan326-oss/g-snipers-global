@@ -80,6 +80,14 @@ export function DiagnosticTargetsSection({
       <div className="mt-4 grid gap-4 xl:grid-cols-[1fr_1.2fr]">
         <div className="space-y-4">
           <div>
+            <div className="mb-1 text-xs font-medium text-slate-500">客户名</div>
+            <Input
+              value={targetForm.tenant_name}
+              onChange={(e) => setTargetForm({ ...targetForm, tenant_name: e.target.value })}
+              placeholder="绿联 / UGREEN"
+            />
+          </div>
+          <div>
             <div className="mb-1 text-xs font-medium text-slate-500">官网</div>
             <Input
               value={targetForm.site_origin}

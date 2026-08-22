@@ -73,6 +73,7 @@ export default function OnsiteBoardPage() {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [query, setQuery] = useState("");
   const [busyId, setBusyId] = useState("");
+  const [draftProgress, setDraftProgress] = useState<{ written: number; remaining: number } | null>(null);
   const [maxUrls, setMaxUrls] = useState(50);
   const [maxDepth, setMaxDepth] = useState(2);
   const [showGscSetup, setShowGscSetup] = useState(false);
@@ -331,6 +332,7 @@ export default function OnsiteBoardPage() {
       const res = await api<FetchRegistered>("/api/onsite/fetch-registered", { method: "POST" });
       setNote(`${res.note} 成功 ${res.fetched} · 失败 ${res.failed} · 验收 ${res.verified}`);
       load();
+      document.getElementById("onsite-pages")?.scrollIntoView({ behavior: "smooth", block: "start" });
     } catch (e) {
       setError(e instanceof Error ? e.message : "抓取失败");
     } finally {
@@ -417,9 +419,10 @@ export default function OnsiteBoardPage() {
         setError("关键词排名数据源未配置，不能查询。不会在后台一直转。");
         return;
       }
+      const keywords = targetKeywords.map((item) => item.label).filter((item) => item.trim());
       const res = await api<SerpRunBatch>("/api/onsite/serp/run", {
         method: "POST",
-        body: JSON.stringify({ keywords: [], country, locale, device: "desktop", limit: 50 }),
+        body: JSON.stringify({ keywords, country, locale, device: "desktop", limit: 50 }),
         timeoutMs: 60000,
       });
       if (!res.configured) {
@@ -637,11 +640,13 @@ export default function OnsiteBoardPage() {
     setError("");
     setBusyId("ai-batch");
     let written = 0;
-    let remaining = 1;
+    let remaining = -1;
+    setDraftProgress({ written: 0, remaining: -1 });
     let stopped = "";
     try {
-      while (remaining > 0) {
+      while (remaining !== 0) {
         setNote(written ? `已写 ${written} 条，继续写剩下的…` : "正在写改法，不会再查一遍…");
+        setDraftProgress({ written, remaining });
         const res = await api<AiAssist>("/api/onsite/ai", {
           method: "POST",
           body: JSON.stringify({ step: "content", limit: 5 }),
@@ -649,6 +654,7 @@ export default function OnsiteBoardPage() {
         });
         written += res.processed ?? 0;
         remaining = res.remaining ?? 0;
+        setDraftProgress({ written, remaining });
         if (res.status === "未配置") {
           stopped = res.detail || "AI 建议服务未配置，本次不会生成建议。";
           break;
@@ -812,6 +818,7 @@ export default function OnsiteBoardPage() {
         guide={guide}
         voicePending={voicePending}
         busyId={busyId}
+        draftProgress={draftProgress}
         onPrimary={() => void runPrimary()}
         crawlOrSeed={crawlOrSeed}
         writeDrafts={() => void writeDrafts()}

@@ -66,7 +66,7 @@ export default function BackupPage() {
         </div>
         <h1 className="mt-3 text-2xl font-semibold text-slate-950">客户数据副本</h1>
         <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-500">
-          诊断历史、Fact Pack、竞品记录只在这一台库里。这里可以打出一份带到机器外面。每天自动抄走还没开。
+          诊断历史、Fact Pack、竞品记录只在这一台库里。点导出下载一份；服务器每天还会自动打一份。
         </p>
         <div className="mt-4">
           <Button onClick={exportNow} disabled={busy}>
@@ -99,14 +99,13 @@ export default function BackupPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Shield className="h-4 w-4" />
-              怎么开每天抄走
+              现在怎么用
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-sm leading-6 text-slate-600">
-            <p>1. 服务器 `.env` 写 `BACKUP_HOST_DIR=/opt/g-snipers-db-exports`。</p>
-            <p>2. 异地用目录或 SCP：`BACKUP_OFFSITE_KIND=dir` 加 `BACKUP_OFFSITE_DIR`，或 `scp` 加 `BACKUP_OFFSITE_SCP`。</p>
-            <p>3. 先手工点一次导出，确认机器外看得到文件。</p>
-            <p>4. 再把 `deploy/backup-postgres.cron.example` 装上，并把 `BACKUP_SCHEDULE_ENABLED=true`。现在不要装。</p>
+            <p>点上面「导出一份并下载」，浏览器会收下 json.gz。</p>
+            <p>服务器每天还会自动打一份，不需要在这页再开开关。</p>
+            <p>异地副本在家里/公司用拉取脚本拿，路径写在交接文档，不写在这页。</p>
           </CardContent>
         </Card>
       </section>

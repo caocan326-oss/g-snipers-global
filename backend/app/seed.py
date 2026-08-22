@@ -12,6 +12,7 @@ from app.database import SessionLocal
 from app.geo_helpers import CHECKLIST_DEFS, ENGINES, build_llms_txt
 from app.risk import default_severity, severity_to_risk
 from app.onsite_inventory import close_untested_index_findings, purge_demo_leftover_pages
+from app.site_identity import DEMO_TENANT_NAME, adopt_live_site, is_snipers_host
 from app.models import (
     BacklinkGap,
     Competitor,
@@ -42,7 +43,7 @@ def ensure_admin(db: Session) -> None:
     password = settings.admin_password
     if not email or not password:
         return
-    tenant = db.scalar(select(Tenant).where(Tenant.name == "演示客户 · 智能门锁出海"))
+    tenant = db.scalar(select(Tenant).where(Tenant.name == DEMO_TENANT_NAME))
     if tenant is None:
         tenant = db.scalar(select(Tenant).order_by(Tenant.created_at.asc()))
     if tenant is None:
@@ -68,9 +69,16 @@ def ensure_admin(db: Session) -> None:
 
 
 def seed(db: Session) -> None:
-    tenant = db.scalar(select(Tenant).where(Tenant.name == "演示客户 · 智能门锁出海"))
+    tenant = db.scalar(select(Tenant).where(Tenant.name == DEMO_TENANT_NAME))
     if tenant is None:
-        tenant = Tenant(name="演示客户 · 智能门锁出海", industry="智能家居", site_origin=SNIPERS_TEST_ORIGIN)
+        tenant = db.scalar(select(Tenant).order_by(Tenant.created_at.asc()))
+    if tenant is not None and tenant.site_origin and not is_snipers_host(tenant.site_origin):
+        adopt_live_site(db, tenant)
+        ensure_admin(db)
+        db.commit()
+        return
+    if tenant is None:
+        tenant = Tenant(name=DEMO_TENANT_NAME, industry="智能家居", site_origin=SNIPERS_TEST_ORIGIN)
         db.add(tenant)
         db.flush()
     elif not tenant.site_origin:

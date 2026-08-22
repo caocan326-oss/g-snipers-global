@@ -22,6 +22,9 @@ export function DeliveryBoundarySection({
             <h2 className="text-lg font-semibold text-slate-950">交付边界</h2>
           </div>
           <p className="mt-1 text-sm text-slate-500">客户看到对得上的检查结论，交付人员看到改法、渠道卡片和复查结果。发新媒体是半自动：AI 写稿，人登号或走接口。不自动群发。</p>
+          {data.seo_performance.data_status !== "已导入" && data.seo_performance.serp_runs === 0 ? (
+            <p className="mt-2 text-sm text-amber-700">还没有 Google/Bing 搜索数据。切 7/28/90 天数字会仍是空的，不是坏了。</p>
+          ) : null}
         </div>
         <div className="flex rounded-md border border-slate-200 bg-slate-50 p-1">
           {[7, 28, 90].map((item) => (

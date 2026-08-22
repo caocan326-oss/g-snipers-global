@@ -16,6 +16,7 @@ export function GuideHeader({
   guide,
   voicePending,
   busyId,
+  draftProgress,
   onPrimary,
   crawlOrSeed,
   writeDrafts,
@@ -26,6 +27,7 @@ export function GuideHeader({
   guide: OnsiteGuide | null;
   voicePending: boolean;
   busyId: string;
+  draftProgress: { written: number; remaining: number } | null;
   onPrimary: () => void;
   crawlOrSeed: () => void;
   writeDrafts: () => void;
@@ -34,10 +36,18 @@ export function GuideHeader({
   downloadReportTable: () => void;
 }) {
   const [more, setMore] = useState(false);
+  const writing = busyId === "ai-batch";
   const primaryBusy =
-    (guide?.action_key === "generate_drafts" && busyId === "ai-batch") ||
+    (guide?.action_key === "generate_drafts" && writing) ||
     (guide?.action_key === "fetch_site" && busyId === "fetch-site") ||
     busyId === "save-origin";
+  const draftKnown = Boolean(draftProgress && draftProgress.remaining >= 0);
+  const draftTotal = draftKnown && draftProgress ? draftProgress.written + draftProgress.remaining : 0;
+  const draftPct = draftTotal > 0 && draftProgress ? Math.round((draftProgress.written / draftTotal) * 100) : 0;
+  const writingLabel =
+    draftProgress && draftProgress.remaining >= 0
+      ? `已写 ${draftProgress.written} / 还剩 ${draftProgress.remaining}`
+      : "正在写改法…";
 
   return (
     <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
@@ -51,7 +61,11 @@ export function GuideHeader({
         </div>
         <Button type="button" onClick={onPrimary} disabled={!guide || Boolean(primaryBusy)}>
           <Bot className="mr-2 h-4 w-4" />
-          {primaryBusy ? "处理中…" : guide?.action_label ?? "加载下一步…"}
+          {writing && guide?.action_key === "generate_drafts"
+            ? writingLabel
+            : primaryBusy
+              ? "处理中…"
+              : guide?.action_label ?? "加载下一步…"}
         </Button>
       </div>
 
@@ -101,9 +115,9 @@ export function GuideHeader({
               <ClipboardList className="mr-2 h-4 w-4" />
               补充更多页面
             </Button>
-            <Button type="button" variant="outline" size="sm" onClick={writeDrafts} disabled={busyId === "ai-batch"}>
+            <Button type="button" variant="outline" size="sm" onClick={writeDrafts} disabled={writing}>
               <Bot className="mr-2 h-4 w-4" />
-              {busyId === "ai-batch" ? "处理中…" : "继续写剩下的改法"}
+              {writing ? writingLabel : "继续写剩下的改法"}
             </Button>
             <Button type="button" variant="outline" size="sm" onClick={recheckSite} disabled={busyId === "ai-recheck"}>
               <Bot className="mr-2 h-4 w-4" />
@@ -120,6 +134,24 @@ export function GuideHeader({
           </div>
         ) : null}
       </div>
+      {draftProgress ? (
+        <div className="mt-3">
+          <div className="flex items-center justify-between gap-3 text-xs text-slate-500">
+            <span>
+              {draftProgress.remaining < 0
+                ? "正在写改法，写完一批会显示还剩多少。"
+                : `已写 ${draftProgress.written} 条，还剩 ${draftProgress.remaining} 条`}
+            </span>
+            {draftTotal > 0 ? <span>{draftPct}%</span> : null}
+          </div>
+          <div className="mt-1 h-2 overflow-hidden rounded bg-slate-200">
+            <div
+              className="h-full bg-emerald-600 transition-all"
+              style={{ width: `${draftTotal > 0 ? Math.max(draftPct, writing ? 4 : 0) : writing ? 8 : 0}%` }}
+            />
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

@@ -269,6 +269,7 @@ class ProjectTargetCompetitorIn(BaseModel):
 
 class ProjectTargetsIn(BaseModel):
     site_origin: str | None = None
+    tenant_name: str | None = None
     markets: list[ProjectTargetMarketIn] = Field(default_factory=list)
     keywords: list[ProjectTargetKeywordIn] = Field(default_factory=list)
     competitors: list[ProjectTargetCompetitorIn] = Field(default_factory=list)
@@ -276,6 +277,7 @@ class ProjectTargetsIn(BaseModel):
 
 
 class ProjectTargetsOut(BaseModel):
+    tenant_name: str = ""
     site_origin: str = ""
     markets: list[MarketDetailOut] = Field(default_factory=list)
     target_market_count: int = 0

@@ -1,6 +1,6 @@
 from sqlalchemy import select
 
-from app.models import GeoAsset, GeoObservation, GeoPrompt, GeoTicket, OnsiteIssue, SitePage, Tenant
+from app.models import DemandSignal, GeoAsset, GeoObservation, GeoPrompt, GeoTicket, OnsiteIssue, SitePage, Tenant
 from app.onsite_inventory import DEMO_LEFTOVER_PATHS, purge_demo_leftover_pages
 from app.seed import seed
 
@@ -90,3 +90,25 @@ def test_seed_does_not_duplicate_cite_checklist_when_prompts_missing(db) -> None
     kinds = [row.kind for row in db.query(GeoAsset).filter(GeoAsset.tenant_id == tenant.id).all()]
     assert kinds.count("cite_checklist") == 1
     assert kinds.count("llms_txt") == 1
+
+
+def test_seed_does_not_reinject_lock_demo_onto_live_origin(db) -> None:
+    seed(db)
+    tenant = db.scalar(select(Tenant).where(Tenant.name == "演示客户 · 智能门锁出海"))
+    assert tenant is not None
+    tenant.site_origin = "https://www.ugreen.com"
+    db.commit()
+    seed(db)
+    db.refresh(tenant)
+    assert tenant.name == "UGREEN"
+    assert tenant.site_origin == "https://www.ugreen.com"
+    live_keywords = [
+        row.theme
+        for row in db.query(DemandSignal).filter(
+            DemandSignal.tenant_id == tenant.id,
+            DemandSignal.source != "target_archived",
+        )
+    ]
+    assert "smart lock for renters" not in live_keywords
+    prompts = [row.prompt_text for row in db.query(GeoPrompt).filter(GeoPrompt.tenant_id == tenant.id).all()]
+    assert not any("smart lock" in text.lower() or "スマートロック" in text for text in prompts)

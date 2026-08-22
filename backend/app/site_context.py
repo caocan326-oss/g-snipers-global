@@ -5,6 +5,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.onsite_fetch import OriginError, normalize_origin, origin_host
+from app.site_identity import name_from_origin
 from app.models import (
     AiRun,
     BacklinkGap,
@@ -200,12 +201,22 @@ def prepare_site_switch(
     existing = latest_archive_for_origin(db, user.tenant_id, new_origin)
     if existing:
         restore_archive_context(db, user, existing)
+        tenant = db.get(Tenant, user.tenant_id)
+        if tenant:
+            next_name = name_from_origin(existing.site_origin)
+            if next_name:
+                tenant.name = next_name
         return {
             "changed": True,
             "restored": True,
             "note": f"已恢复历史网站 {existing.site_origin}。刚才的网站已归档，可在历史网站里查看。",
         }
     reset_current_context(db, user)
+    tenant = db.get(Tenant, user.tenant_id)
+    if tenant and new_origin:
+        next_name = name_from_origin(new_origin)
+        if next_name:
+            tenant.name = next_name
     return {
         "changed": True,
         "restored": False,
