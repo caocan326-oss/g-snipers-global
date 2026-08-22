@@ -8,9 +8,43 @@ const NETWORK_HINTS = [
   "connecterror",
 ];
 
+const TECHNICAL_HINTS = [
+  "internal server error",
+  "database is locked",
+  "operationalerror",
+  "sqlalchemy",
+  "traceback",
+  "failed to fetch",
+  "networkerror",
+  "econnreset",
+  "errno ",
+  "exception",
+  "starlette",
+  "uvicorn",
+];
+
+const HAS_CJK = /[\u4e00-\u9fff]/;
+
+export const UNEXPECTED_FAILURE = "这次没办成，请再试一次。系统没有悄悄做完。";
+
+function looksTechnical(message: string): boolean {
+  const lower = message.toLowerCase();
+  return TECHNICAL_HINTS.some((hint) => lower.includes(hint));
+}
+
+export function explainRequestError(message: string, status?: number): string {
+  const text = (message || "").trim();
+  if (status && status >= 500) {
+    if (HAS_CJK.test(text) && !looksTechnical(text)) return text;
+    return UNEXPECTED_FAILURE;
+  }
+  if (!text || looksTechnical(text)) return UNEXPECTED_FAILURE;
+  return text;
+}
+
 export function explainServiceError(message: string, kind: "speed" | "rank" | "generic" = "generic"): string {
   const text = (message || "").trim();
-  if (!text) return text;
+  if (!text) return explainRequestError(text);
   const lower = text.toLowerCase();
   if (NETWORK_HINTS.some((hint) => lower.includes(hint))) {
     if (kind === "speed") {
@@ -24,5 +58,5 @@ export function explainServiceError(message: string, kind: "speed" | "rank" | "g
   if (lower.includes("timed out") || lower.includes("timeout") || lower.includes("gateway time-out")) {
     return kind === "speed" ? "测速超时了，多半是中转或 Google 这边慢，请稍后再试。" : "查询超时了，请稍后再试。";
   }
-  return text;
+  return explainRequestError(text);
 }

@@ -1,3 +1,5 @@
+import { explainRequestError } from "@/lib/errors";
+
 const TOKEN_KEY = "gsnipers_token";
 
 export function getToken(): string | null {
@@ -39,7 +41,8 @@ export async function api<T>(path: string, init: RequestInit & { timeoutMs?: num
       } catch {
         /* ignore */
       }
-      throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
+      const raw = typeof detail === "string" ? detail : JSON.stringify(detail);
+      throw new Error(explainRequestError(raw, res.status));
     }
     if (res.status === 204) return undefined as T;
     return res.json() as Promise<T>;
@@ -47,7 +50,10 @@ export async function api<T>(path: string, init: RequestInit & { timeoutMs?: num
     if (error instanceof DOMException && error.name === "AbortError") {
       throw new Error("请求超时，请稍后重试。测速和排名检查不会在后台偷偷完成。");
     }
-    throw error;
+    if (error instanceof Error) {
+      throw new Error(explainRequestError(error.message));
+    }
+    throw new Error(explainRequestError(""));
   } finally {
     if (timer) window.clearTimeout(timer);
   }
@@ -73,7 +79,8 @@ export async function downloadApiFile(path: string, filename: string, timeoutMs 
       } catch {
         /* ignore */
       }
-      throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
+      const raw = typeof detail === "string" ? detail : JSON.stringify(detail);
+      throw new Error(explainRequestError(raw, res.status));
     }
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
@@ -88,7 +95,10 @@ export async function downloadApiFile(path: string, filename: string, timeoutMs 
     if (error instanceof DOMException && error.name === "AbortError") {
       throw new Error("下载超时，请稍后重试。");
     }
-    throw error;
+    if (error instanceof Error) {
+      throw new Error(explainRequestError(error.message));
+    }
+    throw new Error(explainRequestError(""));
   } finally {
     window.clearTimeout(timer);
   }

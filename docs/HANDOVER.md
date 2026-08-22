@@ -315,6 +315,8 @@ GEO 写全了；清单和客户说明曾截成「Which brand makes the best…�
 
 Tavily 国家过滤和空结果说明公司已先发（`cb78ec8` 一带），这次没改。IndexNow / GSC 灰着仍是没配钥匙。博查给中文电商仍是源质量。
 
+换站或登录遇到未捕获异常时，不要把 `Internal Server Error` / `database is locked` 甩到页面上。后端记日志，接口和前端统一说「这次没办成，请再试一次。系统没有悄悄做完。」已经写好的中文 4xx 仍原样显示。
+
 ---
 
 ## 5. 收工 / 换到另一台电脑之前

@@ -1,11 +1,18 @@
-from fastapi import FastAPI, Request
+import logging
+
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.config import settings
 from app.llm import status_label
 from app.routers import ai, auth, dashboard, distribution, execution, geo, inquiries, insights, offsite, onsite, ops, seo, site_context, usage, work_orders
 from app.usage import UsageLimitError
+
+logger = logging.getLogger("gsnipers")
+UNEXPECTED_FAILURE = "这次没办成，请再试一次。系统没有悄悄做完。"
 
 app = FastAPI(title="G-Snipers Overseas", version="0.1.0")
 
@@ -13,6 +20,16 @@ app = FastAPI(title="G-Snipers Overseas", version="0.1.0")
 @app.exception_handler(UsageLimitError)
 def usage_limit_handler(_request: Request, exc: UsageLimitError) -> JSONResponse:
     return JSONResponse(status_code=429, content={"detail": str(exc)})
+
+
+@app.exception_handler(Exception)
+def unhandled_error(request: Request, exc: Exception) -> JSONResponse:
+    if isinstance(exc, (HTTPException, StarletteHTTPException)):
+        return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+    if isinstance(exc, RequestValidationError):
+        return JSONResponse(status_code=422, content={"detail": exc.errors()})
+    logger.exception("unhandled %s %s", request.method, request.url.path)
+    return JSONResponse(status_code=500, content={"detail": UNEXPECTED_FAILURE})
 
 app.add_middleware(
     CORSMiddleware,
