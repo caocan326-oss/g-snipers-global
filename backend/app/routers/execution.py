@@ -10,6 +10,7 @@ from app.geo_loop import (
     geo_href,
     latest_prompt_rows,
     prompt_sample_tally,
+    reconcile_open_ticket_status,
     refresh_open_tickets_from_samples,
     ticket_handoff,
 )
@@ -66,7 +67,7 @@ def list_execution_items(user: User = Depends(get_current_user), db: Session = D
             )
         )
 
-    if refresh_open_tickets_from_samples(db, user.tenant_id):
+    if refresh_open_tickets_from_samples(db, user.tenant_id) or reconcile_open_ticket_status(db, user.tenant_id):
         db.commit()
     by_prompt = latest_prompt_rows(db, user.tenant_id)
     geo_rows = (

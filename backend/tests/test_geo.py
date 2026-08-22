@@ -1114,3 +1114,56 @@ def test_same_question_title_stays_full_and_follows_latest_sample(client: TestCl
     assert any("请客户改这一页" in item for item in this_week["items"])
     retest = next(section for section in brief["sections"] if section["key"] == "retest")
     assert any("客户页没上线" in item for item in retest["items"])
+
+
+def test_opening_list_aligns_stale_verify_badge_to_handoff(client: TestClient, demo_user, db) -> None:
+    from app.models import GeoPrompt, GeoTicket
+
+    prompt = GeoPrompt(
+        tenant_id=demo_user.tenant_id,
+        prompt_text="Which brand makes the best 100W USB-C charger for laptops?",
+        locale="en-US",
+    )
+    db.add(prompt)
+    db.flush()
+    leftover = GeoTicket(
+        tenant_id=demo_user.tenant_id,
+        prompt_id=prompt.id,
+        title="买家问「Which brand makes the best 100W USB-C charger for laptops?」时提到了品牌，但没给出官网",
+        diagnosis="mentioned",
+        status="verify",
+        evidence='{"handoff": "drafted"}',
+    )
+    sent = GeoTicket(
+        tenant_id=demo_user.tenant_id,
+        prompt_id=prompt.id,
+        title="已发给客户的待处理项",
+        diagnosis="mentioned",
+        status="verify",
+        evidence='{"handoff": "sent"}',
+    )
+    live = GeoTicket(
+        tenant_id=demo_user.tenant_id,
+        prompt_id=prompt.id,
+        title="客户已上线的待处理项",
+        diagnosis="mentioned",
+        status="open",
+        evidence='{"handoff": "live"}',
+    )
+    db.add_all([leftover, sent, live])
+    db.commit()
+
+    headers = auth_header(client)
+    listed = {row["id"]: row for row in client.get("/api/geo/tickets", headers=headers).json()}
+    assert listed[leftover.id]["handoff"] == "drafted"
+    assert listed[leftover.id]["status"] == "open"
+    assert "还没发给客户" in listed[leftover.id]["handoff_label"]
+    assert listed[sent.id]["status"] == "in_progress"
+    assert listed[live.id]["status"] == "verify"
+
+    board = client.get("/api/execution/items", headers=headers).json()
+    items = {item["id"]: item for item in board["items"]}
+    assert items[leftover.id]["status"] == "open"
+    assert items[leftover.id]["handoff"] == "drafted"
+    assert items[sent.id]["status"] == "in_progress"
+    assert items[live.id]["status"] == "verify"

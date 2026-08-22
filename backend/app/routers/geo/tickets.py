@@ -11,6 +11,7 @@ from app.geo_loop import (
     HANDOFFS,
     latest_prompt_rows,
     prompt_sample_tally,
+    reconcile_open_ticket_status,
     refresh_open_tickets_from_samples,
     set_ticket_handoff,
     ticket_handoff,
@@ -25,7 +26,7 @@ from .common import _ticket_out
 
 @router.get("/tickets", response_model=list[GeoTicketOut])
 def list_tickets(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> list[GeoTicketOut]:
-    if refresh_open_tickets_from_samples(db, user.tenant_id):
+    if refresh_open_tickets_from_samples(db, user.tenant_id) or reconcile_open_ticket_status(db, user.tenant_id):
         db.commit()
     by_prompt = latest_prompt_rows(db, user.tenant_id)
     rows = (

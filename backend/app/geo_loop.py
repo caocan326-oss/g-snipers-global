@@ -371,6 +371,36 @@ def ticket_handoff(ticket: GeoTicket) -> str:
     return value if value in HANDOFFS else "drafted"
 
 
+def status_for_handoff(handoff: str) -> str:
+    return {"drafted": "open", "sent": "in_progress", "live": "verify"}.get(handoff, "open")
+
+
+def sync_ticket_status_to_handoff(ticket: GeoTicket) -> bool:
+    if ticket.status in {"done", "closed", "ignored", "reopened"}:
+        return False
+    want = status_for_handoff(ticket_handoff(ticket))
+    if ticket.status == want:
+        return False
+    ticket.status = want
+    return True
+
+
+def reconcile_open_ticket_status(db: Session, tenant_id: str) -> int:
+    tickets = (
+        db.query(GeoTicket)
+        .filter(
+            GeoTicket.tenant_id == tenant_id,
+            ~GeoTicket.status.in_(["done", "closed", "ignored"]),
+        )
+        .all()
+    )
+    updated = 0
+    for ticket in tickets:
+        if sync_ticket_status_to_handoff(ticket):
+            updated += 1
+    return updated
+
+
 def set_ticket_handoff(ticket: GeoTicket, handoff: str) -> None:
     if handoff not in HANDOFFS:
         raise ValueError(handoff)
@@ -379,12 +409,7 @@ def set_ticket_handoff(ticket: GeoTicket, handoff: str) -> None:
     ticket.evidence = json.dumps(payload, ensure_ascii=False, indent=2)
     if ticket.status in {"done", "closed", "ignored"}:
         return
-    if handoff == "sent":
-        ticket.status = "in_progress"
-    elif handoff == "live":
-        ticket.status = "verify"
-    elif handoff == "drafted" and ticket.status in {"in_progress", "verify"}:
-        ticket.status = "open"
+    ticket.status = status_for_handoff(handoff)
 
 
 def loop_ticket_spec(

@@ -8,7 +8,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session, selectinload
 
 from app.models import GeoTicket, Inquiry, OnsiteIssue, SeoPerformanceRow, SerpRun, SitePage, Tenant, User
-from app.geo_loop import refresh_open_tickets_from_samples, ticket_handoff
+from app.geo_loop import reconcile_open_ticket_status, refresh_open_tickets_from_samples, ticket_handoff
 from app.routers.geo.prompts import geo_summary
 from app.routers.onsite.common import (
     _active_issue,
@@ -112,7 +112,7 @@ def build_customer_brief(user: User, db: Session) -> CustomerBriefOut:
     waiting = [issue for issue in active if issue.status in {"confirmed", "draft_applied"}]
 
     geo = geo_summary(user, db)
-    if refresh_open_tickets_from_samples(db, user.tenant_id):
+    if refresh_open_tickets_from_samples(db, user.tenant_id) or reconcile_open_ticket_status(db, user.tenant_id):
         db.commit()
     tickets = (
         db.query(GeoTicket)
