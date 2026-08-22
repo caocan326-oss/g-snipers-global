@@ -203,13 +203,14 @@ def build_customer_brief(user: User, db: Session) -> CustomerBriefOut:
         this_week.append("登记客户官网。")
     elif not pages:
         this_week.append("查看已登记网站的页面。")
-    for issue in priority_issues:
-        this_week.append(f"{_severity_label(issue.severity)}：{_plain_title(issue.title)}（{_page_short(issue.page)}）")
-    for ticket in tickets:
-        if len(this_week) >= 3:
-            break
+    geo_lines: list[str] = []
+    for ticket in tickets[:1]:
         action = (ticket.recommended_action or "").strip()
-        this_week.append(f"{ticket.title} {action}".strip() if action else ticket.title)
+        geo_lines.append(f"{ticket.title} {action}".strip() if action else ticket.title)
+    onsite_slots = max(0, 3 - len(this_week) - len(geo_lines))
+    for issue in priority_issues[:onsite_slots]:
+        this_week.append(f"{_severity_label(issue.severity)}：{_plain_title(issue.title)}（{_page_short(issue.page)}）")
+    this_week.extend(geo_lines)
     if not this_week:
         this_week.append("对照已有记录，整理给客户的说明，并安排下一轮复查。")
     this_week = this_week[:3]

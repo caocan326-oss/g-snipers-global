@@ -212,6 +212,22 @@ def test_geo_ticket_verify_requires_confirm_and_can_reopen(client: TestClient, d
     assert live.json()["handoff"] == "live"
     assert live.json()["status"] == "verify"
 
+    drafted = client.post(
+        f"/api/geo/tickets/{ticket_id}/handoff",
+        headers=headers,
+        json={"handoff": "drafted"},
+    )
+    assert drafted.status_code == 200
+    assert drafted.json()["handoff"] == "drafted"
+    assert drafted.json()["status"] == "open"
+
+    live_again = client.post(
+        f"/api/geo/tickets/{ticket_id}/handoff",
+        headers=headers,
+        json={"handoff": "live"},
+    )
+    assert live_again.json()["status"] == "verify"
+
     verified = client.post(
         f"/api/geo/tickets/{ticket_id}/verify",
         headers=headers,

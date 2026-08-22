@@ -383,7 +383,7 @@ def set_ticket_handoff(ticket: GeoTicket, handoff: str) -> None:
         ticket.status = "in_progress"
     elif handoff == "live":
         ticket.status = "verify"
-    elif handoff == "drafted" and ticket.status == "in_progress":
+    elif handoff == "drafted" and ticket.status in {"in_progress", "verify"}:
         ticket.status = "open"
 
 

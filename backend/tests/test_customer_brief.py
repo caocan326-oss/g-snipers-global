@@ -259,3 +259,54 @@ def test_customer_brief_retest_only_records_sample_change(client: TestClient, de
     assert all("必须提到" not in item for item in retest["items"])
     assert all("已稳定推荐" not in item for item in retest["items"])
     assert "仍没提到就写仍没提到" in body["markdown"]
+
+
+def test_customer_brief_keeps_geo_ticket_in_this_week_when_onsite_is_full(client: TestClient, demo_user, db) -> None:
+    from app.models import GeoPrompt, GeoTicket
+
+    tenant = db.get(Tenant, demo_user.tenant_id)
+    tenant.site_origin = "https://www.ugreen.com"
+    page = SitePage(
+        tenant_id=demo_user.tenant_id,
+        path="/products/usa-65585",
+        locale="en-US",
+        title="UGREEN Nexode 100W Charger",
+        crawl_status="ok",
+    )
+    db.add(page)
+    db.flush()
+    for title in ("页面缺少给搜索看的说明", "标准网址没写清楚", "产品页缺少 Product schema"):
+        db.add(
+            OnsiteIssue(
+                tenant_id=demo_user.tenant_id,
+                page_id=page.id,
+                category="tdk",
+                title=title,
+                status="open",
+                severity="critical",
+                risk="high",
+            )
+        )
+    prompt = GeoPrompt(
+        tenant_id=demo_user.tenant_id,
+        prompt_text="Which brand makes the best 100W USB-C charger for laptops?",
+        locale="en-US",
+    )
+    db.add(prompt)
+    db.flush()
+    db.add(
+        GeoTicket(
+            tenant_id=demo_user.tenant_id,
+            prompt_id=prompt.id,
+            title="买家问「Which brand makes the best 100W USB-C charger for laptops?」时提到了品牌，但没给出官网",
+            diagnosis="mentioned",
+            status="open",
+            recommended_action="请客户改这一页：UGREEN Nexode 100W Charger https://www.ugreen.com/products/usa-65585",
+        )
+    )
+    db.commit()
+
+    headers = auth_header(client)
+    body = client.get("/api/dashboard/customer-brief", headers=headers).json()
+    assert any("100W USB-C" in item and "请客户改这一页" in item for item in body["this_week"])
+    assert sum(1 for item in body["this_week"] if "紧急" in item) <= 2
