@@ -241,6 +241,7 @@ powershell -File deploy/sync-from-local.ps1
 | 2026-08-22 | 产品/运维 | 家里发到 `8a6e0d8`（`sync-from-local.ps1 -Rebuild`）。PDF 渲染失败改 503；GEO 下 PDF/CSV 失败写在页面上。 |
 | 2026-08-22 | 产品/运维 | 公司发到 `46ac4e7`（`sync-from-local.ps1 -Rebuild`）。同一买家问题在 GEO / 清单 / 客户说明写全；标题按这一轮抽查改；博查+Tavily 算一轮并分源写提到/未提到。 |
 | 2026-08-22 | 产品/运维 | 公司发到 `a6eebaf`（`sync-from-local.ps1 -Rebuild`）。清单写这一轮 `1 / 2`；源名用 Tavily / 博查，不用引擎键。 |
+| 2026-08-22 | 产品/运维 | 公司发到 `0efc59a`（`sync-from-local.ps1 -Rebuild`）。GEO 待处理项写出页和官网链接；进度分已写/已发/已上线，未上线不能验收。 |
 
 ---
 
