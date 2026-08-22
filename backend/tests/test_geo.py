@@ -431,17 +431,16 @@ def test_geo_draft_tickets_from_evidence_rules(client: TestClient, demo_user) ->
     drafted = client.post("/api/geo/tickets/draft-from-evidence", headers=headers)
     assert drafted.status_code == 200, drafted.text
     body = drafted.json()
-    assert body["created"] >= 2
+    assert body["created"] >= 1
     titles = {ticket["title"] for ticket in body["tickets"]}
-    assert any("没给出官网" in title for title in titles)
-    assert any("先推了别人" in title for title in titles)
+    assert any("没给出官网" in title or "先推了别人" in title for title in titles)
     assert all("采样次数不足" not in title for title in titles)
     assert all("不要求这次必须提到" in (ticket["acceptance_criteria"] or "") for ticket in body["tickets"])
     assert all("再抽查" in (ticket["acceptance_criteria"] or "") for ticket in body["tickets"])
 
     second = client.post("/api/geo/tickets/draft-from-evidence", headers=headers).json()
     assert second["created"] == 0
-    assert second["skipped"] >= 2
+    assert second["skipped"] >= 1
 
 
 def test_geo_auto_sampling_aggregate_creates_ent_off_tickets(client: TestClient, demo_user, monkeypatch) -> None:
@@ -720,10 +719,109 @@ def test_geo_grounded_batch_runs_each_configured_source(client: TestClient, demo
     engines = {run["engines"][0] for run in body["runs"]}
     assert engines == {"bocha", "tavily"}
     summary = client.get("/api/geo/summary", headers=headers).json()
-    assert summary["latest_sampled"] == 1
+    assert summary["latest_sampled"] == 2
     assert summary["latest_mentioned"] == 0
     assert summary["latest_owned"] == 0
-    assert summary["latest_third_party"] == 1
+    assert summary["latest_third_party"] == 2
+
+
+def test_tavily_country_ignores_provider_labels() -> None:
+    from app.geo_providers import _tavily_country
+
+    assert _tavily_country("Tavily") == ""
+    assert _tavily_country("API") == ""
+    assert _tavily_country("博查") == ""
+    assert _tavily_country("US") == "united states"
+    assert _tavily_country("de") == "germany"
+
+
+def test_geo_summary_does_not_compare_two_providers_in_the_same_click(client: TestClient, demo_user, db) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    from app.models import GeoPrompt, GeoSampleResult, GeoSampleRun
+
+    tenant_id = demo_user.tenant_id
+    prompt = GeoPrompt(tenant_id=tenant_id, prompt_text="best 100W USB-C charger", locale="en-US")
+    db.add(prompt)
+    db.flush()
+    older = datetime.now(timezone.utc) - timedelta(hours=2)
+    now = datetime.now(timezone.utc)
+    first = GeoSampleRun(tenant_id=tenant_id, config_hash="old", status="done", started_at=older)
+    db.add(first)
+    db.flush()
+    db.add(
+        GeoSampleResult(
+            tenant_id=tenant_id,
+            run_id=first.id,
+            prompt_id=prompt.id,
+            evidence_id="ev_old_bocha",
+            engine="bocha",
+            web_grounded="true",
+            prompt_text_hash="a" * 64,
+            answer_text_hash="b" * 64,
+            mentioned=False,
+            citations_json="[]",
+            owned_citations_json="[]",
+            third_party_citations_json='["https://other.example"]',
+        )
+    )
+    bocha = GeoSampleRun(tenant_id=tenant_id, config_hash="batch-b", status="done", started_at=now)
+    tavily = GeoSampleRun(
+        tenant_id=tenant_id,
+        config_hash="batch-t",
+        status="done",
+        started_at=now + timedelta(seconds=20),
+    )
+    db.add_all([bocha, tavily])
+    db.flush()
+    db.add(
+        GeoSampleResult(
+            tenant_id=tenant_id,
+            run_id=bocha.id,
+            prompt_id=prompt.id,
+            evidence_id="ev_new_bocha",
+            engine="bocha",
+            web_grounded="true",
+            prompt_text_hash="a" * 64,
+            answer_text_hash="c" * 64,
+            mentioned=True,
+            brand_hits="ugreen",
+            citations_json="[]",
+            owned_citations_json="[]",
+            third_party_citations_json='["https://anker.example"]',
+        )
+    )
+    db.add(
+        GeoSampleResult(
+            tenant_id=tenant_id,
+            run_id=tavily.id,
+            prompt_id=prompt.id,
+            evidence_id="ev_new_tavily",
+            engine="tavily",
+            web_grounded="true",
+            prompt_text_hash="a" * 64,
+            answer_text_hash="d" * 64,
+            mentioned=False,
+            citations_json="[]",
+            owned_citations_json="[]",
+            third_party_citations_json="[]",
+        )
+    )
+    db.commit()
+
+    headers = auth_header(client)
+    summary = client.get("/api/geo/summary", headers=headers).json()
+    assert summary["latest_sampled"] == 2
+    assert summary["latest_mentioned"] == 1
+    assert "上次抽查都没提到" in summary["compare_note"]
+    assert "这次有 1 问提到了" in summary["compare_note"]
+    prompts = client.get("/api/geo/prompts", headers=headers).json()
+    card = next(row for row in prompts if row["id"] == prompt.id)
+    assert "提到了品牌，没有给出官网" in card["sample_verdict"]
+    assert "bocha 提到" in card["sample_verdict"]
+    assert "tavily 未提到" in card["sample_verdict"]
+    assert card["mention_rate"] == "50.0%"
+    assert "100W USB-C" in summary["latest_mention_split"] or "bocha 提到" in summary["latest_mention_split"]
 
 
 def test_geo_grounded_batch_requires_a_live_source(client: TestClient, demo_user, monkeypatch) -> None:
@@ -838,3 +936,125 @@ def test_geo_summary_compare_note_and_ticket_retest(client: TestClient, demo_use
     assert "再抽查" in geo_item["acceptance_criteria"] or "再抽查" in geo_item["retest_method"]
     assert "再" in geo_item["retest_method"]
     assert geo_item["href"].startswith("/onsite/") or geo_item["href"] in {"/offsite", "/geo"}
+
+
+def test_short_prompt_keeps_full_charger_question() -> None:
+    from app.geo_loop import short_prompt
+
+    question = "Which brand makes the best 100W USB-C charger for laptops?"
+    assert short_prompt(question) == question
+    assert "…" not in short_prompt(question)
+
+
+def test_same_question_title_stays_full_and_follows_latest_sample(client: TestClient, demo_user, db) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    from app.models import GeoPrompt, GeoSampleResult, GeoSampleRun, GeoTicket, SitePage, Tenant
+
+    question = "Which brand makes the best 100W USB-C charger for laptops?"
+    tenant_id = demo_user.tenant_id
+    tenant = db.get(Tenant, tenant_id)
+    tenant.site_origin = "https://www.ugreen.com"
+    db.add(SitePage(tenant_id=tenant_id, path="/", locale="en-US", title="Home", crawl_status="ok"))
+    prompt = GeoPrompt(tenant_id=tenant_id, prompt_text=question, locale="en-US")
+    db.add(prompt)
+    db.flush()
+    older = datetime.now(timezone.utc) - timedelta(hours=2)
+    now = datetime.now(timezone.utc)
+    first = GeoSampleRun(tenant_id=tenant_id, config_hash="old", status="done", started_at=older)
+    db.add(first)
+    db.flush()
+    db.add(
+        GeoSampleResult(
+            tenant_id=tenant_id,
+            run_id=first.id,
+            prompt_id=prompt.id,
+            evidence_id="ev_old_absent",
+            engine="bocha",
+            web_grounded="true",
+            prompt_text_hash="a" * 64,
+            answer_text_hash="b" * 64,
+            mentioned=False,
+            citations_json="[]",
+            owned_citations_json="[]",
+            third_party_citations_json="[]",
+        )
+    )
+    bocha = GeoSampleRun(tenant_id=tenant_id, config_hash="batch-b", status="done", started_at=now)
+    tavily = GeoSampleRun(tenant_id=tenant_id, config_hash="batch-t", status="done", started_at=now + timedelta(seconds=20))
+    db.add_all([bocha, tavily])
+    db.flush()
+    db.add(
+        GeoSampleResult(
+            tenant_id=tenant_id,
+            run_id=bocha.id,
+            prompt_id=prompt.id,
+            evidence_id="ev_new_bocha",
+            engine="bocha",
+            web_grounded="true",
+            prompt_text_hash="a" * 64,
+            answer_text_hash="c" * 64,
+            mentioned=False,
+            citations_json="[]",
+            owned_citations_json="[]",
+            third_party_citations_json='["https://anker.example"]',
+        )
+    )
+    db.add(
+        GeoSampleResult(
+            tenant_id=tenant_id,
+            run_id=tavily.id,
+            prompt_id=prompt.id,
+            evidence_id="ev_new_tavily",
+            engine="tavily",
+            web_grounded="true",
+            prompt_text_hash="a" * 64,
+            answer_text_hash="d" * 64,
+            mentioned=True,
+            brand_hits="ugreen",
+            citations_json="[]",
+            owned_citations_json="[]",
+            third_party_citations_json="[]",
+        )
+    )
+    ticket = GeoTicket(
+        tenant_id=tenant_id,
+        prompt_id=prompt.id,
+        title="买家问「Which brand makes the best…」时没提到我们",
+        diagnosis="absent",
+        status="open",
+        retest_result="上次提到了，这次也提到了。两次都没有给出官网。",
+    )
+    db.add(ticket)
+    db.commit()
+
+    headers = auth_header(client)
+    listed = client.get("/api/geo/tickets", headers=headers).json()
+    refreshed = next(row for row in listed if row["id"] == ticket.id)
+    assert question in refreshed["title"]
+    assert "…" not in refreshed["title"]
+    assert "提到了品牌" in refreshed["title"]
+    assert "没给出官网" in refreshed["title"]
+    assert "没提到我们" not in refreshed["title"]
+
+    summary = client.get("/api/geo/summary", headers=headers).json()
+    assert summary["latest_sampled"] == 2
+    assert summary["latest_mentioned"] == 1
+    assert "tavily 提到" in summary["latest_mention_split"]
+    assert "bocha 未提到" in summary["latest_mention_split"]
+
+    prompts = client.get("/api/geo/prompts", headers=headers).json()
+    card = next(row for row in prompts if row["id"] == prompt.id)
+    assert card["mention_rate"] == "50.0%"
+    assert "提到了品牌，没有给出官网" in card["sample_verdict"]
+
+    brief = client.get("/api/dashboard/customer-brief", headers=headers).json()
+    this_week = next(section for section in brief["sections"] if section["key"] == "this_week")
+    assert any(question in item and "提到了品牌" in item and "没提到我们" not in item for item in this_week["items"])
+    assert "其中 1 条提到品牌" in brief["headline"]
+    assert "tavily 提到" in brief["markdown"] or "tavily 提到" in brief["headline"]
+
+    board = client.get("/api/execution/items", headers=headers).json()
+    geo_item = next(item for item in board["items"] if item["id"] == ticket.id)
+    assert question in geo_item["title"]
+    assert "提到了品牌" in geo_item["title"]

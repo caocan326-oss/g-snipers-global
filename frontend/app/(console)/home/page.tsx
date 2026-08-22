@@ -92,7 +92,7 @@ export default function HomePage() {
     {
       label: "AI 搜索",
       text: geoSampled > 0
-        ? `最近联网抽查了 ${geoSampled} 个买家问题。ChatGPT 等引擎空位不是这周的缺口。`
+        ? `最近联网搜索写了 ${geoSampled} 条记录。ChatGPT 等引擎空位不是这周的缺口。`
         : data.summary.geo_prompts > 0
           ? `${data.summary.geo_prompts} 个买家问题还没联网抽查。`
           : "还没有买家问题。",

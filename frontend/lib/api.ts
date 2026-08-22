@@ -684,6 +684,7 @@ export type GeoPrompt = {
   absorption_rate?: string;
   ai_status?: string;
   evidence?: string;
+  sample_verdict?: string;
 };
 
 export type GeoSummary = {
@@ -711,6 +712,7 @@ export type GeoSummary = {
   previous_mentioned?: number;
   previous_owned?: number;
   compare_note?: string;
+  latest_mention_split?: string;
 };
 
 export type GeoReport = {

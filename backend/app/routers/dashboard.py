@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.auth import get_current_user
 from app.database import get_db
+from app.geo_loop import pick_sample_batches, summarize_runs
 from app.models import (
     BacklinkGap,
     DemandSignal,
@@ -105,16 +106,16 @@ def _summary_for(user: User, db: Session) -> DashboardSummary:
     geo_evidence_results = (
         db.query(func.count(GeoSampleResult.id)).filter(GeoSampleResult.tenant_id == tid).scalar() or 0
     )
-    latest_geo_run = (
+    recent_geo_runs = (
         db.query(GeoSampleRun)
         .options(selectinload(GeoSampleRun.results))
         .filter(GeoSampleRun.tenant_id == tid)
         .order_by(GeoSampleRun.started_at.desc())
-        .first()
+        .limit(12)
+        .all()
     )
-    latest_geo_results = latest_geo_run.results if latest_geo_run else []
-    geo_latest_sampled = len(latest_geo_results)
-    geo_latest_mentioned = sum(1 for row in latest_geo_results if row.mentioned)
+    latest_geo_batch, _previous_geo = pick_sample_batches(recent_geo_runs)
+    geo_latest_sampled, geo_latest_mentioned, _owned, _third = summarize_runs(latest_geo_batch)
     onsite_pages = db.query(func.count(SitePage.id)).filter(SitePage.tenant_id == tid).scalar() or 0
     onsite_open_low = (
         db.query(func.count(OnsiteIssue.id))
@@ -476,16 +477,19 @@ def workbench(
             )
         )
     if summary.geo_latest_sampled:
+        sampled = summary.geo_latest_sampled
         mentioned = summary.geo_latest_mentioned
+        if mentioned == 0:
+            mention_bit = "都没有提到我们。"
+        elif mentioned == sampled:
+            mention_bit = "都提到了品牌。"
+        else:
+            mention_bit = f"其中 {mentioned} 条提到品牌。"
         next_actions.append(
             WorkbenchItem(
                 id="geo-sampling",
                 title="看这一轮 AI 搜索抽查",
-                subtitle=(
-                    f"抽查了 {summary.geo_latest_sampled} 个买家问题，"
-                    + ("有提到我们。" if mentioned else "没有提到我们。")
-                    + "ChatGPT 等引擎还没打开。"
-                ),
+                subtitle=f"联网搜索写了 {sampled} 条记录，{mention_bit}ChatGPT 等引擎还没打开。",
                 href="/geo",
                 status="已抽查",
                 tone="default",

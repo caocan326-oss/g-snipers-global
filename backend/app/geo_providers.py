@@ -252,12 +252,14 @@ def _tavily_country(region_hint: str) -> str:
         "jp": "japan",
         "ae": "united arab emirates",
         "au": "australia",
+        "united states": "united states",
+        "united kingdom": "united kingdom",
+        "germany": "germany",
+        "japan": "japan",
+        "united arab emirates": "united arab emirates",
+        "australia": "australia",
     }
-    if value in aliases:
-        return aliases[value]
-    if len(value) > 3:
-        return value
-    return ""
+    return aliases.get(value, "")
 
 
 def _call_tavily(prompt_text: str, region_hint: str = "") -> GeoProviderResult:
@@ -306,11 +308,14 @@ def _call_tavily(prompt_text: str, region_hint: str = "") -> GeoProviderResult:
         snippet = item.get("content") or ""
         if title or snippet:
             snippets.append(f"{title}\n{snippet}".strip())
+    answer = "\n\n".join(snippets)
+    if not answer and not urls:
+        answer = "Tavily 这次没有返回网页。"
     return GeoProviderResult(
         provider="tavily",
         engine="tavily",
         model="tavily-search",
-        answer="\n\n".join(snippets) or json.dumps(data, ensure_ascii=False)[:2000],
+        answer=answer,
         citations=sorted(set(urls)),
         web_grounded=True,
         surface="search_provider",

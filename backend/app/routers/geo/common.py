@@ -335,9 +335,23 @@ def _prompt_rates(observations: list[GeoObservation]) -> dict[str, str]:
     }
 
 
-def _prompt_out(row: GeoPrompt) -> GeoPromptOut:
+def _sample_prompt_rates(rows: list[GeoSampleResult]) -> dict[str, str]:
+    total = len(rows)
+    mentioned = sum(1 for row in rows if row.mentioned)
+    owned = sum(1 for row in rows if _grounded_json_list(row, "owned_citations_json"))
+    return {
+        "mention_rate": _rate(mentioned, total),
+        "cite_rate": _rate(owned, total),
+    }
+
+
+def _prompt_out(row: GeoPrompt, sample_verdict: str = "", sample_rows: list[GeoSampleResult] | None = None) -> GeoPromptOut:
     diagnosis = row.diagnosis or "untested"
     rates = _prompt_rates(row.observations)
+    if sample_rows:
+        sample_rates = _sample_prompt_rates(sample_rows)
+        rates["mention_rate"] = sample_rates["mention_rate"]
+        rates["cite_rate"] = sample_rates["cite_rate"]
     return GeoPromptOut(
         id=row.id,
         prompt_text=row.prompt_text,
@@ -359,6 +373,7 @@ def _prompt_out(row: GeoPrompt) -> GeoPromptOut:
         absorption_rate=rates["absorption_rate"],
         ai_status=row.ai_status or "untested",
         evidence=row.evidence or "",
+        sample_verdict=sample_verdict,
     )
 
 

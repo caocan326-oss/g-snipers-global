@@ -8,6 +8,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session, selectinload
 
 from app.models import GeoTicket, Inquiry, OnsiteIssue, SeoPerformanceRow, SerpRun, SitePage, Tenant, User
+from app.geo_loop import refresh_open_tickets_from_samples
 from app.routers.geo.prompts import geo_summary
 from app.routers.onsite.common import (
     _active_issue,
@@ -30,17 +31,22 @@ def _geo_plain(geo) -> tuple[str, str]:
     engines = "ChatGPT、Perplexity 等引擎还没逐个打开。"
     if getattr(geo, "latest_sampled", 0):
         n = geo.latest_sampled
+        split = (getattr(geo, "latest_mention_split", "") or "").strip()
         if geo.latest_mentioned == 0 and geo.latest_owned == 0:
-            core = f"联网搜索抽查了 {n} 个买家问题，都没有提到我们，也没有给出官网。"
+            core = f"联网搜索写了 {n} 条记录，都没有提到我们，也没有给出官网。"
         elif geo.latest_mentioned and geo.latest_owned == 0:
-            core = f"联网搜索抽查了 {n} 个买家问题，有提到品牌，但没有给出官网。"
+            core = f"联网搜索写了 {n} 条记录，其中 {geo.latest_mentioned} 条提到品牌，没有给出官网。"
         elif geo.latest_owned:
-            core = f"联网搜索抽查了 {n} 个买家问题，其中 {geo.latest_owned} 条给出了疑似官网，还要核对。"
+            core = f"联网搜索写了 {n} 条记录，其中 {geo.latest_owned} 条给出了疑似官网，还要核对。"
         else:
-            core = f"联网搜索抽查了 {n} 个买家问题。"
+            core = f"联网搜索写了 {n} 条记录。"
         extra = ""
-        if geo.latest_third_party and geo.latest_owned == 0:
+        if split:
+            extra = split
+        elif geo.latest_third_party and geo.latest_owned == 0:
             extra = f"搜到 {geo.latest_third_party} 个外来网址，不能写成给出了官网。"
+        if geo.latest_third_party and geo.latest_owned == 0 and split:
+            extra = f"{split}搜到 {geo.latest_third_party} 个外来网址，不能写成给出了官网。"
         compare = getattr(geo, "compare_note", "") or ""
         return core, " ".join(part for part in (core, extra, compare, engines) if part)
     if geo.prompts:
@@ -106,6 +112,8 @@ def build_customer_brief(user: User, db: Session) -> CustomerBriefOut:
     waiting = [issue for issue in active if issue.status in {"confirmed", "draft_applied"}]
 
     geo = geo_summary(user, db)
+    if refresh_open_tickets_from_samples(db, user.tenant_id):
+        db.commit()
     tickets = (
         db.query(GeoTicket)
         .options(selectinload(GeoTicket.prompt))
@@ -207,7 +215,10 @@ def build_customer_brief(user: User, db: Session) -> CustomerBriefOut:
 
     retest: list[str] = []
     if waiting:
-        retest.append(f"有 {len(waiting)} 处已经改过，需要再打开页面核对还在不在。")
+        retest.append(
+            f"工作台记了 {len(waiting)} 处「已改 / 人工上线」，还要再打开页面核对。"
+            "这只是工作台打勾，不是客户官网已经改完的证明。"
+        )
     elif priority_issues:
         retest.append("客户改完这几处后，再抓一次对应页面核对。我们不改客户官网。")
     compare_note = getattr(geo, "compare_note", "") or ""

@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.auth import get_current_user
 from app.database import get_db
-from app.geo_loop import kinds_from_sample_rows, loop_ticket_spec, write_ticket_retest
+from app.geo_loop import kinds_from_sample_rows, loop_ticket_spec, pick_sample_batches, write_ticket_retest
 from app.geo_providers import GeoProviderError, configured_implemented_grounded
 from app.models import (
     GeoObservation,
@@ -309,9 +309,12 @@ def _latest_sample_run(db: Session, tenant_id: str) -> GeoSampleRun | None:
     )
 
 
-def _record_retest(db: Session, tenant_id: str, latest: GeoSampleRun | None, previous: GeoSampleRun | None) -> None:
-    if latest is None or previous is None or latest.id == previous.id:
-        return
+def _record_retest(
+    db: Session,
+    tenant_id: str,
+    latest: GeoSampleRun | list[GeoSampleRun] | None,
+    previous: GeoSampleRun | list[GeoSampleRun] | None,
+) -> None:
     if write_ticket_retest(db, tenant_id, latest, previous):
         db.commit()
 
@@ -359,9 +362,9 @@ def create_grounded_batch_runs(
         raise_http(exc)
     previous = _latest_sample_run(db, user.tenant_id)
     runs = []
+    made: list[GeoSampleRun] = []
     failed: list[str] = []
     results_count = 0
-    last_run: GeoSampleRun | None = None
     for provider in ready:
         grounded_body = body.model_copy(update={"provider": provider.key, "engine": provider.key, "web_grounded": "true"})
         run = _execute_auto_sample(
@@ -372,16 +375,18 @@ def create_grounded_batch_runs(
             provider_key=provider.key,
             body=grounded_body,
         )
-        last_run = run
+        made.append(run)
         runs.append(_run_out(run, include_results=True))
         results_count += len(run.results)
         if run.status != "done":
             failed.append(provider.label)
-    _record_retest(db, user.tenant_id, last_run, previous)
+    _record_retest(db, user.tenant_id, made, previous)
     labels = [row.label for row in ready]
     note = f"已对 {len(ready)} 个联网源各抽一轮：{'、'.join(labels)}。DeepSeek 没跑，不算给出官网。"
     if failed:
         note += f" 其中失败：{'、'.join(failed)}。"
+    if any(len(run.results) == 0 for run in made):
+        note += " 有的源这次没有写出记录，看该批次备注，不要把空批次的「未测」写成结论。"
     return GeoGroundedBatchOut(
         providers=[row.key for row in ready],
         results_count=results_count,
@@ -393,6 +398,28 @@ def create_grounded_batch_runs(
 
 def _add_loop_ticket(db: Session, user: User, prompt: GeoPrompt, kind: str, *, third_party: bool, made: list[GeoTicket]) -> str:
     spec = loop_ticket_spec(db, user.tenant_id, prompt, kind, third_party=third_party)
+    existing = (
+        db.query(GeoTicket)
+        .filter(
+            GeoTicket.tenant_id == user.tenant_id,
+            GeoTicket.prompt_id == prompt.id,
+            ~GeoTicket.status.in_(["done", "closed", "ignored"]),
+        )
+        .order_by(GeoTicket.updated_at.desc())
+        .first()
+    )
+    if existing:
+        existing.title = spec["title"]
+        existing.diagnosis = spec["diagnosis"]
+        existing.rationale = spec["rationale"]
+        existing.recommended_action = spec["recommended_action"]
+        existing.acceptance_criteria = spec["acceptance_criteria"]
+        existing.retest_method = spec["retest_method"]
+        existing.evidence = json.dumps(spec["evidence"], ensure_ascii=False, indent=2)
+        db.flush()
+        if existing not in made:
+            made.append(existing)
+        return "updated"
     if _ticket_exists(db, user.tenant_id, prompt.id, spec["title"]):
         return "skipped"
     ticket = GeoTicket(
@@ -429,18 +456,21 @@ def draft_tickets_from_evidence(
     )
     created = skipped = 0
     made: list[GeoTicket] = []
-    latest_run = (
+    recent_runs = (
         db.query(GeoSampleRun)
         .options(selectinload(GeoSampleRun.results).selectinload(GeoSampleResult.prompt))
         .filter(GeoSampleRun.tenant_id == user.tenant_id)
         .order_by(GeoSampleRun.started_at.desc())
-        .first()
+        .limit(12)
+        .all()
     )
+    latest_batch, _previous = pick_sample_batches(recent_runs)
     sampled_prompt_ids: set[str] = set()
-    if latest_run and latest_run.results:
+    if latest_batch:
         by_prompt: dict[str, list[GeoSampleResult]] = {}
-        for row in latest_run.results:
-            by_prompt.setdefault(row.prompt_id, []).append(row)
+        for run in latest_batch:
+            for row in run.results:
+                by_prompt.setdefault(row.prompt_id, []).append(row)
         prompts_by_id = {prompt.id: prompt for prompt in prompts}
         for prompt_id, rows in by_prompt.items():
             prompt = prompts_by_id.get(prompt_id) or (rows[0].prompt if rows else None)
@@ -448,12 +478,14 @@ def draft_tickets_from_evidence(
                 continue
             sampled_prompt_ids.add(prompt.id)
             third_party = any(_json_list(row.third_party_citations_json) for row in rows)
-            for kind in kinds_from_sample_rows(rows):
-                result = _add_loop_ticket(db, user, prompt, kind, third_party=third_party, made=made)
-                if result == "created":
-                    created += 1
-                else:
-                    skipped += 1
+            kinds = kinds_from_sample_rows(rows)
+            if not kinds:
+                continue
+            result = _add_loop_ticket(db, user, prompt, kinds[0], third_party=third_party, made=made)
+            if result == "created":
+                created += 1
+            else:
+                skipped += 1
     for prompt in prompts:
         if prompt.id in sampled_prompt_ids:
             continue

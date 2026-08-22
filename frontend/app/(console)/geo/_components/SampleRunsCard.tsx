@@ -18,6 +18,10 @@ export function SampleRunsCard({ runs }: { runs: GeoSampleRun[] }) {
                 <div className="mt-1 text-sm font-medium">
                   {run.protocol_version} · {run.prompt_set_id} · {run.results_count} 条记录
                 </div>
+                {run.results_count === 0 ? (
+                  <p className="mt-1 text-xs text-amber-700">这批没有写出记录。提及写「未测」只表示这批是空的，不要拿去对说明页。</p>
+                ) : null}
+                {run.note ? <p className="mt-1 text-xs text-slate-500">{run.note}</p> : null}
               </div>
               <Badge tone={run.status === "done" ? "green" : "amber"}>{run.status}</Badge>
             </div>

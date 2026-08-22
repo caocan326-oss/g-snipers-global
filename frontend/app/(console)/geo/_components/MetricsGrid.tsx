@@ -24,7 +24,8 @@ export function MetricsGrid({ summary }: { summary: GeoSummary | null }) {
             <div className="text-2xl font-semibold">
               {summary?.latest_sampled ? `${summary.latest_mentioned ?? 0} / ${summary.latest_sampled}` : displayRate(summary?.mention_rate)}
             </div>
-            <div className="text-xs text-slate-500">抽查里被提到</div>
+            <div className="text-xs text-slate-500">抽查记录里被提到</div>
+            {summary?.latest_mention_split ? <p className="mt-1 text-[11px] leading-4 text-slate-500">{summary.latest_mention_split}</p> : null}
           </CardContent>
         </Card>
         <Card className="rounded-md">

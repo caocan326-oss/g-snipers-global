@@ -7,6 +7,7 @@ from app.ai_engine import assist_geo_ticket
 from app.auth import get_current_user
 from app.database import get_db
 from app.geo_helpers import DIAGNOSES, TICKET_STATUSES
+from app.geo_loop import refresh_open_tickets_from_samples
 from app.models import GeoPrompt, GeoTicket, User
 from app.risk import require_confirm
 from app.schemas import AiAssistOut, AiStepIn, GeoTicketCreate, GeoTicketOut, GeoTicketVerifyIn
@@ -17,6 +18,8 @@ from .common import _ticket_out
 
 @router.get("/tickets", response_model=list[GeoTicketOut])
 def list_tickets(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> list[GeoTicketOut]:
+    if refresh_open_tickets_from_samples(db, user.tenant_id):
+        db.commit()
     rows = (
         db.query(GeoTicket)
         .filter(GeoTicket.tenant_id == user.tenant_id)

@@ -465,6 +465,7 @@ class GeoPromptOut(BaseModel):
     absorption_rate: str = "未测"
     ai_status: str = "untested"
     evidence: str = ""
+    sample_verdict: str = ""
 
 
 class GeoDiagnosisIn(BaseModel):
@@ -566,6 +567,7 @@ class GeoSummary(BaseModel):
     previous_mentioned: int = 0
     previous_owned: int = 0
     compare_note: str = ""
+    latest_mention_split: str = ""
 
 
 class GeoSeedOut(BaseModel):

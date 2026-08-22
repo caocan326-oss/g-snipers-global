@@ -9,7 +9,7 @@ import json
 import re
 from datetime import datetime, timezone
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.models import GeoPrompt, GeoSampleResult, GeoSampleRun, GeoTicket, SitePage, SourcePlatform
 from app.official_apis import OFFICIAL_APIS
@@ -56,10 +56,12 @@ _CHANNEL_ORDER = (
 )
 
 
-def short_prompt(text: str, limit: int = 28) -> str:
+def short_prompt(text: str, limit: int = 240) -> str:
     value = " ".join((text or "").split())
+    if not value:
+        return "这个问题"
     if len(value) <= limit:
-        return value or "这个问题"
+        return value
     return value[: limit - 1].rstrip() + "…"
 
 
@@ -96,13 +98,53 @@ def run_counts(run: GeoSampleRun | None) -> tuple[int, int, int, int]:
     )
 
 
-def compare_runs_note(latest: GeoSampleRun | None, previous: GeoSampleRun | None) -> str:
-    if latest is None or not getattr(latest, "results", None):
+def summarize_runs(runs: list[GeoSampleRun] | None) -> tuple[int, int, int, int]:
+    sampled = mentioned = owned = third = 0
+    for run in runs or []:
+        n, m, o, t = run_counts(run)
+        sampled += n
+        mentioned += m
+        owned += o
+        third += t
+    return sampled, mentioned, owned, third
+
+
+def _started(run: GeoSampleRun):
+    return getattr(run, "started_at", None)
+
+
+def same_sample_batch(left: GeoSampleRun, right: GeoSampleRun, window_sec: int = 180) -> bool:
+    start_left, start_right = _started(left), _started(right)
+    if start_left is None or start_right is None:
+        return False
+    return abs((start_left - start_right).total_seconds()) <= window_sec
+
+
+def pick_sample_batches(runs_desc: list[GeoSampleRun]) -> tuple[list[GeoSampleRun], list[GeoSampleRun]]:
+    nonempty = [run for run in runs_desc if getattr(run, "results", None)]
+    if not nonempty:
+        return [], []
+    latest = nonempty[0]
+    latest_batch = [run for run in nonempty if same_sample_batch(run, latest)]
+    rest = [run for run in nonempty if run.id not in {item.id for item in latest_batch}]
+    if not rest:
+        return latest_batch, []
+    previous = rest[0]
+    previous_batch = [run for run in rest if same_sample_batch(run, previous)]
+    return latest_batch, previous_batch
+
+
+def compare_batches_note(latest_runs: list[GeoSampleRun], previous_runs: list[GeoSampleRun]) -> str:
+    if not latest_runs:
         return ""
-    latest_n, latest_mentioned, latest_owned, _ = run_counts(latest)
-    if previous is None or not getattr(previous, "results", None):
+    latest_n, latest_mentioned, latest_owned, _ = summarize_runs(latest_runs)
+    if not latest_n:
         return ""
-    prev_n, prev_mentioned, prev_owned, _ = run_counts(previous)
+    if not previous_runs:
+        return ""
+    prev_n, prev_mentioned, prev_owned, _ = summarize_runs(previous_runs)
+    if not prev_n:
+        return ""
     if prev_mentioned == 0 and latest_mentioned == 0:
         mention = f"上次抽查 {prev_n} 问都没提到；这次 {latest_n} 问仍没提到。"
     elif prev_mentioned == 0 and latest_mentioned > 0:
@@ -120,6 +162,56 @@ def compare_runs_note(latest: GeoSampleRun | None, previous: GeoSampleRun | None
     else:
         owned = f"上次给出官网 {prev_owned} 条，这次 {latest_owned} 条。"
     return f"{mention}{owned}抽查变化只记事实，不写成已经稳定推荐。"
+
+
+def prompt_sample_verdict(rows: list[GeoSampleResult]) -> str:
+    if not rows:
+        return ""
+    mentioned = any(row.mentioned for row in rows)
+    owned = any(_owned(row) for row in rows)
+    third = any(_third_party(row) for row in rows)
+    split = mention_split_note(rows)
+    if mentioned and owned:
+        head = "联网抽查：有的源提到了品牌，并给出了疑似官网，还要核对。"
+    elif mentioned:
+        head = "联网抽查：有的源提到了品牌，没有给出官网。"
+    elif third:
+        head = "联网抽查：没提到我们，回答里是外来网址。"
+    else:
+        head = "联网抽查：没提到我们，也没有给出官网。"
+    return f"{head}{split}"
+
+
+def mention_split_note(rows: list[GeoSampleResult]) -> str:
+    if not rows:
+        return ""
+    bits: list[str] = []
+    for row in rows:
+        engine = row.engine or "未知源"
+        if row.mentioned:
+            bits.append(f"{engine} 提到")
+        else:
+            bits.append(f"{engine} 未提到")
+    return "（" + "；".join(bits) + "。）"
+
+
+def mention_split_for_runs(runs: list[GeoSampleRun]) -> str:
+    rows: list[GeoSampleResult] = []
+    for run in runs:
+        rows.extend(list(getattr(run, "results", None) or []))
+    return mention_split_note(rows)
+
+
+def compare_runs_note(latest: GeoSampleRun | None, previous: GeoSampleRun | None) -> str:
+    return compare_batches_note([latest] if latest else [], [previous] if previous else [])
+
+
+def _as_runs(value: GeoSampleRun | list[GeoSampleRun] | None) -> list[GeoSampleRun]:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return [run for run in value if run is not None]
+    return [value]
 
 
 def compare_prompt_note(latest_rows: list[GeoSampleResult], previous_rows: list[GeoSampleResult]) -> str:
@@ -269,17 +361,21 @@ def kinds_from_sample_rows(rows: list[GeoSampleResult]) -> list[str]:
 def write_ticket_retest(
     db: Session,
     tenant_id: str,
-    latest: GeoSampleRun | None,
-    previous: GeoSampleRun | None,
+    latest: GeoSampleRun | list[GeoSampleRun] | None,
+    previous: GeoSampleRun | list[GeoSampleRun] | None,
 ) -> int:
-    if latest is None or not getattr(latest, "results", None) or previous is None:
+    latest_runs = [run for run in _as_runs(latest) if getattr(run, "results", None)]
+    previous_runs = [run for run in _as_runs(previous) if getattr(run, "results", None)]
+    if not latest_runs:
         return 0
     latest_by: dict[str, list[GeoSampleResult]] = {}
     previous_by: dict[str, list[GeoSampleResult]] = {}
-    for row in latest.results:
-        latest_by.setdefault(row.prompt_id, []).append(row)
-    for row in getattr(previous, "results", None) or []:
-        previous_by.setdefault(row.prompt_id, []).append(row)
+    for run in latest_runs:
+        for row in run.results:
+            latest_by.setdefault(row.prompt_id, []).append(row)
+    for run in previous_runs:
+        for row in run.results:
+            previous_by.setdefault(row.prompt_id, []).append(row)
     tickets = (
         db.query(GeoTicket)
         .filter(
@@ -292,10 +388,46 @@ def write_ticket_retest(
     now = datetime.now(timezone.utc)
     updated = 0
     for ticket in tickets:
-        ticket.retest_result = compare_prompt_note(latest_by.get(ticket.prompt_id, []), previous_by.get(ticket.prompt_id, []))
-        ticket.last_checked_at = now
-        updated += 1
+        rows = latest_by.get(ticket.prompt_id, [])
+        kinds = kinds_from_sample_rows(rows)
+        prompt = db.get(GeoPrompt, ticket.prompt_id)
+        changed = False
+        if prompt is not None and kinds:
+            spec = loop_ticket_spec(
+                db,
+                tenant_id,
+                prompt,
+                kinds[0],
+                third_party=any(_third_party(row) for row in rows),
+            )
+            if ticket.title != spec["title"] or ticket.diagnosis != spec["diagnosis"]:
+                ticket.title = spec["title"]
+                ticket.diagnosis = spec["diagnosis"]
+                ticket.rationale = spec["rationale"]
+                ticket.recommended_action = spec["recommended_action"]
+                changed = True
+        if previous_runs:
+            note = compare_prompt_note(rows, previous_by.get(ticket.prompt_id, []))
+            if ticket.retest_result != note:
+                ticket.retest_result = note
+                changed = True
+        if changed:
+            ticket.last_checked_at = now
+            updated += 1
     return updated
+
+
+def refresh_open_tickets_from_samples(db: Session, tenant_id: str) -> int:
+    recent = (
+        db.query(GeoSampleRun)
+        .options(selectinload(GeoSampleRun.results))
+        .filter(GeoSampleRun.tenant_id == tenant_id)
+        .order_by(GeoSampleRun.started_at.desc())
+        .limit(12)
+        .all()
+    )
+    latest, previous = pick_sample_batches(recent)
+    return write_ticket_retest(db, tenant_id, latest, previous)
 
 
 def geo_href(ticket: GeoTicket) -> str:

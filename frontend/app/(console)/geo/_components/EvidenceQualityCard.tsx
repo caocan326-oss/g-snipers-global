@@ -42,7 +42,11 @@ export function EvidenceQualityCard({
           <div className="mt-3 grid gap-2 text-sm sm:grid-cols-4">
             <div className="rounded-md bg-white p-3"><div className="text-xs text-slate-500">检查批次</div><div className="mt-1 font-semibold">{runs.length}</div></div>
             <div className="rounded-md bg-white p-3"><div className="text-xs text-slate-500">检查记录</div><div className="mt-1 font-semibold">{summary?.evidence_results ?? 0}</div></div>
-            <div className="rounded-md bg-white p-3"><div className="text-xs text-slate-500">品牌被提到</div><div className="mt-1 font-semibold">{displayRate(summary?.mention_rate)}</div></div>
+            <div className="rounded-md bg-white p-3">
+              <div className="text-xs text-slate-500">品牌被提到</div>
+              <div className="mt-1 font-semibold">{summary?.latest_sampled ? `${summary.latest_mentioned ?? 0} / ${summary.latest_sampled}` : displayRate(summary?.mention_rate)}</div>
+              {summary?.latest_mention_split ? <p className="mt-1 text-[11px] leading-4 text-slate-500">{summary.latest_mention_split}</p> : null}
+            </div>
             <div className="rounded-md bg-white p-3"><div className="text-xs text-slate-500">官网来源已核对</div><div className="mt-1 font-semibold">{displayRate(summary?.verified_citation_rate)}</div></div>
           </div>
         </div>

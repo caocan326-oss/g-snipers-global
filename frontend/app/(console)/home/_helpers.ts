@@ -235,7 +235,7 @@ export function reportReadyChecks(data: Workbench, targets: ProjectTargets | nul
       ok: (data.summary.geo_latest_sampled ?? 0) > 0 || data.summary.geo_recorded > 0,
       detail:
         (data.summary.geo_latest_sampled ?? 0) > 0
-          ? `最近联网抽查了 ${data.summary.geo_latest_sampled} 个买家问题。`
+          ? `最近联网搜索写了 ${data.summary.geo_latest_sampled} 条记录。`
           : data.summary.geo_recorded > 0
             ? `已有 ${data.summary.geo_recorded} 条 AI 搜索记录。`
             : "需要联网或人工检查。引擎空位不算已经抽查。",

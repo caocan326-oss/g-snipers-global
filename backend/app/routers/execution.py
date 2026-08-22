@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.auth import get_current_user
 from app.database import get_db
-from app.geo_loop import HONEST_ACCEPTANCE, HONEST_RETEST, geo_href
+from app.geo_loop import HONEST_ACCEPTANCE, HONEST_RETEST, geo_href, refresh_open_tickets_from_samples
 from app.models import BacklinkGap, GeoTicket, OnsiteIssue, SitePage, User
 from app.routers.onsite.common import _category_label, _page_short, _plain_title
 from app.schemas import ExecutionBoardOut, ExecutionItemOut
@@ -57,6 +57,8 @@ def list_execution_items(user: User = Depends(get_current_user), db: Session = D
             )
         )
 
+    if refresh_open_tickets_from_samples(db, user.tenant_id):
+        db.commit()
     geo_rows = db.query(GeoTicket).filter(GeoTicket.tenant_id == user.tenant_id, ~GeoTicket.status.in_(GEO_CLOSED)).all()
     for ticket in geo_rows:
         items.append(

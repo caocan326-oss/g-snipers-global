@@ -116,7 +116,15 @@ export function SamplePromptsPanel({
           <CardHeader>
             <CardTitle className="text-base">{p.prompt_text}</CardTitle>
             <p className="text-xs text-slate-500">
-              {countryLabel(p.locale)} · 被提到 {displayRate(p.mention_rate)} · 给出官网 {displayRate(p.cite_rate)} · 已核对 {displayRate(p.verified_citation_rate)} · 竞品 {displayRate(p.competitor_rate)}
+              {p.sample_verdict
+                ? `${countryLabel(p.locale)} · 联网抽查被提到 ${displayRate(p.mention_rate)} · 给出官网 ${displayRate(p.cite_rate)}`
+                : `${countryLabel(p.locale)} · 被提到 ${displayRate(p.mention_rate)} · 给出官网 ${displayRate(p.cite_rate)} · 已核对 ${displayRate(p.verified_citation_rate)} · 竞品 ${displayRate(p.competitor_rate)}`}
+            </p>
+            {p.sample_verdict ? <p className="mt-1 text-xs font-medium text-slate-700">{p.sample_verdict}</p> : null}
+            <p className="mt-1 text-[11px] text-slate-400">
+              {p.sample_verdict
+                ? "「被提到 / 给出官网」按这一轮联网记录算。下面 8 个引擎空位没手工打开的仍是尚未检查。"
+                : "上面「被提到 / 给出官网 / 已核对」是 8 个引擎空位。没打开的保持尚未检查。"}
             </p>
             {p.evidence ? <pre className="mt-2 whitespace-pre-wrap text-xs text-slate-500">{p.evidence}</pre> : null}
             <div className="mt-2 flex items-center gap-2">

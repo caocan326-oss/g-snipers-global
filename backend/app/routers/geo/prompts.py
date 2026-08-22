@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.ai_engine import assist_geo_prompt
 from app.auth import get_current_user
 from app.database import get_db
-from app.geo_loop import compare_runs_note, run_counts
+from app.geo_loop import compare_batches_note, mention_split_for_runs, pick_sample_batches, prompt_sample_verdict, summarize_runs
 from app.geo_helpers import DIAGNOSES, ENGINES, OBS_STATUSES, ensure_engine_slots
 from app.geo_providers import provider_statuses
 from app.models import (
@@ -42,7 +42,6 @@ from . import router
 from .common import (
     _create_untested_slots,
     _evidence_tier,
-    _json_list,
     _load_prompt,
     _obs_out,
     _prompt_key,
@@ -104,13 +103,13 @@ def geo_summary(user: User = Depends(get_current_user), db: Session = Depends(ge
         .options(selectinload(GeoSampleRun.results))
         .filter(GeoSampleRun.tenant_id == tid)
         .order_by(GeoSampleRun.started_at.desc())
-        .limit(2)
+        .limit(12)
         .all()
     )
-    latest_run = recent_runs[0] if recent_runs else None
-    previous_run = recent_runs[1] if len(recent_runs) > 1 else None
-    latest_results = latest_run.results if latest_run else []
-    previous_sampled, previous_mentioned, previous_owned, _ = run_counts(previous_run)
+    latest_batch, previous_batch = pick_sample_batches(recent_runs)
+    latest_run = latest_batch[0] if latest_batch else None
+    latest_sampled, latest_mentioned, latest_owned, latest_third = summarize_runs(latest_batch)
+    previous_sampled, previous_mentioned, previous_owned, _ = summarize_runs(previous_batch)
     return GeoSummary(
         prompts=prompts,
         untested=untested,
@@ -128,14 +127,15 @@ def geo_summary(user: User = Depends(get_current_user), db: Session = Depends(ge
         evidence_results=evidence_results,
         latest_run_id=latest_run.id if latest_run else None,
         latest_run_at=latest_run.started_at if latest_run else None,
-        latest_sampled=len(latest_results),
-        latest_mentioned=sum(1 for row in latest_results if row.mentioned),
-        latest_owned=sum(1 for row in latest_results if _json_list(row.owned_citations_json)),
-        latest_third_party=sum(1 for row in latest_results if _json_list(row.third_party_citations_json)),
+        latest_sampled=latest_sampled,
+        latest_mentioned=latest_mentioned,
+        latest_owned=latest_owned,
+        latest_third_party=latest_third,
         previous_sampled=previous_sampled,
         previous_mentioned=previous_mentioned,
         previous_owned=previous_owned,
-        compare_note=compare_runs_note(latest_run, previous_run),
+        compare_note=compare_batches_note(latest_batch, previous_batch),
+        latest_mention_split=mention_split_for_runs(latest_batch),
     )
 
 
@@ -166,7 +166,27 @@ def list_prompts(
             .order_by(GeoPrompt.created_at.desc())
             .all()
         )
-    return [_prompt_out(r) for r in rows]
+    recent_runs = (
+        db.query(GeoSampleRun)
+        .options(selectinload(GeoSampleRun.results))
+        .filter(GeoSampleRun.tenant_id == user.tenant_id)
+        .order_by(GeoSampleRun.started_at.desc())
+        .limit(12)
+        .all()
+    )
+    latest_batch, _previous = pick_sample_batches(recent_runs)
+    by_prompt: dict[str, list] = {}
+    for run in latest_batch:
+        for result in run.results:
+            by_prompt.setdefault(result.prompt_id, []).append(result)
+    return [
+        _prompt_out(
+            r,
+            sample_verdict=prompt_sample_verdict(by_prompt.get(r.id, [])),
+            sample_rows=by_prompt.get(r.id, []),
+        )
+        for r in rows
+    ]
 
 
 @router.post("/prompts", response_model=GeoPromptOut, status_code=201)

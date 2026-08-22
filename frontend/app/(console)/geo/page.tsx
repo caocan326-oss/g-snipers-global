@@ -232,6 +232,9 @@ export default function GeoPage() {
         body: JSON.stringify({ trials: 1, limit: 8, web_grounded: "true" }),
       });
       setNote(batch.note);
+      if (batch.results_count === 0) {
+        setError(batch.failed.length ? `这次没有写出记录。失败：${batch.failed.join("、")}` : "这次没有写出记录。");
+      }
       loadRuns();
       loadPrompts();
       loadTickets();
@@ -264,6 +267,9 @@ export default function GeoPage() {
         }),
       });
       setNote(`${batch.note} 复测只记有没有变化，不承诺这次会提到。`);
+      if (batch.results_count === 0) {
+        setError("同一问再测没有写出记录。看上面的说明，不要把空批次写成未测。");
+      }
       loadRuns();
       loadPrompts();
       loadTickets();
@@ -288,10 +294,16 @@ export default function GeoPage() {
           trials: 1,
           limit: 8,
           web_grounded: selected?.web_grounded ? "true" : "false",
-          region_hint: selected?.label ?? "API",
+          region_hint: targets?.markets[0]?.country_code || form.country_code || "",
         }),
       });
-      setNote(`${selected?.label ?? sampleProvider} 检查完成：${run.results_count} 条记录。${selected?.web_grounded ? "返回来源网址时，可算作给出了官网。" : "该结果用于分析和是否被提到，不算给出官网。"}`);
+      if (run.results_count === 0) {
+        setError(`${selected?.label ?? sampleProvider} 这次没有写出记录。${run.note || "看批次备注。"}`.trim());
+        setNote("");
+      } else {
+        const extra = run.note && run.note.includes("失败") ? ` ${run.note}` : "";
+        setNote(`${selected?.label ?? sampleProvider} 检查完成：${run.results_count} 条记录。${selected?.web_grounded ? "返回来源网址时，可算作给出了官网。" : "该结果用于分析和是否被提到，不算给出官网。"}${extra}`);
+      }
       loadRuns();
       loadPrompts();
       loadTickets();
