@@ -239,6 +239,7 @@ powershell -File deploy/sync-from-local.ps1
 | 2026-08-22 | 产品/运维 | 家里发到 `9d2781c`（`sync-from-local.ps1 -Rebuild`）。百炼默认不进都测；seed 修复 502。 |
 | 2026-08-22 | 产品/运维 | 家里发到 `038c770`（`sync-from-local.ps1 -Rebuild`）。绿联实走：客户名跟官网、登录进首页、用量成功后再记账；写出改法有进度。`ddd1f34` 曾因删门锁问句碰到 `geo_sample_results` 外键 502，随即修好。 |
 | 2026-08-22 | 产品/运维 | 家里发到 `8a6e0d8`（`sync-from-local.ps1 -Rebuild`）。PDF 渲染失败改 503；GEO 下 PDF/CSV 失败写在页面上。 |
+| 2026-08-22 | 产品/运维 | 公司发到 `46ac4e7`（`sync-from-local.ps1 -Rebuild`）。同一买家问题在 GEO / 清单 / 客户说明写全；标题按这一轮抽查改；博查+Tavily 算一轮并分源写提到/未提到。 |
 
 ---
 
