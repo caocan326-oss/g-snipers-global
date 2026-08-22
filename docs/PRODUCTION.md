@@ -243,6 +243,7 @@ powershell -File deploy/sync-from-local.ps1
 | 2026-08-22 | 产品/运维 | 公司发到 `a6eebaf`（`sync-from-local.ps1 -Rebuild`）。清单写这一轮 `1 / 2`；源名用 Tavily / 博查，不用引擎键。 |
 | 2026-08-22 | 产品/运维 | 公司发到 `0efc59a`（`sync-from-local.ps1 -Rebuild`）。GEO 待处理项写出页和官网链接；进度分已写/已发/已上线，未上线不能验收。 |
 | 2026-08-22 | 产品/运维 | 公司发到 `5e10164`（`sync-from-local.ps1 -Rebuild`）。客户说明「这周改三处」至少留一格给 GEO 改法；改回已写改法时清单角标回到待处理。 |
+| 2026-08-22 | 产品/运维 | 公司发到 `6fb37e2`（`sync-from-local.ps1 -Rebuild`）。打开清单 / GEO / 客户说明按进度对齐角标；清单 `verify` 从「待核对」改成「待复查」。 |
 
 ---
 
