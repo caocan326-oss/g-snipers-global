@@ -14,6 +14,7 @@ from app.geo_loop import (
     refresh_open_tickets_from_samples,
     ticket_customer_note,
     ticket_handoff,
+    ticket_live_url,
     ticket_paste,
 )
 from app.models import BacklinkGap, GeoTicket, OnsiteIssue, SitePage, User
@@ -90,6 +91,7 @@ def list_execution_items(user: User = Depends(get_current_user), db: Session = D
                 sample_note=sample_note,
                 handoff=handoff,
                 handoff_label=HANDOFF_LABELS[handoff],
+                result_url=ticket_live_url(ticket),
                 href=geo_href(ticket),
                 status=ticket.status,
                 priority=ticket.priority or "P2",

@@ -1,6 +1,7 @@
 from sqlalchemy import select
 
 from app.models import (
+    BacklinkGap,
     DemandSignal,
     GeoAsset,
     GeoObservation,
@@ -145,3 +146,9 @@ def test_seed_does_not_reinject_lock_demo_onto_live_origin(db) -> None:
     assert "smart lock for renters" not in live_keywords
     prompts = [row.prompt_text for row in db.query(GeoPrompt).filter(GeoPrompt.tenant_id == tenant.id).all()]
     assert not any("smart lock" in text.lower() or "スマートロック" in text for text in prompts)
+    leftover_hosts = [
+        row.referring_domain
+        for row in db.query(BacklinkGap).filter(BacklinkGap.tenant_id == tenant.id).all()
+    ]
+    assert "old-blog.example" not in leftover_hosts
+    assert "smarthome-weekly.example" not in leftover_hosts

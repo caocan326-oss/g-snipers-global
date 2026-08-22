@@ -827,6 +827,7 @@ export type GeoTicket = {
   sample_note?: string;
   handoff?: string;
   handoff_label?: string;
+  result_url?: string;
   blocked_reason: string;
   status: string;
   verified_note: string | null;

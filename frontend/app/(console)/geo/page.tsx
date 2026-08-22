@@ -349,10 +349,13 @@ export default function GeoPage() {
     loadTickets();
   }
 
-  async function setHandoff(id: string, handoff: "drafted" | "sent" | "live") {
+  async function setHandoff(id: string, handoff: "drafted" | "sent" | "live", resultUrl = "") {
     setError("");
     try {
-      await api(`/api/geo/tickets/${id}/handoff`, { method: "POST", body: JSON.stringify({ handoff, note: confirmNote }) });
+      await api(`/api/geo/tickets/${id}/handoff`, {
+        method: "POST",
+        body: JSON.stringify({ handoff, note: confirmNote, result_url: resultUrl }),
+      });
       loadTickets();
     } catch (e) {
       setError(e instanceof Error ? e.message : "进度没记上");

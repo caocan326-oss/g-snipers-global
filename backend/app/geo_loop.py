@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import re
 from datetime import datetime, timezone
+from urllib.parse import urlparse
 
 from sqlalchemy.orm import Session, selectinload
 
@@ -379,6 +380,15 @@ def ticket_handoff(ticket: GeoTicket) -> str:
     return value if value in HANDOFFS else "drafted"
 
 
+def is_http_url(url: str) -> bool:
+    parsed = urlparse((url or "").strip())
+    return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
+
+
+def ticket_live_url(ticket: GeoTicket) -> str:
+    return str(parse_ticket_evidence(ticket).get("live_url") or "").strip()
+
+
 def customer_note(
     *,
     kind: str,
@@ -485,10 +495,17 @@ def reconcile_open_ticket_status(db: Session, tenant_id: str) -> int:
     return updated
 
 
-def set_ticket_handoff(ticket: GeoTicket, handoff: str) -> None:
+def set_ticket_handoff(ticket: GeoTicket, handoff: str, live_url: str = "") -> None:
     if handoff not in HANDOFFS:
         raise ValueError(handoff)
     payload = parse_ticket_evidence(ticket)
+    url = (live_url or payload.get("live_url") or "").strip()
+    if handoff == "live":
+        if not is_http_url(url):
+            raise ValueError("live_url")
+        payload["live_url"] = url
+    elif url and is_http_url(url):
+        payload["live_url"] = url
     payload["handoff"] = handoff
     ticket.evidence = json.dumps(payload, ensure_ascii=False, indent=2)
     if ticket.status in {"done", "closed", "ignored"}:

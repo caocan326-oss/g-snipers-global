@@ -203,14 +203,23 @@ def test_geo_ticket_verify_requires_confirm_and_can_reopen(client: TestClient, d
     assert sent.json()["handoff"] == "sent"
     assert "发给客户" in sent.json()["handoff_label"]
 
-    live = client.post(
+    missing_url = client.post(
         f"/api/geo/tickets/{ticket_id}/handoff",
         headers=headers,
         json={"handoff": "live"},
     )
+    assert missing_url.status_code == 400
+    assert "地址" in missing_url.json()["detail"]
+
+    live = client.post(
+        f"/api/geo/tickets/{ticket_id}/handoff",
+        headers=headers,
+        json={"handoff": "live", "result_url": "https://www.ugreen.com/products/usa-65585"},
+    )
     assert live.status_code == 200
     assert live.json()["handoff"] == "live"
     assert live.json()["status"] == "verify"
+    assert live.json()["result_url"] == "https://www.ugreen.com/products/usa-65585"
 
     drafted = client.post(
         f"/api/geo/tickets/{ticket_id}/handoff",

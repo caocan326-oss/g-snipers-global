@@ -15,6 +15,7 @@ from app.geo_loop import (
     refresh_open_tickets_from_samples,
     set_ticket_handoff,
     ticket_handoff,
+    ticket_live_url,
 )
 from app.models import GeoPrompt, GeoTicket, User
 from app.risk import require_confirm
@@ -89,7 +90,15 @@ def mark_ticket_handoff(
     row = db.get(GeoTicket, ticket_id)
     if row is None or row.tenant_id != user.tenant_id:
         raise HTTPException(status_code=404, detail="整改项不存在")
-    set_ticket_handoff(row, body.handoff)
+    try:
+        set_ticket_handoff(row, body.handoff, live_url=body.result_url or "")
+    except ValueError as exc:
+        if str(exc) == "live_url":
+            raise HTTPException(
+                status_code=400,
+                detail="请先填写客户已上线的页或帖地址（http/https）。没有地址不能记第三档，也不能再测。",
+            ) from exc
+        raise
     if body.note:
         row.verified_note = body.note
     row.last_checked_at = datetime.now(timezone.utc)
@@ -109,10 +118,10 @@ def verify_ticket(
     row = db.get(GeoTicket, ticket_id)
     if row is None or row.tenant_id != user.tenant_id:
         raise HTTPException(status_code=404, detail="整改项不存在")
-    if ticket_handoff(row) != "live":
+    if ticket_handoff(row) != "live" or not ticket_live_url(row):
         raise HTTPException(
             status_code=400,
-            detail="还没到验收：先等客户页上线或帖发出，再测同一问。工作台打勾不算官网已改。",
+            detail="还没到验收：先记下客户页或帖的地址，再测同一问。工作台打勾不算官网已改。",
         )
     row.status = "done"
     row.verified_note = body.note or "客户经理已按验收标准人工复核。"

@@ -503,6 +503,7 @@ class GeoTicketOut(BaseModel):
     sample_note: str = ""
     handoff: str = "drafted"
     handoff_label: str = ""
+    result_url: str = ""
     blocked_reason: str = ""
     status: str
     verified_note: str | None
@@ -523,6 +524,7 @@ class GeoTicketVerifyIn(BaseModel):
 class GeoTicketHandoffIn(BaseModel):
     handoff: str
     note: str | None = None
+    result_url: str = ""
 
 
 class GeoAssetOut(BaseModel):

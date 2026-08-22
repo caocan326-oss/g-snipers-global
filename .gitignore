@@ -24,3 +24,5 @@ backend/.env
 frontend/.env
 frontend/.env.local
 data/db-exports/
+backend/localtest.db
+backend/localtest.db-*

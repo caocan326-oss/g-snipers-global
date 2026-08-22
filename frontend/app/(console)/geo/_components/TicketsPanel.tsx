@@ -38,9 +38,10 @@ export function TicketsPanel({
   aiTicket: (id: string) => void;
   verifyTicket: (id: string, confirmed: boolean) => void;
   reopenTicket: (id: string) => void;
-  setHandoff: (id: string, handoff: "drafted" | "sent" | "live") => void;
+  setHandoff: (id: string, handoff: "drafted" | "sent" | "live", resultUrl?: string) => void;
 }) {
   const [copied, setCopied] = useState("");
+  const [liveUrls, setLiveUrls] = useState<Record<string, string>>({});
   return (
     <div className="space-y-4">
       {tickets.map((t) => (
@@ -72,6 +73,20 @@ export function TicketsPanel({
             {t.retest_method ? <p className="text-sm text-slate-600">复查：{t.retest_method}</p> : null}
             {t.retest_result ? <p className="text-sm text-slate-700">复测记录：{t.retest_result}</p> : null}
             {t.verified_note ? <p className="text-xs text-slate-500">备注：{t.verified_note}</p> : null}
+            {t.result_url ? (
+              <p className="text-sm text-slate-700">
+                客户上线地址：{" "}
+                <a className="break-all text-brand-700 underline" href={t.result_url} target="_blank" rel="noreferrer">
+                  {t.result_url}
+                </a>
+                <span className="ml-1 text-xs text-slate-400">登记地址，不是我们打开核对过的证明</span>
+              </p>
+            ) : null}
+            <Input
+              placeholder="客户已上线的页或帖地址，例如 https://www.ugreen.com/products/usa-65585"
+              value={liveUrls[t.id] ?? t.result_url ?? ""}
+              onChange={(e) => setLiveUrls((current) => ({ ...current, [t.id]: e.target.value }))}
+            />
             {t.evidence ? <pre className="whitespace-pre-wrap text-xs text-slate-500">{t.evidence}</pre> : null}
             {t.ai_review ? <p className="text-sm text-slate-600">初审：{t.ai_review}</p> : null}
             <div className="flex flex-wrap gap-2">
@@ -91,7 +106,11 @@ export function TicketsPanel({
               <Button size="sm" variant={t.handoff === "sent" ? "default" : "outline"} onClick={() => setHandoff(t.id, "sent")}>
                 已发给客户
               </Button>
-              <Button size="sm" variant={t.handoff === "live" ? "default" : "outline"} onClick={() => setHandoff(t.id, "live")}>
+              <Button
+                size="sm"
+                variant={t.handoff === "live" ? "default" : "outline"}
+                onClick={() => setHandoff(t.id, "live", (liveUrls[t.id] ?? t.result_url ?? "").trim())}
+              >
                 客户已上线
               </Button>
               <Button size="sm" onClick={() => aiTicket(t.id)}>
@@ -100,14 +119,20 @@ export function TicketsPanel({
               <Button size="sm" variant="outline" onClick={() => verifyTicket(t.id, false)}>
                 未确认
               </Button>
-              <Button size="sm" onClick={() => verifyTicket(t.id, t.handoff === "live")} disabled={t.handoff !== "live"}>
+              <Button
+                size="sm"
+                onClick={() => verifyTicket(t.id, t.handoff === "live" && Boolean(t.result_url))}
+                disabled={t.handoff !== "live" || !t.result_url}
+              >
                 确认完成
               </Button>
               <Button size="sm" variant="ghost" onClick={() => reopenTicket(t.id)}>
                 复查后重开
               </Button>
             </div>
-            <p className="text-[11px] text-slate-400">「客户已上线」是客户经理登记，不是官网已改的证明。没到这一步不能验收，也不能当成再测条件已经满足。</p>
+            <p className="text-[11px] text-slate-400">
+              「客户已上线」必须先填页或帖地址。这是客户经理登记，不是我们打开核对过的证明。没到这一步、没有地址，不能验收，也不能再测。
+            </p>
           </CardContent>
         </Card>
       ))}

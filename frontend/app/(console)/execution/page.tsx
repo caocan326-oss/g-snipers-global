@@ -41,6 +41,14 @@ function ItemCard({ item }: { item: ExecutionItem }) {
               {item.subtitle ? <p className="mt-1 text-sm text-slate-500">{item.subtitle}</p> : null}
               {item.sample_note ? <p className="mt-1 text-sm text-slate-700">这一轮 {item.sample_note}</p> : null}
               {item.handoff_label ? <p className="mt-1 text-sm text-slate-700">{item.handoff_label}</p> : null}
+              {item.result_url ? (
+                <p className="mt-1 text-sm text-slate-700">
+                  上线地址：{" "}
+                  <a className="break-all text-brand-700 underline" href={item.result_url} target="_blank" rel="noreferrer">
+                    {item.result_url}
+                  </a>
+                </p>
+              ) : null}
               {item.customer_note ? (
                 <pre className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">给客户：{"\n"}{item.customer_note}</pre>
               ) : item.recommended_action ? (

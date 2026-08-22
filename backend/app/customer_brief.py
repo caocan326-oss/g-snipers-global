@@ -13,6 +13,7 @@ from app.geo_loop import (
     refresh_open_tickets_from_samples,
     ticket_customer_note,
     ticket_handoff,
+    ticket_live_url,
     weekly_paste,
 )
 from app.routers.geo.prompts import geo_summary
@@ -227,7 +228,14 @@ def build_customer_brief(user: User, db: Session) -> CustomerBriefOut:
     if geo_waiting:
         retest.append("AI 搜索改法还在工作台或已发给客户。客户页没上线、帖没发出前不要再测。工作台打勾不是官网已改。")
     if geo_live:
-        retest.append("有客户说已上线或帖已发出的项，用同一买家问题再抽查一次。只记变化，不承诺这次会提到。")
+        live_urls = [ticket_live_url(ticket) for ticket in geo_live if ticket_live_url(ticket)]
+        if live_urls:
+            retest.append(
+                f"客户登记了上线地址：{live_urls[0]}。"
+                "用同一买家问题再抽查一次。只记变化，不承诺这次会提到。登记地址不是我们打开核对过的证明。"
+            )
+        else:
+            retest.append("有项标了客户已上线，但没有页或帖地址。先补链接再测。工作台打勾不是官网已改。")
     if waiting:
         retest.append(
             f"工作台记了 {len(waiting)} 处「已改 / 人工上线」，还要再打开页面核对。"

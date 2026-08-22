@@ -6,14 +6,25 @@ from urllib.parse import urlparse
 
 from sqlalchemy.orm import Session
 
-from app.models import BacklinkGap, DemandSignal, GeoObservation, GeoPrompt, GeoSampleResult, GeoTicket, Tenant
+from app.models import (
+    BacklinkGap,
+    DemandSignal,
+    DistributionJob,
+    GeoObservation,
+    GeoPrompt,
+    GeoSampleResult,
+    GeoTicket,
+    OutreachItem,
+    Tenant,
+)
 from app.onsite_fetch import OriginError, normalize_origin, origin_host
 
 DEMO_TENANT_NAME = "演示客户 · 智能门锁出海"
 SNIPERS_HOSTS = {"snipers.com.cn", "www.snipers.com.cn"}
 LOCK_PROMPT_MARKERS = ("smart lock", "スマートロック", "renters install", "賃貸でスマートロック")
 LOCK_KEYWORD_EXACT = {"smart lock for renters", "賃貸", "スマートロック", "許可"}
-LOCK_GAP_MARKERS = ("smarthome-weekly.example", "renters-lock")
+LOCK_GAP_MARKERS = ("smarthome-weekly.example", "old-blog.example", "renters-lock")
+LOCK_GAP_COMPETITORS = {"august home", "level lock", "qrio", "nuki"}
 
 
 def host_of(origin: str | None) -> str:
@@ -76,10 +87,16 @@ def adopt_live_site(db: Session, tenant: Tenant) -> str:
 
     gaps = 0
     for gap in db.query(BacklinkGap).filter(BacklinkGap.tenant_id == tenant.id).all():
-        blob = " ".join([gap.referring_domain or "", gap.link_url or "", gap.title or ""]).lower()
-        if any(marker in blob for marker in LOCK_GAP_MARKERS):
+        host = (gap.referring_domain or "").lower()
+        blob = " ".join([host, gap.link_url or "", gap.title or "", gap.competitor_name or ""]).lower()
+        demo_host = host.endswith(".example") or any(marker in blob for marker in LOCK_GAP_MARKERS)
+        demo_brand = (gap.competitor_name or "").strip().lower() in LOCK_GAP_COMPETITORS
+        if demo_host or demo_brand:
+            db.query(OutreachItem).filter(OutreachItem.gap_id == gap.id).delete(synchronize_session=False)
+            for job in db.query(DistributionJob).filter(DistributionJob.gap_id == gap.id).all():
+                job.gap_id = None
             db.delete(gap)
             gaps += 1
     if gaps:
-        notes.append(f"已去掉 {gaps} 条门锁站外示例")
+        notes.append(f"已去掉 {gaps} 条门锁/演示站外示例")
     return "；".join(notes)
