@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import type { ProjectTargets } from "@/lib/api";
 
-import { DIAGNOSTIC_COUNTRIES, type TargetForm } from "../_helpers";
+import { DIAGNOSTIC_COUNTRIES, keywordPlaceholder, type TargetForm } from "../_helpers";
 
 export type { TargetForm };
 
@@ -151,9 +151,11 @@ export function DiagnosticTargetsSection({
               className="min-h-[96px]"
               value={targetForm.keywords}
               onChange={(e) => setTargetForm({ ...targetForm, keywords: e.target.value })}
-              placeholder={"smart lock for renters\n賃貸 スマートロック 許可"}
+              placeholder={keywordPlaceholder(targetForm.site_origin, targetForm.tenant_name)}
             />
-            <p className="mt-1 text-xs text-slate-400">一行一个。日文词跟日本，英文词跟美英德澳。</p>
+            <p className="mt-1 text-xs text-slate-400">
+              灰字是示例，不是已保存的词。空着保存后，排名和买家问题都不会自己有词。一行一个。日文词跟日本，英文词跟美英德澳。
+            </p>
           </div>
           <div>
             <div className="mb-1 text-xs font-medium text-slate-500">主要竞品</div>

@@ -165,6 +165,8 @@ def assert_can(db: Session, tenant_id: str, meter: str, need: int = 1) -> MeterS
 
 
 def record(db: Session, tenant_id: str, meter: str, need: int = 1) -> MeterSnapshot:
+    if not tenant_id:
+        raise ValueError("用量记账缺少租户")
     assert_can(db, tenant_id, meter, need)
     day = usage_day()
     row = (
@@ -181,6 +183,17 @@ def record(db: Session, tenant_id: str, meter: str, need: int = 1) -> MeterSnaps
     return snapshot(db, tenant_id, meter)
 
 
+def charge(db: Session, tenant_id: str, meter: str, need: int = 1) -> MeterSnapshot:
+    """Count a successful paid call and commit it now.
+
+    Same contract as SERP / PageSpeed: caller passes db and tenant_id.
+    Later failures in the same request must not erase this count.
+    """
+    snap = record(db, tenant_id, meter, need)
+    db.commit()
+    return snap
+
+
 def assert_current(meter: str, need: int = 1) -> None:
     tenant_id = current_tenant_id()
     db = _DB.get()
@@ -190,18 +203,12 @@ def assert_current(meter: str, need: int = 1) -> None:
 
 
 def record_current(meter: str, need: int = 1) -> None:
-    """Count a successful paid call and commit it now.
-
-    Later failures in the same request must not erase this count. This also
-    commits other pending work on the request session; call only after the
-    vendor has already answered.
-    """
+    """Legacy ContextVar path. New paid GEO calls should use charge()."""
     tenant_id = current_tenant_id()
     db = _DB.get()
     if not tenant_id or db is None:
         return
-    record(db, tenant_id, meter, need)
-    db.commit()
+    charge(db, tenant_id, meter, need)
 
 
 def raise_http(exc: UsageLimitError) -> None:

@@ -13,6 +13,10 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 @router.post("/login", response_model=TokenResponse)
 def login(body: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
+    if not body.email.strip() or not body.password:
+        raise HTTPException(status_code=400, detail="请填写邮箱和密码。")
+    if "@" not in body.email:
+        raise HTTPException(status_code=400, detail="请填写有效邮箱。")
     email = body.email.lower()
     if locked_until(email) is not None:
         raise HTTPException(status_code=429, detail="失败次数过多，请 15 分钟后再试。")

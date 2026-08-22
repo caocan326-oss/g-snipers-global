@@ -173,7 +173,7 @@ def _load_sample_prompts(db: Session, user: User, body: GeoAutoSampleIn) -> list
         q = q.filter(GeoPrompt.id.in_(body.prompt_ids))
     prompts = q.order_by(GeoPrompt.created_at.desc()).limit(body.limit).all()
     if not prompts:
-        raise HTTPException(status_code=400, detail="没有可自动采样的 GEO 问句。")
+        raise HTTPException(status_code=400, detail="没有可检查的买家问题。请先点「生成买家问题」，或手写一句英文问句再测。")
     return prompts
 
 
@@ -243,6 +243,8 @@ def _execute_auto_sample(
                     prompt_text=prompt.prompt_text,
                     model=body.model,
                     region_hint=body.region_hint,
+                    db=db,
+                    tenant_id=user.tenant_id,
                 )
             except UsageLimitError as exc:
                 raise_http(exc)

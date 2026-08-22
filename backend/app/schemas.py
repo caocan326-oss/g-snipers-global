@@ -4,8 +4,8 @@ from pydantic import BaseModel, EmailStr, Field
 
 
 class LoginRequest(BaseModel):
-    email: EmailStr
-    password: str
+    email: str = ""
+    password: str = ""
 
 
 class TokenResponse(BaseModel):

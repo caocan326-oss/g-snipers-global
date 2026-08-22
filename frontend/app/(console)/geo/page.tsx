@@ -148,7 +148,12 @@ export default function GeoPage() {
     setBusyAction("seed-prompts");
     try {
       const res = await api<{ created: number; skipped: number; prompts: number; note: string }>("/api/geo/prompt-panel/seed", { method: "POST" });
-      setNote(`${res.note} 新增 ${res.created} 条，跳过 ${res.skipped} 条。当前买家问题 ${res.prompts} 条。`);
+      const summary = `${res.note} 新增 ${res.created} 条，跳过 ${res.skipped} 条。当前买家问题 ${res.prompts} 条。`;
+      if (res.created === 0 && res.prompts === 0) {
+        setError(summary);
+      } else {
+        setNote(summary);
+      }
       loadPrompts();
     } catch (e) {
       setError(e instanceof Error ? e.message : "生成买家问题失败");

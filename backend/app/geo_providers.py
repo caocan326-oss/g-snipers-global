@@ -5,6 +5,7 @@ from typing import Any
 from dataclasses import dataclass, field
 
 import httpx
+from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.llm import OK, complete, configured as llm_configured
@@ -183,6 +184,27 @@ def _bailian_urls(data: dict) -> list[str]:
     return _extract_urls_from_raw(data)
 
 
+def _require_usage(db: Session | None, tenant_id: str) -> tuple[Session, str]:
+    if db is None or not tenant_id:
+        raise GeoProviderError("这次抽查没有带上客户用量，已中止，没有记次。请重试。")
+    return db, tenant_id
+
+
+def _assert_meter(db: Session, tenant_id: str, meter: str) -> None:
+    from app.usage import UsageLimitError, assert_can
+
+    try:
+        assert_can(db, tenant_id, meter, 1)
+    except UsageLimitError:
+        raise
+
+
+def _charge_meter(db: Session, tenant_id: str, meter: str) -> None:
+    from app.usage import charge
+
+    charge(db, tenant_id, meter, 1)
+
+
 def _bailian_answer(data: dict) -> str:
     output = data.get("output") if isinstance(data.get("output"), dict) else {}
     choices = output.get("choices") or data.get("choices") or []
@@ -194,16 +216,12 @@ def _bailian_answer(data: dict) -> str:
     return content.strip() if isinstance(content, str) else ""
 
 
-def _call_bocha(prompt_text: str) -> GeoProviderResult:
+def _call_bocha(prompt_text: str, *, db: Session | None = None, tenant_id: str = "") -> GeoProviderResult:
     if not settings.bocha_api_key:
         raise GeoProviderError("未配置 BOCHA_API_KEY，不能执行博查搜索采样。")
+    session, billed_tenant = _require_usage(db, tenant_id)
     payload = {"query": prompt_text, "freshness": "noLimit", "summary": True, "count": 10}
-    from app.usage import UsageLimitError, assert_current, record_current
-
-    try:
-        assert_current("bocha", 1)
-    except UsageLimitError:
-        raise
+    _assert_meter(session, billed_tenant, "bocha")
     try:
         with httpx.Client(timeout=45) as client:
             response = client.post(
@@ -216,7 +234,7 @@ def _call_bocha(prompt_text: str) -> GeoProviderResult:
         data = response.json()
     except httpx.HTTPError as exc:
         raise GeoProviderError(f"博查请求失败：{str(exc)[:200]}") from exc
-    record_current("bocha", 1)
+    _charge_meter(session, billed_tenant, "bocha")
 
     pages = (((data.get("data") or {}).get("webPages") or {}).get("value") or [])
     urls: list[str] = []
@@ -262,9 +280,16 @@ def _tavily_country(region_hint: str) -> str:
     return aliases.get(value, "")
 
 
-def _call_tavily(prompt_text: str, region_hint: str = "") -> GeoProviderResult:
+def _call_tavily(
+    prompt_text: str,
+    region_hint: str = "",
+    *,
+    db: Session | None = None,
+    tenant_id: str = "",
+) -> GeoProviderResult:
     if not settings.tavily_api_key:
         raise GeoProviderError("未配置 TAVILY_API_KEY，不能执行 Tavily 搜索采样。")
+    session, billed_tenant = _require_usage(db, tenant_id)
     payload: dict[str, Any] = {
         "query": prompt_text,
         "search_depth": "basic",
@@ -274,12 +299,7 @@ def _call_tavily(prompt_text: str, region_hint: str = "") -> GeoProviderResult:
     country = _tavily_country(region_hint)
     if country:
         payload["country"] = country
-    from app.usage import UsageLimitError, assert_current, record_current
-
-    try:
-        assert_current("tavily", 1)
-    except UsageLimitError:
-        raise
+    _assert_meter(session, billed_tenant, "tavily")
     try:
         with httpx.Client(timeout=45) as client:
             response = client.post(
@@ -292,7 +312,7 @@ def _call_tavily(prompt_text: str, region_hint: str = "") -> GeoProviderResult:
         data = response.json()
     except httpx.HTTPError as exc:
         raise GeoProviderError(f"Tavily 请求失败：{str(exc)[:200]}") from exc
-    record_current("tavily", 1)
+    _charge_meter(session, billed_tenant, "tavily")
 
     pages = data.get("results") or []
     urls: list[str] = []
@@ -323,11 +343,19 @@ def _call_tavily(prompt_text: str, region_hint: str = "") -> GeoProviderResult:
     )
 
 
-def _call_bailian(prompt_text: str, model: str = "", region_hint: str = "") -> GeoProviderResult:
+def _call_bailian(
+    prompt_text: str,
+    model: str = "",
+    region_hint: str = "",
+    *,
+    db: Session | None = None,
+    tenant_id: str = "",
+) -> GeoProviderResult:
     if not settings.dashscope_api_key:
         raise GeoProviderError("未配置 DASHSCOPE_API_KEY，不能执行百炼联网采样。")
+    session, billed_tenant = _require_usage(db, tenant_id)
     system = "You are a search-grounded B2B SEO/GEO evaluator. Prefer reliable official or third-party sources."
-    if region_hint:
+    if region_hint and _tavily_country(region_hint):
         system += f" Region hint: {region_hint}."
     model_name = model or settings.bailian_model or "qwen-plus"
     payload = {
@@ -347,12 +375,7 @@ def _call_bailian(prompt_text: str, model: str = "", region_hint: str = "") -> G
             },
         },
     }
-    from app.usage import UsageLimitError, assert_current, record_current
-
-    try:
-        assert_current("bailian", 1)
-    except UsageLimitError:
-        raise
+    _assert_meter(session, billed_tenant, "bailian")
     try:
         with httpx.Client(timeout=90) as client:
             response = client.post(
@@ -368,7 +391,7 @@ def _call_bailian(prompt_text: str, model: str = "", region_hint: str = "") -> G
 
     if data.get("code") and data.get("code") not in {"", "Success", "success"}:
         raise GeoProviderError(f"百炼返回 {data.get('code')}: {str(data.get('message') or '')[:200]}")
-    record_current("bailian", 1)
+    _charge_meter(session, billed_tenant, "bailian")
 
     urls = _bailian_urls(data)
     answer = _bailian_answer(data)
@@ -390,6 +413,8 @@ def sample_with_provider(
     prompt_text: str,
     model: str = "",
     region_hint: str = "",
+    db: Session | None = None,
+    tenant_id: str = "",
 ) -> GeoProviderResult:
     provider = normalize_provider_key(provider_key)
     if provider == "deepseek":
@@ -400,9 +425,9 @@ def sample_with_provider(
             "Answer the user's question directly. "
             "Do not invent source citations. Do not mention this evaluation instruction."
         )
-        if region_hint:
+        if region_hint and _tavily_country(region_hint):
             system += f" Region hint: {region_hint}."
-        res = complete(system=system, user=prompt_text)
+        res = complete(system=system, user=prompt_text, db=db, tenant_id=tenant_id)
         if res.status != OK:
             raise GeoProviderError(f"{res.status} {res.detail}".strip())
         return GeoProviderResult(
@@ -417,13 +442,13 @@ def sample_with_provider(
         )
 
     if provider == "bocha":
-        return _call_bocha(prompt_text)
+        return _call_bocha(prompt_text, db=db, tenant_id=tenant_id)
 
     if provider == "tavily":
-        return _call_tavily(prompt_text, region_hint=region_hint)
+        return _call_tavily(prompt_text, region_hint=region_hint, db=db, tenant_id=tenant_id)
 
     if provider == "bailian":
-        return _call_bailian(prompt_text, model=model, region_hint=region_hint)
+        return _call_bailian(prompt_text, model=model, region_hint=region_hint, db=db, tenant_id=tenant_id)
 
     status = provider_status(provider)
     label = status.label if status else provider

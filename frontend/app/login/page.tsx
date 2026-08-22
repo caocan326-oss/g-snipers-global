@@ -18,8 +18,16 @@ export default function LoginPage() {
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    setLoading(true);
     setError("");
+    if (!email.trim() || !password) {
+      setError("请填写邮箱和密码。");
+      return;
+    }
+    if (!email.includes("@")) {
+      setError("请填写有效邮箱。");
+      return;
+    }
+    setLoading(true);
     try {
       const data = await api<{ access_token: string }>("/api/auth/login", {
         method: "POST",
@@ -28,7 +36,12 @@ export default function LoginPage() {
       setToken(data.access_token);
       router.replace("/home");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "登录失败");
+      const message = err instanceof Error ? err.message : "登录失败";
+      if (/field required|valid email|value_error|email/i.test(message) && !/密码|账号|演示/.test(message)) {
+        setError("请填写有效邮箱和密码。");
+      } else {
+        setError(message);
+      }
     } finally {
       setLoading(false);
     }

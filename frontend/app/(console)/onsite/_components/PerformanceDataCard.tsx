@@ -308,7 +308,9 @@ export function PerformanceDataCard({
             {busyId === "serp" ? "查询中，最多约 1 分钟…" : "查询目标关键词排名"}
           </Button>
           <p className="mt-2 text-xs text-slate-500">
-            {performance?.serp?.configured ? "按目标国家和核心搜索词查询 Google 前 50，作为市场可见度证据。" : "服务器尚未配置排名检查数据源，按钮已停用，不会空转。"}
+            {performance?.serp?.configured
+              ? "按总览已保存的核心搜索词查 Google 前 50。框是空的就先去总览填写并保存，按钮绿只表示数据源配好了，不表示已经有词。"
+              : "服务器尚未配置排名检查数据源，按钮已停用，不会空转。"}
           </p>
         </div>
         {actionError ? <p className="text-sm text-red-600 xl:col-span-2">{actionError}</p> : null}

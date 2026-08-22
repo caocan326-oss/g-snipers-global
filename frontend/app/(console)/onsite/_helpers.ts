@@ -19,10 +19,17 @@ export const issuePlainTitle: Record<string, string> = {
   "URL 层级过深": "网址层级太深，不好被找到",
   "GEO-SCHEMA-002 Schema 类型与正文弱一致": "页面说明和正文对不上",
   "GEO-ENT-002 缺少 Organization / WebSite schema": "首页缺少公司介绍说明",
+  "GEO-ENT-002 产品/方案页缺少 Product 或 Service schema": "产品页缺少给搜索看的产品说明",
+  "产品页缺少 Product schema": "产品页缺少给搜索看的产品说明",
+  "GEO-INDEX-001 关键页声明 noindex": "关键页告诉搜索不要收录",
+  "GEO-CRAWL-003 无 JS 正文过短": "不打开脚本时几乎没有正文",
+  "GEO-STRUCT-001 首屏缺少直接答案": "页面开头没有直接回答买家问题",
 };
 
 export function plainIssueTitle(title: string) {
-  return issuePlainTitle[title] || title;
+  const mapped = (issuePlainTitle[title] || title).replace(/GEO-[A-Z]+-\d+\s*/g, "").trim() || title;
+  if (/schema|json-ld/i.test(mapped)) return "页面缺少给搜索看的说明";
+  return mapped;
 }
 
 export const catLabel: Record<string, string> = {

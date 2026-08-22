@@ -155,7 +155,7 @@ export function IssueBoard({
                   <div className="grid gap-4 xl:grid-cols-[1fr_1fr]">
                     <div className="space-y-2">
                       <div className="text-xs font-medium text-slate-500">查看依据</div>
-                      {plainIssueTitle(issue.title) !== issue.title ? (
+                      {plainIssueTitle(issue.title) !== issue.title && !/GEO-[A-Z]+-\d+|schema|JSON-LD/i.test(issue.title) ? (
                         <p className="text-xs text-slate-500">内部名称：{issue.title}</p>
                       ) : null}
                       <p className="text-sm text-slate-700">{issue.detail || "暂无详情。"}</p>
@@ -196,7 +196,7 @@ export function IssueBoard({
                         </Button>
                         <Button size="sm" onClick={() => aiIssue(issue.id)} disabled={busyId === issue.id}>
                           <Bot className="mr-1.5 h-3.5 w-3.5" />
-                          生成改法
+                          {busyId === issue.id ? "生成中…" : "生成改法"}
                         </Button>
                         <Button size="sm" variant="outline" onClick={() => saveDraft(issue)} disabled={busyId === issue.id}>
                           保存改法

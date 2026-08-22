@@ -261,7 +261,12 @@ def seed_prompt_panel(user: User = Depends(get_current_user), db: Session = Depe
         )
     if not candidates:
         total = db.query(func.count(GeoPrompt.id)).filter(GeoPrompt.tenant_id == user.tenant_id).scalar() or 0
-        return GeoSeedOut(created=0, skipped=0, prompts=total, note="没有可生成问句的 SEO 目标。请先在首页配置目标关键词，或在 SEO 选题里登记 target keyword。")
+        return GeoSeedOut(
+            created=0,
+            skipped=0,
+            prompts=total,
+            note="没有可生成问句的 SEO 目标。请先回总览填写搜索词并点「保存诊断目标」，或在 SEO 选题里登记 target keyword。空着点不会自己长出问题。",
+        )
     for item in candidates:
         key = _prompt_key(str(item["prompt_text"]), str(item["locale"]))
         if key in existing:

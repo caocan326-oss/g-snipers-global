@@ -103,7 +103,7 @@ export default function ExecutionPage() {
             <Badge tone="brand">处理清单</Badge>
             <h1 className="mt-3 text-2xl font-semibold text-slate-950">本周期处理清单</h1>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
-              这里汇总网站检查、AI 搜索和站外曝光里还没关闭的事项。点一项会回到原模块继续处理、确认和复查。
+              「未关闭」是网站检查、AI 搜索、站外曝光三处加总，不是只算网站问题。总览左侧「紧急/优先」只算网站。数字对不上是口径不同，不是算错。点一项会回到原模块继续处理。
             </p>
           </div>
           <div className="grid w-full gap-2 sm:grid-cols-3 lg:w-[520px]">

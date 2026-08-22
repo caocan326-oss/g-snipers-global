@@ -1,3 +1,4 @@
+import re
 from collections import Counter
 from datetime import datetime, timezone
 
@@ -242,8 +243,15 @@ def _category_label(category: str) -> str:
     return CATEGORY_LABELS.get(category, category or "其他")
 
 
+_INTERNAL_CODE = re.compile(r"GEO-[A-Z]+-\d+\s*")
+
+
 def _plain_title(title: str) -> str:
-    return ISSUE_PLAIN_TITLES.get(title, title)
+    mapped = ISSUE_PLAIN_TITLES.get(title, title)
+    mapped = _INTERNAL_CODE.sub("", mapped).strip() or mapped
+    if re.search(r"schema|json-ld", mapped, re.I):
+        return "页面缺少给搜索看的说明"
+    return mapped
 
 
 def _page_short(page: SitePage | None) -> str:

@@ -314,3 +314,40 @@ def test_customer_brief_keeps_geo_ticket_in_this_week_when_onsite_is_full(client
     assert "1." in body["paste_text"]
     assert "工作台打勾" not in body["paste_text"]
     assert "发给客户的短稿" in body["markdown"]
+
+
+def test_customer_brief_hides_internal_issue_codes(client: TestClient, demo_user, db) -> None:
+    from app.routers.onsite.common import _plain_title
+
+    assert _plain_title("GEO-ENT-002 缺少 Organization / WebSite schema") == "首页缺少公司介绍说明"
+    assert "schema" not in _plain_title("产品页缺少 Product schema").lower()
+
+    tenant = db.get(Tenant, demo_user.tenant_id)
+    tenant.site_origin = "https://www.ugreen.com"
+    page = SitePage(
+        tenant_id=demo_user.tenant_id,
+        path="/",
+        locale="en-US",
+        title="Home",
+        crawl_status="ok",
+    )
+    db.add(page)
+    db.flush()
+    db.add(
+        OnsiteIssue(
+            tenant_id=demo_user.tenant_id,
+            page_id=page.id,
+            category="schema",
+            title="GEO-ENT-002 缺少 Organization / WebSite schema",
+            status="open",
+            severity="critical",
+            risk="high",
+        )
+    )
+    db.commit()
+
+    body = client.get("/api/dashboard/customer-brief", headers=auth_header(client)).json()
+    blob = body["markdown"] + body["paste_text"] + "".join(body["this_week"])
+    assert "GEO-ENT-002" not in blob
+    assert "schema" not in blob.lower()
+    assert "首页缺少公司介绍说明" in blob

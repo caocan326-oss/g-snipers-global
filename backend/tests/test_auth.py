@@ -4,6 +4,15 @@ from app.models import User
 from app.seed import ensure_admin
 
 
+def test_login_empty_submit_is_chinese(client: TestClient) -> None:
+    empty = client.post("/api/auth/login", json={"email": "", "password": ""})
+    assert empty.status_code == 400
+    assert empty.json()["detail"] == "请填写邮箱和密码。"
+    missing = client.post("/api/auth/login", json={})
+    assert missing.status_code == 400
+    assert "请填写" in missing.json()["detail"]
+
+
 def test_login_and_me(client: TestClient, demo_user) -> None:
     bad = client.post("/api/auth/login", json={"email": "am@demo.gsnipers.com", "password": "wrong"})
     assert bad.status_code == 401

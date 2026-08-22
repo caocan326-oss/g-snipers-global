@@ -221,9 +221,8 @@ def test_record_current_survives_later_rollback(demo_user, db) -> None:
 
 def test_bocha_counts_only_after_http_success(demo_user, db, monkeypatch) -> None:
     from app import geo_providers
-    from app.usage import set_usage_tenant, used_today
+    from app.usage import used_today
 
-    set_usage_tenant(demo_user.tenant_id, db)
     monkeypatch.setattr(geo_providers.settings, "bocha_api_key", "test-key")
 
     class Fail:
@@ -232,7 +231,7 @@ def test_bocha_counts_only_after_http_success(demo_user, db, monkeypatch) -> Non
 
     monkeypatch.setattr(geo_providers.httpx, "Client", _fake_httpx_client(Fail()))
     try:
-        geo_providers._call_bocha("best lock")
+        geo_providers._call_bocha("best lock", db=db, tenant_id=demo_user.tenant_id)
         raise AssertionError("博查失败时不该当成功")
     except geo_providers.GeoProviderError:
         pass
@@ -245,10 +244,40 @@ def test_bocha_counts_only_after_http_success(demo_user, db, monkeypatch) -> Non
             return {"data": {"webPages": {"value": [{"url": "https://a.example", "name": "A", "snippet": "s"}]}}}
 
     monkeypatch.setattr(geo_providers.httpx, "Client", _fake_httpx_client(Ok()))
-    geo_providers._call_bocha("best lock")
+    geo_providers._call_bocha("best lock", db=db, tenant_id=demo_user.tenant_id)
     db.rollback()
     db.expire_all()
     assert used_today(db, demo_user.tenant_id, "bocha") == 1
+
+
+def test_bocha_without_tenant_does_not_count(demo_user, db, monkeypatch) -> None:
+    from app import geo_providers
+    from app.usage import used_today
+
+    monkeypatch.setattr(geo_providers.settings, "bocha_api_key", "test-key")
+    called = {"n": 0}
+
+    class Probe:
+        def __init__(self, *args, **kwargs):
+            called["n"] += 1
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def post(self, *args, **kwargs):
+            raise AssertionError("没有租户时不该打博查")
+
+    monkeypatch.setattr(geo_providers.httpx, "Client", Probe)
+    try:
+        geo_providers._call_bocha("best lock")
+        raise AssertionError("缺少用量上下文时应失败")
+    except geo_providers.GeoProviderError as exc:
+        assert "用量" in str(exc)
+    assert called["n"] == 0
+    assert used_today(db, demo_user.tenant_id, "bocha") == 0
 
 
 def test_llm_counts_only_after_http_success(demo_user, db, monkeypatch) -> None:

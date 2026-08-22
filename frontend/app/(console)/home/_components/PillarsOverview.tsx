@@ -32,7 +32,7 @@ export function PillarsOverview({
           status={highRisk > 0 ? "待处理" : data.summary.onsite_pages > 0 ? "已查看" : "未查看"}
           statusTone={technicalTone}
           primary={`${highRisk} 个紧急/优先`}
-          helper={`${data.summary.onsite_pages} 个页面。看能不能打开、搜索有没有收录、标题和说明清不清楚。`}
+          helper={`${data.summary.onsite_pages} 个页面。只算网站问题，不含 AI 搜索和站外。`}
           href="/onsite"
           icon={SearchCheck}
         >
@@ -67,7 +67,7 @@ export function PillarsOverview({
           status={reviewTotal > 0 ? "待处理" : "清爽"}
           statusTone={workTone}
           primary={`${reviewTotal} 个执行项`}
-          helper={`${data.summary.geo_tickets_open} 个 AI 搜索待处理项，${data.summary.seo_pending_review} 个网站待复查；站外线索进曝光台跟进。`}
+          helper={`网站 + AI 搜索 + 站外未关闭加总，和左边「紧急/优先」不是同一个数。其中 AI 搜索待处理 ${data.summary.geo_tickets_open}，网站待复查 ${data.summary.seo_pending_review}。`}
           href="/offsite"
           icon={ListChecks}
         >
@@ -77,6 +77,9 @@ export function PillarsOverview({
           </div>
         </PillarCard>
       </section>
+      <p className="text-xs leading-5 text-slate-500">
+        三块数字口径不同：左边只算网站紧急/优先，中间是买家问题抽查，右边是三处未关闭加总。对不上不是算错。
+      </p>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <MetricTile label="曝光" value={perf.total_impressions} helper={`${perf.days} 天 Google/Bing 数据`} icon={BarChart3} />

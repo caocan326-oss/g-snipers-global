@@ -24,6 +24,7 @@ export function ChannelCards({
   jobs,
   assets,
   seedPlatforms,
+  seedBusy,
   writeForChannel,
   queueOnChannel,
   writingId,
@@ -34,6 +35,7 @@ export function ChannelCards({
   jobs: DistJob[];
   assets: ContentAsset[];
   seedPlatforms: () => void;
+  seedBusy?: boolean;
   writeForChannel: (platform: SourcePlatform) => void;
   queueOnChannel: (platform: SourcePlatform) => void;
   writingId: string;
@@ -53,7 +55,9 @@ export function ChannelCards({
           <p className="text-sm leading-6 text-slate-500">
             一张卡片就是一个渠道。客户想发 LinkedIn、Facebook 或行业目录，点那张卡：AI 写稿、加上关键词，人用接口或自己登号发出去。不自动群发。
           </p>
-          <Button onClick={seedPlatforms}>载入常用渠道</Button>
+          <Button onClick={seedPlatforms} disabled={seedBusy}>
+            {seedBusy ? "载入中…" : "载入常用渠道"}
+          </Button>
         </CardContent>
       </Card>
     );

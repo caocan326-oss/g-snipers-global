@@ -14,6 +14,18 @@ export type TargetForm = {
   competitors: TargetCompetitorDraft[];
 };
 
+export function keywordPlaceholder(siteOrigin: string, brand: string): string {
+  const host = siteOrigin.replace(/^https?:\/\//i, "").split("/")[0].replace(/^www\./i, "").toLowerCase();
+  if (!host || host.includes("snipers.com")) {
+    return "smart lock for renters\n賃貸 スマートロック 許可";
+  }
+  if (host.includes("ugreen")) {
+    return "100W USB-C charger\nUSB-C docking station";
+  }
+  const name = (brand || host.split(".")[0] || "brand").trim();
+  return `${name} official website\n${name} review`;
+}
+
 export const emptyTargetForm: TargetForm = {
   tenant_name: "",
   site_origin: "",
@@ -244,7 +256,7 @@ export function reportReadyChecks(data: Workbench, targets: ProjectTargets | nul
       label: "紧急 / 优先问题",
       status: highRisk > 0 ? "需说明" : "通过",
       ok: highRisk === 0,
-      detail: highRisk > 0 ? `仍有 ${highRisk} 个紧急或优先问题，说明里要列入改法和复查。` : "没有打开的紧急或优先网站问题。",
+      detail: highRisk > 0 ? `仍有 ${highRisk} 个紧急或优先网站问题（不含 AI 搜索和站外），说明里要列入改法和复查。` : "没有打开的紧急或优先网站问题。",
     },
     {
       label: "Google 数据授权",

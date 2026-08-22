@@ -63,6 +63,7 @@ export function PlatformsTab({
   platforms,
   platformStats,
   seedPlatforms,
+  seedBusy,
   platformQuery,
   setPlatformQuery,
   platformTypeFilter,
@@ -85,6 +86,7 @@ export function PlatformsTab({
   platforms: SourcePlatform[];
   platformStats: PlatformStats;
   seedPlatforms: () => void;
+  seedBusy?: boolean;
   platformQuery: string;
   setPlatformQuery: (value: string) => void;
   platformTypeFilter: string;
@@ -115,7 +117,9 @@ export function PlatformsTab({
                 先导入 LinkedIn、X、YouTube、Facebook、Instagram、TikTok、Pinterest、Google Business 和出口 B2B 权威源，再按客户行业补充垂直目录、协会、分销商和媒体。导入不会覆盖已有平台。
               </p>
             </div>
-            <Button type="button" onClick={seedPlatforms}>导入主流平台</Button>
+            <Button type="button" onClick={seedPlatforms} disabled={seedBusy}>
+              {seedBusy ? "导入中…" : "导入主流平台"}
+            </Button>
           </div>
           <div className="mt-4 grid gap-2 sm:grid-cols-3 xl:grid-cols-6">
             <div className="rounded-md bg-slate-50 p-3 text-sm"><div className="text-xs text-slate-500">平台总数</div><div className="mt-1 font-semibold">{platforms.length}</div></div>

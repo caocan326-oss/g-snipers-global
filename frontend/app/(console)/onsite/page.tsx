@@ -46,6 +46,7 @@ import {
   type FilterKey,
   matchesFilter,
   performanceVerdict,
+  plainIssueTitle,
   priorityRank,
   SNIPERS_TEST_ORIGIN,
   SNIPERS_TEST_PAGES,
@@ -180,6 +181,7 @@ export default function OnsiteBoardPage() {
       if (!q) return true;
       return [
         issue.title,
+        plainIssueTitle(issue.title),
         issue.page_title,
         issue.page_path,
         issue.category,
@@ -411,15 +413,19 @@ export default function OnsiteBoardPage() {
 
   async function runSerp() {
     setError("");
+    const keywords = targetKeywords.map((item) => item.label).filter((item) => item.trim());
+    if (!performance?.serp?.configured) {
+      setError("关键词排名数据源未配置，不能查询。不会在后台一直转。");
+      return;
+    }
+    if (!keywords.length) {
+      setError("没有可查询的关键词。请先回总览填写并保存搜索词，空着点不会去查，也不用等一分钟。");
+      return;
+    }
     setBusyId("serp");
     try {
       const country = targetMarkets[0]?.country_code || "US";
       const locale = targetMarkets[0]?.primary_locale || "en-US";
-      if (!performance?.serp?.configured) {
-        setError("关键词排名数据源未配置，不能查询。不会在后台一直转。");
-        return;
-      }
-      const keywords = targetKeywords.map((item) => item.label).filter((item) => item.trim());
       const res = await api<SerpRunBatch>("/api/onsite/serp/run", {
         method: "POST",
         body: JSON.stringify({ keywords, country, locale, device: "desktop", limit: 50 }),
@@ -708,10 +714,17 @@ export default function OnsiteBoardPage() {
     try {
       const res = await api<AiAssist>(`/api/onsite/issues/${id}/ai`, {
         method: "POST",
+        timeoutMs: 120000,
         body: JSON.stringify({ step: "all" }),
       });
-      setNote(res.detail || res.status);
-      if (res.status === "未配置") setError(res.detail);
+      if (res.status === "未配置") {
+        setError(res.detail || "AI 建议未配置，没有写改法。");
+      } else if (res.draft) {
+        setDrafts((current) => ({ ...current, [id]: res.draft }));
+        setNote("处理建议已写进方案框，请先看再保存。");
+      } else {
+        setNote(res.detail || "这次没有写出新的处理建议。");
+      }
       load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "生成建议失败");
@@ -888,7 +901,12 @@ export default function OnsiteBoardPage() {
         actionError={error}
       />
 
-      <StatsGrid board={board} stats={stats} />
+      <div className="space-y-2">
+        <StatsGrid board={board} stats={stats} />
+        <p className="text-xs leading-5 text-slate-500">
+          这些数字只算网站检查。紧急/优先是严重程度；需确认、待上线、待复查是进度，所以也会对不上。总览右侧「执行项」还加上了 AI 搜索和站外。
+        </p>
+      </div>
 
       <IssueBoard
         visibleIssues={visibleIssues}

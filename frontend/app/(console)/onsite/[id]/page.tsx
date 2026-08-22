@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { api, crawlStatusLabel, type AiAssist, type FetchRegistered, type OnsiteIssue, type SitePageDetail } from "@/lib/api";
 
 import { discoverySourceLabel, labelOr, pageTypeLabel, priorityHintLabel } from "../../_labels";
-import { catLabel, sevLabel, sevTone, statusLabel } from "../_helpers";
+import { catLabel, plainIssueTitle, sevLabel, sevTone, statusLabel } from "../_helpers";
 
 export default function OnsiteEditorPage() {
   const params = useParams<{ id: string }>();
@@ -22,6 +22,7 @@ export default function OnsiteEditorPage() {
   const [note, setNote] = useState("");
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [issueForm, setIssueForm] = useState({ category: "tdk", title: "", proposed_change: "" });
+  const [busyIssueId, setBusyIssueId] = useState("");
 
   function load() {
     api<SitePageDetail>(`/api/onsite/pages/${params.id}`).then(setPage).catch((e) => setError(e.message));
@@ -75,10 +76,28 @@ export default function OnsiteEditorPage() {
   }
 
   async function aiIssue(id: string) {
-    const res = await api<AiAssist>(`/api/onsite/issues/${id}/ai`, { method: "POST", body: JSON.stringify({ step: "all" }) });
-    setNote(res.detail || res.status);
-    if (res.status === "未配置") setError(res.detail);
-    load();
+    setError("");
+    setBusyIssueId(id);
+    try {
+      const res = await api<AiAssist>(`/api/onsite/issues/${id}/ai`, {
+        method: "POST",
+        timeoutMs: 120000,
+        body: JSON.stringify({ step: "all" }),
+      });
+      if (res.status === "未配置") {
+        setError(res.detail || "AI 建议未配置，没有写改法。");
+      } else if (res.draft) {
+        setDrafts((current) => ({ ...current, [id]: res.draft }));
+        setNote("处理建议已写进方案框，请先看再保存。");
+      } else {
+        setNote(res.detail || "这次没有写出新的处理建议。");
+      }
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "生成处理建议失败");
+    } finally {
+      setBusyIssueId("");
+    }
   }
 
   async function addIssue(e: FormEvent) {
@@ -158,7 +177,7 @@ export default function OnsiteEditorPage() {
             基于当前抓取重新诊断
           </Button>
         </div>
-        {note ? <p className="mt-2 text-sm text-slate-600">{note}</p> : null}
+        {note ? <p className="mt-2 text-sm text-emerald-700">{note}</p> : null}
       </div>
 
       {(["critical", "high", "low"] as const).map((sev) => (
@@ -173,7 +192,7 @@ export default function OnsiteEditorPage() {
             {grouped[sev].map((i) => (
               <div key={i.id} className="rounded-md border p-3">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-medium">{i.title}</span>
+                  <span className="font-medium">{plainIssueTitle(i.title)}</span>
                   <Badge>{catLabel[i.category] ?? i.category}</Badge>
                   <Badge tone="amber">{i.metric_status === "untested" ? "未测" : i.metric_status}</Badge>
                   <Badge tone="blue">{statusLabel[i.status] ?? i.status}</Badge>
@@ -205,8 +224,8 @@ export default function OnsiteEditorPage() {
                   onChange={(e) => setDrafts({ ...drafts, [i.id]: e.target.value })}
                 />
                 <div className="mt-2 flex gap-2">
-                  <Button size="sm" onClick={() => aiIssue(i.id)}>
-                    生成处理建议
+                  <Button size="sm" onClick={() => aiIssue(i.id)} disabled={busyIssueId === i.id}>
+                    {busyIssueId === i.id ? "生成中…" : "生成处理建议"}
                   </Button>
                   <Button size="sm" variant="outline" onClick={() => saveDraft(i)}>
                     保存整改方案

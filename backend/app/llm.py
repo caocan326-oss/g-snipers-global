@@ -44,7 +44,7 @@ def gateway_info() -> dict[str, str | bool]:
     }
 
 
-def complete(*, system: str, user: str) -> LlmResult:
+def complete(*, system: str, user: str, db=None, tenant_id: str = "") -> LlmResult:
     if not configured():
         return LlmResult(
             configured=False,
@@ -65,10 +65,13 @@ def complete(*, system: str, user: str) -> LlmResult:
         "Authorization": f"Bearer {settings.llm_api_key}",
         "Content-Type": "application/json",
     }
-    from app.usage import UsageLimitError, assert_current, record_current
+    from app.usage import UsageLimitError, assert_can, assert_current, charge, record_current
 
     try:
-        assert_current("llm", 1)
+        if db is not None and tenant_id:
+            assert_can(db, tenant_id, "llm", 1)
+        else:
+            assert_current("llm", 1)
     except UsageLimitError:
         raise
     try:
@@ -83,7 +86,10 @@ def complete(*, system: str, user: str) -> LlmResult:
             .get("content", "")
             or ""
         ).strip()
-        record_current("llm", 1)
+        if db is not None and tenant_id:
+            charge(db, tenant_id, "llm", 1)
+        else:
+            record_current("llm", 1)
         if not text:
             return LlmResult(True, UNTESTED, "", "模型无输出，保持未测。")
         return LlmResult(True, OK, text, "")

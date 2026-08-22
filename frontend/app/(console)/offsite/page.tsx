@@ -46,6 +46,7 @@ export default function OffsitePage() {
   const [assets, setAssets] = useState<ContentAsset[]>([]);
   const [error, setError] = useState("");
   const [note, setNote] = useState("");
+  const [seedBusy, setSeedBusy] = useState(false);
   const [form, setForm] = useState({
     title: "",
     issue_type: "competitor_gap",
@@ -354,11 +355,18 @@ export default function OffsitePage() {
   async function seedPlatforms() {
     setError("");
     setNote("");
-    const res = await api<SourcePlatformSeed>("/api/offsite/platforms/seed-b2b", { method: "POST" });
-    const apis = await api<{ created: number; updated: number }>("/api/offsite/platforms/seed-official-apis", { method: "POST" });
-    setPlatforms(res.platforms);
-    loadPlatforms();
-    setNote(`已导入 ${res.created} 个渠道，跳过 ${res.skipped} 个。官方接口挂上 ${apis.created + apis.updated} 处：客户自己跳转发，或用自己的钥匙调接口。`);
+    setSeedBusy(true);
+    try {
+      const res = await api<SourcePlatformSeed>("/api/offsite/platforms/seed-b2b", { method: "POST", timeoutMs: 120000 });
+      const apis = await api<{ created: number; updated: number }>("/api/offsite/platforms/seed-official-apis", { method: "POST", timeoutMs: 60000 });
+      setPlatforms(res.platforms);
+      loadPlatforms();
+      setNote(`已导入 ${res.created} 个渠道，跳过 ${res.skipped} 个。官方接口挂上 ${apis.created + apis.updated} 处：客户自己跳转发，或用自己的钥匙调接口。`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "载入渠道失败");
+    } finally {
+      setSeedBusy(false);
+    }
   }
 
   async function saveFactPack(e: FormEvent) {
@@ -558,6 +566,8 @@ export default function OffsitePage() {
   return (
     <div className="space-y-6">
       <SummaryHeader stats={stats} platformsCount={platforms.length} />
+      {note ? <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{note}</p> : null}
+      {error ? <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
 
       <TabNav tab={tab} setTab={setTab} />
 
@@ -569,6 +579,7 @@ export default function OffsitePage() {
           jobs={jobs}
           assets={assets}
           seedPlatforms={seedPlatforms}
+          seedBusy={seedBusy}
           writeForChannel={writeForChannel}
           queueOnChannel={queueOnChannel}
           writingId={writingId}
@@ -640,6 +651,7 @@ export default function OffsitePage() {
           platforms={platforms}
           platformStats={platformStats}
           seedPlatforms={seedPlatforms}
+          seedBusy={seedBusy}
           platformQuery={platformQuery}
           setPlatformQuery={setPlatformQuery}
           platformTypeFilter={platformTypeFilter}
@@ -661,8 +673,6 @@ export default function OffsitePage() {
         />
       ) : null}
 
-      {note ? <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{note}</p> : null}
-      {error ? <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
     </div>
   );
 }
