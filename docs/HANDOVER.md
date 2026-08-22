@@ -158,7 +158,7 @@ git push upstream main
 powershell -File deploy/sync-from-local.ps1
 ```
 
-改了 Dockerfile 或依赖时：
+改了 Dockerfile、依赖，或前后端业务代码时（镜像里 `COPY` 源码，不 Rebuild 容器仍跑旧包）：
 
 ```powershell
 powershell -File deploy/sync-from-local.ps1 -Rebuild
@@ -351,7 +351,7 @@ git log -1 --oneline
 | 分支 | `main` |
 | 提交 | 产品 `432fd6a`（用量记账、空结果说明、等待提示、数字口径、客户白话）。绿联身份见 §4.4。三处对齐见 §4.5。客户改法见 §4.6。人工复测修补见 §4.7。百炼见 §4.3。运维：§4.1 / §4.2。 |
 | 已 push origin / upstream | 是。 |
-| 已发版生产 | **是。** `sync-from-local.ps1`（未改 Docker/依赖，不 Rebuild）。`DEMO_LOGIN_ENABLED` 仍关。Postgres 仍不映射 5432。 |
+| 已发版生产 | **是。** `sync-from-local.ps1 -Rebuild`。业务代码打进镜像，不 Rebuild 会对不上。`DEMO_LOGIN_ENABLED` 仍关。Postgres 仍不映射 5432。 |
 | 接口实测 | `test_auth` / `test_customer_brief` / `test_onsite` / `test_usage` / `test_geo`：74 通过。`test_dashboard_workbench_prioritizes_seo_geo_diagnosis` 因 CSV 日期窗口仍偶发；`test_seeded_demo_counts_align_across_surfaces` 仍偶发。 |
 | 未完成 | 没有单独的绿联客户经理号，这次用 `admin@weiyids.com`。「客户已上线」还不能留下址。博查源质量仍差。IndexNow / GSC 仍要配钥匙。不要公开注册。不要自动群发。 |
 | 下一台先做 | 公司先 `git pull origin main`。强制刷新：博查/Tavily 成功后顶栏用量应加；买家问题 0 条是红字；空登录是中文；客户说明不要出现 `GEO-ENT-002` / `schema`。不要两边同时改。`localtest.db` 不要提交。 |
