@@ -7,7 +7,7 @@
 
 约定：家里和公司**不会同时改**。换机器前必须把这边 push 完。
 
-最后更新：2026-08-23 00:15（家里。产品 `432fd6a`。绿联身份见 §4.4。同一问三处对齐见 §4.5。客户改法见 §4.6。人工复测修补见 §4.7。）。
+最后更新：2026-08-23 01:10（家里。产品 `526c158`。上线地址见 `01d8b3b`。绿联身份见 §4.4。同一问三处对齐见 §4.5。客户改法见 §4.6。人工复测修补见 §4.7。）。
 
 ---
 
@@ -350,15 +350,15 @@ git log -1 --oneline
 
 | 项 | 值 |
 | --- | --- |
-| 日期 | 2026-08-23 00:15 |
+| 日期 | 2026-08-23 01:10 |
 | 最后一台 | 家里 `D:\workspace\G-snipers海外版` |
 | 分支 | `main` |
-| 提交 | 产品 `432fd6a`（用量记账、空结果说明、等待提示、数字口径、客户白话）。绿联身份见 §4.4。三处对齐见 §4.5。客户改法见 §4.6。人工复测修补见 §4.7。百炼见 §4.3。运维：§4.1 / §4.2。 |
+| 提交 | 产品 `526c158`（意外 500 不再甩英文）。上线地址 `01d8b3b`。用量与空态 `432fd6a`。绿联身份见 §4.4。三处对齐见 §4.5。客户改法见 §4.6。人工复测修补见 §4.7。百炼见 §4.3。运维：§4.1 / §4.2。 |
 | 已 push origin / upstream | 是。 |
 | 已发版生产 | **是。** `sync-from-local.ps1 -Rebuild`。业务代码打进镜像，不 Rebuild 会对不上。`DEMO_LOGIN_ENABLED` 仍关。Postgres 仍不映射 5432。 |
-| 接口实测 | `test_auth` / `test_customer_brief` / `test_onsite` / `test_usage` / `test_geo`：74 通过。`test_dashboard_workbench_prioritizes_seo_geo_diagnosis` 因 CSV 日期窗口仍偶发；`test_seeded_demo_counts_align_across_surfaces` 仍偶发。 |
-| 未完成 | 没有单独的绿联客户经理号，这次用 `admin@weiyids.com`。「客户已上线」还不能留下址。博查源质量仍差。IndexNow / GSC 仍要配钥匙。不要公开注册。不要自动群发。 |
-| 下一台先做 | 公司先 `git pull origin main`。强制刷新：博查/Tavily 成功后顶栏用量应加；买家问题 0 条是红字；空登录是中文；客户说明不要出现 `GEO-ENT-002` / `schema`。不要两边同时改。`localtest.db` 不要提交。 |
+| 接口实测 | `test_http_errors` 2 通过；`test_geo_ticket_verify_requires_confirm_and_can_reopen` 通过。`test_dashboard_workbench_prioritizes_seo_geo_diagnosis` 因 CSV 日期窗口仍偶发。 |
+| 未完成 | 没有单独的绿联客户经理号，这次用 `admin@weiyids.com`。博查源质量仍差。IndexNow / GSC 仍要配钥匙。不要公开注册。不要自动群发。 |
+| 下一台先做 | 公司先 `git pull origin main`。强制刷新：换站或登录若后端失败，应是「这次没办成，请再试一次」，不要出现 Internal Server Error。客户已上线必须填页/帖地址。不要两边同时改。 |
 
 `www` 灰云、A 仍 `39.97.52.149`。`relay.weiyids.com` 橙云，不要 CNAME 回 `workers.dev`。不要开 Google Ads。不要在服务器 `git pull`。
 
