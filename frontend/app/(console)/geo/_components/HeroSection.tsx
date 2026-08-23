@@ -57,7 +57,7 @@ export function HeroSection({
           </div>
           <h1 className="mt-3 text-2xl font-semibold text-slate-950">AI 搜索可见度</h1>
           <p className="mt-1 max-w-4xl text-sm leading-6 text-slate-500">
-            用买家会问的问题，看 AI 回答里有没有提到客户、有没有给出官网、是不是只在推荐竞品。没有联网来源的结果只作分析参考。
+            用买家会问的问题，看联网搜索结果里有没有提到客户、有没有给出官网。默认抽查是 Tavily / 博查等搜索源，不是 ChatGPT、Perplexity 本人。没有核对过的官网链接，不能写进客户说明当铁证。
           </p>
           <div className="mt-2">
             <UsageTodayBar meters={["bocha", "bailian", "tavily", "llm"]} refreshToken={busyAction} />

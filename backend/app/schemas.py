@@ -644,6 +644,13 @@ class GeoProviderStatusListOut(BaseModel):
     note: str = "DeepSeek/LLM 可用于分析；联网 AI 搜索 provider 只有返回 citation/source 时才计入真实引用。"
 
 
+class GeoSampleResultVerifyIn(BaseModel):
+    confirmed: bool = False
+    checked_url: str = ""
+    passed: bool = True
+    note: str | None = None
+
+
 class GeoSampleResultOut(BaseModel):
     id: str
     run_id: str

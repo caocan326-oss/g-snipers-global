@@ -44,7 +44,11 @@ def _geo_plain(geo) -> tuple[str, str]:
         elif geo.latest_mentioned and geo.latest_owned == 0:
             core = f"联网搜索写了 {n} 条记录，其中 {geo.latest_mentioned} 条提到品牌，没有给出官网。"
         elif geo.latest_owned:
-            core = f"联网搜索写了 {n} 条记录，其中 {geo.latest_owned} 条给出了疑似官网，还要核对。"
+            verified = (getattr(geo, "verified_citation_rate", None) or "").strip()
+            if verified and verified not in {"未测", "尚未检查"} and not verified.startswith("0"):
+                core = f"联网搜索写了 {n} 条记录，其中 {geo.latest_owned} 条给出了疑似官网；已核对比例 {verified}。"
+            else:
+                core = f"联网搜索写了 {n} 条记录，其中 {geo.latest_owned} 条给出了疑似官网，还要人工打开核对，不能写成已经确认。"
         else:
             core = f"联网搜索写了 {n} 条记录。"
         extra = ""
@@ -55,7 +59,8 @@ def _geo_plain(geo) -> tuple[str, str]:
         if geo.latest_third_party and geo.latest_owned == 0 and split:
             extra = f"{split}搜到 {geo.latest_third_party} 个外来网址，不能写成给出了官网。"
         compare = getattr(geo, "compare_note", "") or ""
-        return core, " ".join(part for part in (core, extra, compare, engines) if part)
+        bound = "这一轮是联网搜索源（如 Tavily / 博查），不是 ChatGPT 本人。"
+        return core, " ".join(part for part in (core, extra, compare, bound, engines) if part)
     if geo.prompts:
         core = f"{geo.prompts} 个买家问题还没联网抽查。"
         return core, f"{core}{engines}引擎空位不算这一周的缺口。"

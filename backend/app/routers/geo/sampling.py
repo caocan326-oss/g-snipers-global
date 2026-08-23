@@ -17,9 +17,12 @@ from app.models import (
     Tenant,
     User,
 )
+from app.risk import require_confirm
 from app.schemas import (
     GeoAutoSampleIn,
     GeoGroundedBatchOut,
+    GeoSampleResultOut,
+    GeoSampleResultVerifyIn,
     GeoSampleRunCreate,
     GeoSampleRunOut,
     GeoTicketDraftOut,
@@ -35,6 +38,7 @@ from .common import (
     _extract_urls,
     _citation_buckets,
     _json_list,
+    _result_out,
     _root_domain,
     _run_out,
     _sha256,
@@ -57,6 +61,42 @@ def list_sample_runs(user: User = Depends(get_current_user), db: Session = Depen
         .all()
     )
     return [_run_out(row, include_results=True) for row in rows]
+
+
+@router.post("/sample-results/{result_id}/verify", response_model=GeoSampleResultOut)
+def verify_sample_result(
+    result_id: str,
+    body: GeoSampleResultVerifyIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> GeoSampleResultOut:
+    require_confirm(body.confirmed, action="核对官网来源")
+    row = db.get(GeoSampleResult, result_id)
+    if row is None or row.tenant_id != user.tenant_id:
+        raise HTTPException(status_code=404, detail="抽查记录不存在")
+    owned = _json_list(row.owned_citations_json)
+    if not owned:
+        raise HTTPException(
+            status_code=400,
+            detail="这条没有客户官网链接。购物页和外来网址不能核成「给出了官网」。",
+        )
+    checked = (body.checked_url or "").strip()
+    if not checked:
+        raise HTTPException(status_code=400, detail="请选择你打开核对过的客户官网地址。")
+    if checked not in owned:
+        raise HTTPException(
+            status_code=400,
+            detail="只能核对客户官网链接。不要拿购物页或其它外来网址勾通过。",
+        )
+    row.verification_status = "passed" if body.passed else "failed"
+    note = (body.note or "").strip()
+    if body.passed:
+        row.verification_note = note or f"已打开核对：{checked}。能打开，且是客户页。"
+    else:
+        row.verification_note = note or f"已打开核对：{checked}。打不开或不是客户页。"
+    db.commit()
+    db.refresh(row)
+    return _result_out(row)
 
 
 @router.post("/sample-runs/from-observations", response_model=GeoSampleRunOut, status_code=201)

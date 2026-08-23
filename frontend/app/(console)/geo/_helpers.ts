@@ -82,7 +82,7 @@ export function geoEvidenceVerdict(summary: GeoSummary | null, runs: GeoSampleRu
   if (pendingOwned.length > 0) {
     return {
       title: "发现疑似官网来源，还需核对",
-      text: `已有 ${pendingOwned.length} 条疑似客户自己的网址。请确认能打开、内容相关、确属客户资产后再写入正式结论。`,
+      text: `已有 ${pendingOwned.length} 条疑似客户自己的网址。请在检查批次里打开客户官网链接，点「打开过，核对通过」后再写入正式结论。购物页不能勾通过。`,
       tone: "amber" as const,
       level: "待核对",
     };

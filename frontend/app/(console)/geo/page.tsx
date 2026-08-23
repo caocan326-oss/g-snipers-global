@@ -344,6 +344,30 @@ export default function GeoPage() {
     }
   }
 
+  async function verifyOwnedCitation(resultId: string, checkedUrl: string, passed: boolean) {
+    setError("");
+    setNote("");
+    setBusyAction(resultId);
+    try {
+      await api(`/api/geo/sample-results/${resultId}/verify`, {
+        method: "POST",
+        body: JSON.stringify({
+          confirmed: true,
+          checked_url: checkedUrl,
+          passed,
+          note: confirmNote || null,
+        }),
+      });
+      setNote(passed ? "已记下：客户官网打开核对通过。" : "已记下：该官网链接打不开或不是客户页。");
+      loadRuns();
+      loadPrompts();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "官网核对失败");
+    } finally {
+      setBusyAction("");
+    }
+  }
+
   async function reopenTicket(id: string) {
     await api(`/api/geo/tickets/${id}/reopen`, { method: "POST", body: JSON.stringify({ note: confirmNote }) });
     loadTickets();
@@ -465,7 +489,7 @@ export default function GeoPage() {
 
       <MetricsGrid summary={summary} />
 
-      <SampleRunsCard runs={runs} />
+      <SampleRunsCard runs={runs} busyId={busyAction} verifyOwnedCitation={verifyOwnedCitation} />
 
       <TabNav tab={tab} setTab={setTab} />
 
