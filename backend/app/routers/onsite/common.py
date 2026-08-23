@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.models import CrawlSession, OnsiteIssue, SitePage, Tenant, User
 from app.onsite_analyzer import reconcile_issues
 from app.onsite_fetch import OriginError, normalize_origin
+from app.onsite_loop import issue_customer_note, issue_customer_paste
 from app.risk import needs_confirm
 from app.schemas import CrawlSessionOut, OnsiteIssueOut, SitePageOut
 
@@ -82,7 +83,12 @@ def _ai_issue_candidates(db: Session, user: User) -> list[OnsiteIssue]:
     return rows
 
 
-def _issue_out(row: OnsiteIssue, page: SitePage | None = None) -> OnsiteIssueOut:
+def _site_origin(db: Session, tenant_id: str) -> str:
+    tenant = db.get(Tenant, tenant_id)
+    return ((tenant.site_origin if tenant else "") or "").rstrip("/")
+
+
+def _issue_out(row: OnsiteIssue, page: SitePage | None = None, site_origin: str = "") -> OnsiteIssueOut:
     p = page or row.page
     guidance = CATEGORY_GUIDANCE.get(
         row.category,
@@ -122,6 +128,8 @@ def _issue_out(row: OnsiteIssue, page: SitePage | None = None) -> OnsiteIssueOut
         result_url=row.result_url or "",
         blocked_reason=row.blocked_reason or "",
         owner_hint=row.owner_hint or (guidance["owner"] if review_required else "内容运营 / 客户经理"),
+        customer_note=issue_customer_note(row, p, site_origin),
+        customer_paste=issue_customer_paste(row, p, site_origin),
         last_checked_at=row.last_checked_at,
         closed_at=row.closed_at,
     )

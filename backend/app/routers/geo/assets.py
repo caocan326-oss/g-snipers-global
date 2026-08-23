@@ -15,12 +15,16 @@ from app.schemas import (
     GeoChecklistItemOut,
     GeoChecklistItemUpdate,
 )
+from app.site_identity import adopt_live_site
 
 from . import router
 
 
 @router.get("/assets", response_model=list[GeoAssetOut])
 def list_assets(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> list[GeoAsset]:
+    tenant = db.get(Tenant, user.tenant_id)
+    if tenant is not None and adopt_live_site(db, tenant):
+        db.commit()
     return db.query(GeoAsset).filter(GeoAsset.tenant_id == user.tenant_id).all()
 
 

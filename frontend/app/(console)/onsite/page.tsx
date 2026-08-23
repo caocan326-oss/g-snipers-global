@@ -805,13 +805,13 @@ export default function OnsiteBoardPage() {
   }
 
   async function copyDraft(issue: OnsiteIssue) {
-    const text = drafts[issue.id] ?? issue.proposed_change;
-    if (!text?.trim()) {
-      setError("没有可复制的改法。");
+    const text = (issue.customer_paste || issue.customer_note || "").trim();
+    if (!text) {
+      setError("没有可复制的短稿。");
       return;
     }
     await navigator.clipboard.writeText(text);
-    setNote("改法已复制。");
+    setNote("短稿已复制，可直接贴微信或邮件。");
   }
 
   async function create(e: FormEvent) {

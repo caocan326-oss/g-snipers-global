@@ -17,7 +17,7 @@ from app.schemas import (
 
 from . import router
 from .constants import BOARD_ACTIONABLE, ISSUE_STATUSES
-from .common import _issue_out, _owned_page, _page_out
+from .common import _issue_out, _owned_page, _page_out, _site_origin
 
 
 @router.get("/pages", response_model=list[SitePageOut])
@@ -59,9 +59,10 @@ def get_page(
     if page is None:
         raise HTTPException(status_code=404, detail="页面不存在")
     base = _page_out(db, page)
+    origin = _site_origin(db, user.tenant_id)
     return SitePageDetailOut(
         **base.model_dump(),
-        issues=[_issue_out(i, page) for i in page.issues],
+        issues=[_issue_out(i, page, origin) for i in page.issues],
     )
 
 
@@ -115,9 +116,10 @@ def issue_board(user: User = Depends(get_current_user), db: Session = Depends(ge
             workflow_counts["verified"] += 1
         if row.status == "wont_fix":
             workflow_counts["wont_fix"] += 1
+    origin = _site_origin(db, user.tenant_id)
     for row in rows:
         sev = row.severity if row.severity in groups else "low"
-        groups[sev].append(_issue_out(row))
+        groups[sev].append(_issue_out(row, site_origin=origin))
     return OnsiteBoardOut(
         pages=len(pages),
         analyzed_pages=analyzed,

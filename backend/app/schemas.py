@@ -498,6 +498,8 @@ class GeoTicketOut(BaseModel):
     recommended_action: str = ""
     customer_note: str = ""
     customer_paste: str = ""
+    page_label: str = ""
+    page_url: str = ""
     retest_method: str = ""
     retest_result: str = ""
     sample_note: str = ""
@@ -777,6 +779,8 @@ class OnsiteIssueOut(BaseModel):
     result_url: str = ""
     blocked_reason: str = ""
     owner_hint: str = ""
+    customer_note: str = ""
+    customer_paste: str = ""
     last_checked_at: datetime | None = None
     closed_at: datetime | None = None
 

@@ -36,7 +36,7 @@ import { localeForCode } from "@/lib/countries";
 import { geoEvidenceVerdict, type Tab } from "./_helpers";
 
 export default function GeoPage() {
-  const [tab, setTab] = useState<Tab>("sample");
+  const [tab, setTab] = useState<Tab>("tickets");
   const [prompts, setPrompts] = useState<GeoPrompt[]>([]);
   const [summary, setSummary] = useState<GeoSummary | null>(null);
   const [targets, setTargets] = useState<ProjectTargets | null>(null);
@@ -114,13 +114,6 @@ export default function GeoPage() {
     const res = await api<AiAssist>(`/api/geo/prompts/${id}/ai`, { method: "POST", body: JSON.stringify({ step: "analyze" }) });
     if (res.status === "未配置" || res.status === "未测") setError(res.detail || res.status);
     loadPrompts();
-  }
-
-  async function aiTicket(id: string) {
-    setError("");
-    const res = await api<AiAssist>(`/api/geo/tickets/${id}/ai`, { method: "POST", body: JSON.stringify({ step: "review" }) });
-    if (res.status === "未配置") setError(res.detail);
-    loadTickets();
   }
 
   async function aiAsset(id: string) {
@@ -331,19 +324,6 @@ export default function GeoPage() {
     loadTickets();
   }
 
-  async function verifyTicket(id: string, confirmed: boolean) {
-    setError("");
-    try {
-      await api(`/api/geo/tickets/${id}/verify`, {
-        method: "POST",
-        body: JSON.stringify({ confirmed, note: confirmNote }),
-      });
-      loadTickets();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "确认失败");
-    }
-  }
-
   async function verifyOwnedCitation(resultId: string, checkedUrl: string, passed: boolean) {
     setError("");
     setNote("");
@@ -366,11 +346,6 @@ export default function GeoPage() {
     } finally {
       setBusyAction("");
     }
-  }
-
-  async function reopenTicket(id: string) {
-    await api(`/api/geo/tickets/${id}/reopen`, { method: "POST", body: JSON.stringify({ note: confirmNote }) });
-    loadTickets();
   }
 
   async function setHandoff(id: string, handoff: "drafted" | "sent" | "live", resultUrl = "") {
@@ -476,18 +451,21 @@ export default function GeoPage() {
         error={error}
       />
 
-      <ProviderStatusCard providers={providers} />
-
-      <EvidenceQualityCard
-        evidenceVerdict={evidenceVerdict}
-        runs={runs}
-        summary={summary}
-        providerQuality={providerQuality}
-      />
-
-      <TargetsCard targets={targets} />
-
-      <MetricsGrid summary={summary} />
+      <details className="rounded-md border border-dashed border-slate-200 bg-white p-4">
+        <summary className="cursor-pointer text-sm font-medium text-slate-700">客户经理工具：数据源状态 / 抽查质量 / 目标词</summary>
+        <div className="mt-4 space-y-4">
+          <ProviderStatusCard providers={providers} />
+          <EvidenceQualityCard
+            evidenceVerdict={evidenceVerdict}
+            runs={runs}
+            summary={summary}
+            providerQuality={providerQuality}
+          />
+          <TargetsCard targets={targets} />
+          <MetricsGrid summary={summary} />
+          <Input placeholder="确认 / 复查备注（登记上线时可选）" value={confirmNote} onChange={(e) => setConfirmNote(e.target.value)} />
+        </div>
+      </details>
 
       <SampleRunsCard runs={runs} busyId={busyAction} verifyOwnedCitation={verifyOwnedCitation} />
 
@@ -512,10 +490,10 @@ export default function GeoPage() {
           ticketForm={ticketForm}
           setTicketForm={setTicketForm}
           addTicket={addTicket}
-          aiTicket={aiTicket}
-          verifyTicket={verifyTicket}
-          reopenTicket={reopenTicket}
           setHandoff={setHandoff}
+          retestSameQuestions={retestSameQuestions}
+          canRetestSame={Boolean(runs[0]?.results?.length)}
+          busyAction={busyAction}
         />
       ) : null}
 
@@ -534,8 +512,6 @@ export default function GeoPage() {
           setCheck={setCheck}
         />
       ) : null}
-
-      <Input placeholder="确认 / 复查备注" value={confirmNote} onChange={(e) => setConfirmNote(e.target.value)} />
     </div>
   );
 }

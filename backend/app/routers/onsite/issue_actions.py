@@ -33,10 +33,15 @@ from .common import (
     _owned_issue,
     _owned_page,
     _require_origin,
+    _site_origin,
     _tenant,
 )
 from .constants import CATEGORIES
 from .crawl import _fetch_one_registered, _reconcile_site_patterns
+
+
+def _out(db: Session, user: User, row: OnsiteIssue, page: SitePage | None = None) -> OnsiteIssueOut:
+    return _issue_out(row, page, _site_origin(db, user.tenant_id))
 
 
 def _ai_after_analyze(db: Session, user: User, pages: list[SitePage], *, limit: int = 3) -> tuple[str, int, int]:
@@ -139,7 +144,7 @@ def create_issue(
     db.add(row)
     db.commit()
     db.refresh(row)
-    return _issue_out(row, page)
+    return _out(db, user, row, page)
 
 
 @router.patch("/issues/{issue_id}/draft", response_model=OnsiteIssueOut)
@@ -157,7 +162,7 @@ def write_change_draft(
         row.status = "drafted"
     db.commit()
     db.refresh(row)
-    return _issue_out(row)
+    return _out(db, user, row)
 
 
 @router.post("/issues/{issue_id}/apply-draft", response_model=OnsiteIssueOut)
@@ -177,7 +182,7 @@ def apply_draft(
     row.status = "draft_applied"
     db.commit()
     db.refresh(row)
-    return _issue_out(row, page)
+    return _out(db, user, row, page)
 
 
 @router.post("/issues/{issue_id}/confirm-apply", response_model=OnsiteIssueOut)
@@ -206,7 +211,7 @@ def confirm_apply(
             pass
     db.commit()
     db.refresh(row)
-    return _issue_out(row, page)
+    return _out(db, user, row, page)
 
 
 @router.post("/issues/{issue_id}/mark-executed", response_model=OnsiteIssueOut)
@@ -230,7 +235,7 @@ def mark_executed(
     row.last_checked_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(row)
-    return _issue_out(row, page)
+    return _out(db, user, row, page)
 
 
 @router.post("/issues/{issue_id}/retest", response_model=OnsiteIssueOut)
@@ -255,7 +260,7 @@ def retest_issue(
     row.retest_result = "已重新抓取页面并刷新诊断状态。"
     db.commit()
     db.refresh(row)
-    return _issue_out(row, page)
+    return _out(db, user, row, page)
 
 
 @router.post("/issues/{issue_id}/wont-fix", response_model=OnsiteIssueOut)
@@ -276,7 +281,7 @@ def wont_fix_issue(
         row.evidence = ((row.evidence or "").rstrip() + f"\n忽略原因：{note}").strip()
     db.commit()
     db.refresh(row)
-    return _issue_out(row, page)
+    return _out(db, user, row, page)
 
 
 @router.post("/issues/{issue_id}/reopen", response_model=OnsiteIssueOut)
@@ -293,7 +298,7 @@ def reopen_issue(
     row.closed_at = None
     db.commit()
     db.refresh(row)
-    return _issue_out(row, page)
+    return _out(db, user, row, page)
 
 
 @router.post("/issues/{issue_id}/ai", response_model=AiAssistOut)

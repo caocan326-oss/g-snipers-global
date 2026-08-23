@@ -16,6 +16,7 @@ from app.geo_loop import (
     ticket_live_url,
     weekly_paste,
 )
+from app.onsite_loop import issue_customer_note
 from app.routers.geo.prompts import geo_summary
 from app.routers.onsite.common import (
     _active_issue,
@@ -221,7 +222,8 @@ def build_customer_brief(user: User, db: Session) -> CustomerBriefOut:
         geo_lines.append(f"{ticket.title}\n{note}".strip() if note else ticket.title)
     onsite_slots = max(0, 3 - len(this_week) - len(geo_lines))
     for issue in priority_issues[:onsite_slots]:
-        this_week.append(f"{_severity_label(issue.severity)}：{_plain_title(issue.title)}（{_page_short(issue.page)}）")
+        note = issue_customer_note(issue, issue.page, site_origin)
+        this_week.append(f"{_severity_label(issue.severity)}\n{note}".strip() if note else _plain_title(issue.title))
     this_week.extend(geo_lines)
     if not this_week:
         this_week.append("对照已有记录，整理给客户的说明，并安排下一轮复查。")

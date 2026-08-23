@@ -10,6 +10,7 @@ from app.models import (
     BacklinkGap,
     DemandSignal,
     DistributionJob,
+    GeoAsset,
     GeoObservation,
     GeoPrompt,
     GeoSampleResult,
@@ -25,6 +26,15 @@ LOCK_PROMPT_MARKERS = ("smart lock", "スマートロック", "renters install",
 LOCK_KEYWORD_EXACT = {"smart lock for renters", "賃貸", "スマートロック", "許可"}
 LOCK_GAP_MARKERS = ("smarthome-weekly.example", "old-blog.example", "renters-lock")
 LOCK_GAP_COMPETITORS = {"august home", "level lock", "qrio", "nuki"}
+LOCK_ASSET_MARKERS = (
+    "智能门锁",
+    "演示客户",
+    "smart lock",
+    "renters",
+    "賃貸",
+    "スマートロック",
+    "snipers.com.cn",
+)
 
 
 def host_of(origin: str | None) -> str:
@@ -99,4 +109,19 @@ def adopt_live_site(db: Session, tenant: Tenant) -> str:
             gaps += 1
     if gaps:
         notes.append(f"已去掉 {gaps} 条门锁/演示站外示例")
+
+    assets_cleared = 0
+    for asset in db.query(GeoAsset).filter(GeoAsset.tenant_id == tenant.id).all():
+        blob = f"{asset.title}\n{asset.body}".lower()
+        if any(marker.lower() in blob for marker in LOCK_ASSET_MARKERS):
+            asset.body = ""
+            if asset.kind == "cite_checklist":
+                asset.title = "可供引用的材料"
+            elif asset.kind == "llms_txt":
+                asset.title = "llms.txt 草稿"
+            asset.status = "draft"
+            assets_cleared += 1
+    if assets_cleared:
+        notes.append(f"已清空 {assets_cleared} 份门锁/演示引用材料")
+
     return "；".join(notes)

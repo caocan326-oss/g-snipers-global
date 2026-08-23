@@ -53,11 +53,10 @@ export function HeroSection({
             <Badge tone={(summary?.latest_sampled || summary?.evidence_results || summary?.recorded) ? "green" : "amber"}>
               {(summary?.latest_sampled || summary?.evidence_results || summary?.recorded) ? "已有抽查" : "还没抽查"}
             </Badge>
-            <Badge tone="blue">标准买家问题</Badge>
           </div>
           <h1 className="mt-3 text-2xl font-semibold text-slate-950">AI 搜索可见度</h1>
           <p className="mt-1 max-w-4xl text-sm leading-6 text-slate-500">
-            用买家会问的问题，看联网搜索结果里有没有提到客户、有没有给出官网。默认抽查是 Tavily / 博查等搜索源，不是 ChatGPT、Perplexity 本人。没有核对过的官网链接，不能写进客户说明当铁证。
+            看老外那句问有没有提到客户、有没有给出官网；下面待处理项是短稿和再测。默认抽查是 Tavily / 博查，不是 ChatGPT 本人。
           </p>
           <div className="mt-2">
             <UsageTodayBar meters={["bocha", "bailian", "tavily", "llm"]} refreshToken={busyAction} />
@@ -83,13 +82,34 @@ export function HeroSection({
           <Wand2 className="mr-2 h-4 w-4" />
           {busyAction === "seed-prompts" ? "生成中…" : "生成买家问题"}
         </Button>
-        <Button size="sm" variant="outline" onClick={createEvidenceRun} disabled={busyAction === "evidence-run"}>
-          {busyAction === "evidence-run" ? "整理中…" : "保存当前记录"}
+        <Button
+          size="sm"
+          onClick={runGroundedBatch}
+          disabled={busyAction === "auto-sample" || busyAction === "grounded-batch" || !(providers?.providers ?? []).some((provider) => provider.configured && provider.web_grounded && (provider.key === "bocha" || provider.key === "bailian" || provider.key === "tavily"))}
+        >
+          <Globe2 className="mr-2 h-4 w-4" />
+          {busyAction === "grounded-batch" ? "抽查中…" : "联网抽查"}
         </Button>
-        <Button size="sm" variant="outline" onClick={draftTicketsFromEvidence} disabled={busyAction === "draft-tickets"}>
-          {busyAction === "draft-tickets" ? "生成中…" : "生成待处理项"}
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={retestSameQuestions}
+          disabled={!canRetestSame || busyAction === "auto-sample" || busyAction === "grounded-batch" || busyAction === "retest-same"}
+        >
+          {busyAction === "retest-same" ? "复测中…" : "同一问再测"}
         </Button>
-        <div className="flex flex-wrap items-center gap-2 rounded-md border border-slate-200 bg-slate-50 p-1">
+        <Button size="sm" variant="outline" onClick={downloadGeoReport}>
+          <FileText className="mr-2 h-4 w-4" />
+          下载说明
+        </Button>
+        <Button size="sm" variant="outline" onClick={downloadGeoTable}>
+          <Download className="mr-2 h-4 w-4" />
+          下载记录
+        </Button>
+      </div>
+      <details className="mt-3 rounded-md border border-dashed border-slate-200 bg-slate-50/60 p-3">
+        <summary className="cursor-pointer text-xs font-medium text-slate-600">客户经理工具：单源抽查 / 手工整理</summary>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
           <select
             className="h-8 min-w-[190px] rounded border border-slate-200 bg-white px-2 text-xs outline-none focus:border-emerald-500"
             value={sampleProvider}
@@ -102,42 +122,22 @@ export function HeroSection({
               </option>
             ))}
           </select>
-          <Button size="sm" onClick={runAutoSample} disabled={busyAction === "auto-sample" || busyAction === "grounded-batch" || Boolean(selectedProvider && !selectedProvider.configured)}>
-            <Globe2 className="mr-2 h-4 w-4" />
+          <Button size="sm" variant="outline" onClick={runAutoSample} disabled={busyAction === "auto-sample" || busyAction === "grounded-batch" || Boolean(selectedProvider && !selectedProvider.configured)}>
             {busyAction === "auto-sample" ? "检查中…" : "只测这一源"}
           </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={runGroundedBatch}
-            disabled={busyAction === "auto-sample" || busyAction === "grounded-batch" || !(providers?.providers ?? []).some((provider) => provider.configured && provider.web_grounded && (provider.key === "bocha" || provider.key === "bailian" || provider.key === "tavily"))}
-          >
-            {busyAction === "grounded-batch" ? "抽查中…" : "已配置的联网源都测"}
+          <Button size="sm" variant="outline" onClick={createEvidenceRun} disabled={busyAction === "evidence-run"}>
+            {busyAction === "evidence-run" ? "整理中…" : "保存当前记录"}
           </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={retestSameQuestions}
-            disabled={!canRetestSame || busyAction === "auto-sample" || busyAction === "grounded-batch" || busyAction === "retest-same"}
-          >
-            {busyAction === "retest-same" ? "复测中…" : "同一问再测"}
+          <Button size="sm" variant="outline" onClick={draftTicketsFromEvidence} disabled={busyAction === "draft-tickets"}>
+            {busyAction === "draft-tickets" ? "生成中…" : "生成待处理项"}
           </Button>
         </div>
-        <Button size="sm" variant="outline" onClick={downloadGeoReport}>
-          <FileText className="mr-2 h-4 w-4" />
-          下载 AI 搜索说明（PDF）
-        </Button>
-        <Button size="sm" variant="outline" onClick={downloadGeoTable}>
-          <Download className="mr-2 h-4 w-4" />
-          下载检查记录
-        </Button>
-      </div>
+        <p className="mt-2 text-[11px] text-slate-500">
+          办事默认用上面的「联网抽查」。这里是单源调试。当前：{selectedProvider?.label ?? "尚未选择"}。
+        </p>
+      </details>
       {note ? <p className="mt-3 text-sm text-emerald-700">{note}</p> : null}
       {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
-      <p className="mt-3 text-xs text-slate-500">
-        一次只跑下拉里选中的源。已配置但没选的卡片会空着，不是坏了。当前：{selectedProvider?.label ?? "尚未选择"} · {selectedProvider?.web_grounded ? "联网来源：返回网址时，可算作给出了官网" : "分析参考：只判断有没有提到品牌，不算给出官网"}。
-        「同一问再测」只对最近一批买家问题再抽一次，记下有没有变化，不承诺这次会提到。
-      </p>
     </section>
   );
 }

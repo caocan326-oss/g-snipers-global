@@ -96,6 +96,8 @@ def test_customer_brief_merges_onsite_and_geo(client: TestClient, demo_user, db)
     assert "客户改完你再看一次" in markdown
     assert "这个月有几个老外来问过" in markdown
     assert any("首页标题过长" in item for item in body["this_week"])
+    assert any("请改这一页" in item and "首页标题过长" in item for item in body["this_week"])
+    assert any("紧急" in item for item in body["this_week"])
     assert any(("尚未检查" in item or "还没联网抽查" in item) for item in body["untested"])
 
     workbench = client.get("/api/dashboard/workbench?days=28", headers=headers).json()
@@ -138,7 +140,8 @@ def test_seeded_demo_counts_align_across_surfaces(client: TestClient, db) -> Non
     assert "16 条检查" not in geo_act["subtitle"]
     assert "16 个买家问题" not in geo_act["subtitle"]
     assert "采样" not in brief["markdown"]
-    assert "英文安装问题：先记下 AI 怎么回答，再补说明页" in brief["markdown"]
+    # Seed creates two GEO tickets; brief keeps one GEO slot (ordered by updated_at).
+    assert any("许可问题" in item or "安装问题" in item for item in brief["this_week"])
     assert "16 条尚未检查" not in brief["headline"]
     assert "16 条尚未检查" not in brief["markdown"]
 

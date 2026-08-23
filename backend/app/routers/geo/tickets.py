@@ -17,9 +17,10 @@ from app.geo_loop import (
     ticket_handoff,
     ticket_live_url,
 )
-from app.models import GeoPrompt, GeoTicket, User
+from app.models import GeoPrompt, GeoTicket, Tenant, User
 from app.risk import require_confirm
 from app.schemas import AiAssistOut, AiStepIn, GeoTicketCreate, GeoTicketHandoffIn, GeoTicketOut, GeoTicketVerifyIn
+from app.site_identity import adopt_live_site
 
 from . import router
 from .common import _ticket_out
@@ -27,7 +28,10 @@ from .common import _ticket_out
 
 @router.get("/tickets", response_model=list[GeoTicketOut])
 def list_tickets(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> list[GeoTicketOut]:
-    if refresh_open_tickets_from_samples(db, user.tenant_id) or reconcile_open_ticket_status(db, user.tenant_id):
+    tenant = db.get(Tenant, user.tenant_id)
+    cleaned = adopt_live_site(db, tenant) if tenant is not None else ""
+    refreshed = refresh_open_tickets_from_samples(db, user.tenant_id) or reconcile_open_ticket_status(db, user.tenant_id)
+    if cleaned or refreshed:
         db.commit()
     by_prompt = latest_prompt_rows(db, user.tenant_id)
     rows = (

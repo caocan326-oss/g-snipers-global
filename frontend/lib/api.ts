@@ -827,6 +827,8 @@ export type GeoTicket = {
   recommended_action: string;
   customer_note?: string;
   customer_paste?: string;
+  page_label?: string;
+  page_url?: string;
   retest_method: string;
   retest_result: string;
   sample_note?: string;
@@ -968,6 +970,8 @@ export type OnsiteIssue = {
   result_url?: string;
   blocked_reason?: string;
   owner_hint?: string;
+  customer_note?: string;
+  customer_paste?: string;
   last_checked_at?: string | null;
   closed_at?: string | null;
 };
