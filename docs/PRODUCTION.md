@@ -247,6 +247,7 @@ powershell -File deploy/sync-from-local.ps1
 | 2026-08-22 | 产品/运维 | 公司发到 `cb78ec8`（`sync-from-local.ps1 -Rebuild`）。客户说明增加可复制短稿；GEO 待处理项可复制单条。短稿不写工作台内部用语。 |
 | 2026-08-23 | 产品/运维 | 家里发到 `e93dbf6`（`sync-from-local.ps1 -Rebuild`）。连不上与后端 500 拆开；控制台挂了留横幅不踢登录；GEO 购物页不算官网。 |
 | 2026-08-23 | 产品/运维 | 家里发到 `e1d2435`（`sync-from-local.ps1 -Rebuild`）。GEO「没给出官网」只跟海外源；复测不跟博查店链。 |
+| 2026-08-23 | 产品/运维 | 家里发到 `363b37b`（`sync-from-local.ps1 -Rebuild`）。GEO 官网核验收口：只能对着客户官网链接勾通过。 |
 
 ---
 
