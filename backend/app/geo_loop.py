@@ -104,6 +104,43 @@ def _third_party(row: GeoSampleResult) -> bool:
     return bool(_json_list(row.third_party_citations_json))
 
 
+# 博查常给中文购物页，不当成「海外源提到了却没官网」的开单依据。
+_CN_LEAN_ENGINES = frozenset({"bocha"})
+
+
+def _is_overseas_engine(engine: str) -> bool:
+    return (engine or "").strip().lower() not in _CN_LEAN_ENGINES
+
+
+def _overseas_rows(rows: list[GeoSampleResult]) -> list[GeoSampleResult]:
+    return [row for row in rows if _is_overseas_engine(row.engine or "")]
+
+
+def _mention_signal(rows: list[GeoSampleResult]) -> bool:
+    """Retest / ticket gates: prefer overseas sources when the round has them."""
+    overseas = _overseas_rows(rows)
+    if overseas:
+        return any(row.mentioned for row in overseas)
+    return any(row.mentioned for row in rows)
+
+
+def sample_reason_for_ticket(rows: list[GeoSampleResult], kind: str) -> str:
+    if not rows:
+        return ""
+    split = mention_split_note(rows)
+    if kind == "no_owned":
+        return f"海外联网源提到了品牌，没有给出客户官网{split}"
+    if kind == "absent":
+        return f"这一轮联网源都没提到我们{split}"
+    if kind == "competitor":
+        return f"回答里先推了别人{split}"
+    if kind == "unverified":
+        if any(_owned(row) for row in rows):
+            return f"抽查里有疑似官网，还没打开核对{split}"
+        return f"给出的网址还没打开核对{split}"
+    return split.strip("（）。") if split else ""
+
+
 def run_counts(run: GeoSampleRun | None) -> tuple[int, int, int, int]:
     results = list(getattr(run, "results", None) or [])
     return (
@@ -262,13 +299,14 @@ def _as_runs(value: GeoSampleRun | list[GeoSampleRun] | None) -> list[GeoSampleR
 
 
 def compare_prompt_note(latest_rows: list[GeoSampleResult], previous_rows: list[GeoSampleResult]) -> str:
-    curr_m = any(row.mentioned for row in latest_rows)
+    # Only mention + owned. Shop-page counts are not visibility.
+    curr_m = _mention_signal(latest_rows)
     curr_o = any(_owned(row) for row in latest_rows)
     if not previous_rows:
         mentioned = "这一次提到了。" if curr_m else "这一次没有提到。"
         owned = "给出了疑似官网，还要核对。" if curr_o else "没有给出官网。"
         return mentioned + owned
-    prev_m = any(row.mentioned for row in previous_rows)
+    prev_m = _mention_signal(previous_rows)
     prev_o = any(_owned(row) for row in previous_rows)
     if not prev_m and not curr_m:
         mention = "上次没有提到，这次仍没有提到。"
@@ -553,8 +591,9 @@ def loop_ticket_spec(
         )
         actions[action_kind] = note if action_kind == "unverified" else f"{note}\n{CUSTOMER_CLOSE}"
     rationale = f"对应页：{page_bit} · 官网：{url} · 渠道：{channel_name}"
-    if third_party and kind in {"absent", "no_owned"}:
-        rationale += "。回答里出现了外来网址，不能写成给出了官网。"
+    reason = sample_reason_for_ticket(sample_rows or [], kind)
+    if reason:
+        rationale += f"。{reason}"
     caveat = overseas_source_note(sample_rows or [], prompt)
     if caveat:
         rationale += f"。{caveat}"
@@ -597,11 +636,14 @@ def apply_loop_spec(ticket: GeoTicket, spec: dict, *, keep_handoff: bool = True)
 def kinds_from_sample_rows(rows: list[GeoSampleResult]) -> list[str]:
     mentioned = any(row.mentioned for row in rows)
     owned = any(_owned(row) for row in rows)
+    overseas_mentioned = any(row.mentioned for row in _overseas_rows(rows))
     competitors = any((row.competitor_hits or "").strip() for row in rows)
     kinds: list[str] = []
     if not mentioned:
         kinds.append("absent")
-    elif not owned:
+    elif not owned and overseas_mentioned:
+        # Only when an overseas source (e.g. Tavily) mentioned us without an owned URL.
+        # Bocha-only mention with shop pages is not a reason to ask the customer to fix a page.
         kinds.append("no_owned")
     if competitors:
         kinds.append("competitor")
