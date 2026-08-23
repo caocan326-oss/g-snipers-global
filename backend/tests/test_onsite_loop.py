@@ -34,10 +34,10 @@ def test_issue_customer_note_has_page_url_ask_and_retest() -> None:
     assert "问题：首页标题过长" in note
     assert "请做：把标题改成 100W USB-C Charger for Laptops | UGREEN" in note
     assert "重新打开页面" in note
+    assert ONSITE_CUSTOMER_CLOSE in note
 
     paste = issue_customer_paste(issue, page, "https://www.ugreen.com")
-    assert note in paste
-    assert ONSITE_CUSTOMER_CLOSE in paste
+    assert paste == note
 
 
 def test_issue_customer_note_falls_back_to_category_action() -> None:
@@ -65,3 +65,4 @@ def test_issue_customer_note_falls_back_to_category_action() -> None:
     assert "https://www.example.com/" in note
     assert "问题：页面缺少给搜索看的说明" in note
     assert "请做：起草页面说明标记" in note
+    assert ONSITE_CUSTOMER_CLOSE in note

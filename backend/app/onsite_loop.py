@@ -82,6 +82,7 @@ def issue_customer_note(
         or "改完后重新打开该页核对。"
     )
     lines.append(retest)
+    lines.append(ONSITE_CUSTOMER_CLOSE)
     return "\n".join(lines)
 
 
@@ -90,8 +91,7 @@ def issue_customer_paste(
     page: SitePage | None = None,
     site_origin: str = "",
 ) -> str:
-    note = issue_customer_note(issue, page, site_origin)
-    return "\n\n".join(part for part in (note, ONSITE_CUSTOMER_CLOSE) if part)
+    return issue_customer_note(issue, page, site_origin)
 
 
 def looks_like_http_url(url: str) -> bool:

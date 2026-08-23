@@ -489,14 +489,20 @@ def ticket_customer_note(ticket: GeoTicket, prompt: GeoPrompt | None = None) -> 
     url = str(ev.get("page_url") or "").strip()
     channel = str(ev.get("channel") or "").strip()
     if ev.get("kind") or page_bit or url:
-        return customer_note(kind=kind, question=question, page_bit=page_bit, url=url, channel=channel)
-    slim = _slim_stored_action(ticket.recommended_action)
-    return slim or ticket.title
+        note = customer_note(kind=kind, question=question, page_bit=page_bit, url=url, channel=channel)
+    else:
+        note = _slim_stored_action(ticket.recommended_action) or ticket.title
+    note = (note or "").strip()
+    if note and "不代改" not in note:
+        note = f"{note}\n{CUSTOMER_CLOSE}"
+    elif not note:
+        note = CUSTOMER_CLOSE
+    return note
 
 
 def ticket_paste(ticket: GeoTicket, prompt: GeoPrompt | None = None) -> str:
     note = ticket_customer_note(ticket, prompt)
-    parts = [ticket.title.strip(), note.strip(), CUSTOMER_CLOSE]
+    parts = [ticket.title.strip(), note.strip()]
     return "\n\n".join(part for part in parts if part)
 
 
