@@ -248,6 +248,7 @@ powershell -File deploy/sync-from-local.ps1
 | 2026-08-23 | 产品/运维 | 家里发到 `e93dbf6`（`sync-from-local.ps1 -Rebuild`）。连不上与后端 500 拆开；控制台挂了留横幅不踢登录；GEO 购物页不算官网。 |
 | 2026-08-23 | 产品/运维 | 家里发到 `e1d2435`（`sync-from-local.ps1 -Rebuild`）。GEO「没给出官网」只跟海外源；复测不跟博查店链。 |
 | 2026-08-23 | 产品/运维 | 家里发到 `363b37b`（`sync-from-local.ps1 -Rebuild`）。GEO 官网核验收口：只能对着客户官网链接勾通过。 |
+| 2026-08-23 | 产品/运维 | 家里发到 `d905cbf`（`sync-from-local.ps1 -Rebuild`）。没给出官网短稿写实；无客户官网链接时说明为何没有核对按钮。 |
 
 ---
 
