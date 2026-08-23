@@ -448,9 +448,14 @@ def customer_note(
     else:
         lines.append("还没有对应页，请先补一页再写这个问题。")
     asks = {
-        "absent": f"页里写清买家问的「{question}」，并放上官网链接。",
-        "no_owned": f"页里补能回答「{question}」的事实，并放上官网链接。",
-        "competitor": f"页里补和别人的对照，并放上官网链接。",
+        "absent": f"页里用英文写清买家问的「{question}」，并放上可点的官网链接。",
+        "no_owned": (
+            f"页里用英文写清能回答「{question}」的产品事实（规格、卖点、适用场景），"
+            f"并放上可点的官网链接（指向本页或官网产品页）。"
+            f"现在搜索提到了品牌，但链接里没有给出官网；改完告诉我，我再用同一问测一次。"
+            f"不保证这次一定给出官网。"
+        ),
+        "competitor": f"页里补和别人的对照（英文），并放上可点的官网链接。",
     }
     if kind in asks:
         lines.append(asks[kind])

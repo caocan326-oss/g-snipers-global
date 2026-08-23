@@ -1005,6 +1005,8 @@ def test_customer_note_is_short_and_skips_workbench_jargon() -> None:
     assert "usa-65585" in note
     assert question in note
     assert "LinkedIn Company Page" in note
+    assert "提到了品牌，但链接里没有给出官网" in note
+    assert "不保证这次一定给出官网" in note
     assert "工作台" not in note
     assert "可引用事实" not in note
     paste = weekly_paste("UGREEN", ["紧急：页面缺少给搜索看的说明（agents.md）", note])

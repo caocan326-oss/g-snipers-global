@@ -82,6 +82,11 @@ export function SampleRunsCard({
                     {shops.length ? <Badge tone="default">有购物页，不算官网</Badge> : null}
                     <span className="text-xs text-slate-500">{result.engine_label ?? result.engine}</span>
                   </div>
+                  {result.mentioned && !result.owned_citations.length ? (
+                    <p className="mt-2 text-xs text-amber-700">
+                      正文提到了品牌，但链接里没有客户官网，所以没有「核对通过」。上线地址栏填的页不算抽查给出了官网。
+                    </p>
+                  ) : null}
                   {result.answer_excerpt ? (
                     <p className="mt-2 whitespace-pre-wrap text-slate-700">{result.answer_excerpt}</p>
                   ) : (

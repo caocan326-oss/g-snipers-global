@@ -87,6 +87,15 @@ export function geoEvidenceVerdict(summary: GeoSummary | null, runs: GeoSampleRu
       level: "待核对",
     };
   }
+  const mentionedNoOwned = webGrounded.filter((result) => result.mentioned && result.owned_citations.length === 0);
+  if (mentionedNoOwned.length > 0) {
+    return {
+      title: "提到了品牌，但没有客户官网链接",
+      text: "正文里提到了客户，抽查链接里没有客户域名，所以页面上不会出现「核对通过」。上线地址栏填的官网不算抽查给出了官网。要等下一轮抽查真的带回客户官网链接，才能核对。",
+      tone: "amber" as const,
+      level: "缺官网链接",
+    };
+  }
   if (thirdPartyOnly.length > 0) {
     return {
       title: "有第三方来源，可转站外跟进",
