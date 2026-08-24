@@ -253,6 +253,7 @@ powershell -File deploy/sync-from-local.ps1
 | 2026-08-24 | 产品/运维 | 公司发到 `9006ec6`（`sync-from-local.ps1 -Rebuild`）。发给客户的短稿带上「自己发这一条」和两行英文。黄框不重复。不代发。站外仍不进清单。 |
 | 2026-08-24 | 产品/运维 | 公司发到 `b98325b`（`sync-from-local.ps1 -Rebuild`）。从历史网站恢复时按域名写回客户名。工单仍按站整包切换。 |
 | 2026-08-24 | 产品/运维 | 公司发到 `d7f02bf`（`sync-from-local.ps1 -Rebuild`）。站外卡片改为「打开官方发帖页」，不再写「接口可发」。不代发。 |
+| 2026-08-24 | 产品/运维 | 公司发到 `f5bdd92`（`sync-from-local.ps1 -Rebuild`）。执行记录回填帖链接写成「已回填」，渠道显示平台名，不写 directory。登记≠代发。 |
 
 ---
 
