@@ -276,8 +276,11 @@ def submit_result(
     job.result_url = body.result_url
     job.verify_status = body.verify_status
     job.status = "verifying" if body.verify_status == "pending" else "done" if body.verify_status == "live" else "submitted"
-    job.last_result = "已提交结果"
-    job.last_detail = body.evidence or f"Result URL: {body.result_url}"
+    job.last_result = "已回填结果链接"
+    note = (body.evidence or "").strip() or f"已记下：{body.result_url}"
+    if "登记≠我们代发" not in note:
+        note = f"{note} 登记≠我们代发。"
+    job.last_detail = note
     job.last_checked_at = datetime.now(timezone.utc)
     if job.gap_id:
         gap = db.get(BacklinkGap, job.gap_id)
@@ -371,13 +374,13 @@ def check_placement(
         else:
             job.verify_status = "failed"
             job.status = "submitted"
-            note = f"URL 返回 HTTP {response.status_code}，暂未通过存活核验。"
+            note = f"URL 返回 HTTP {response.status_code}，暂未通过存活核验。登记≠我们代发。"
     except httpx.HTTPError as exc:
         job.verify_status = "failed"
         job.status = "submitted"
-        note = f"核验请求失败：{str(exc)[:200]}"
+        note = f"核验请求失败：{str(exc)[:200]}。登记≠我们代发。"
 
-    job.last_result = "结果页面核验"
+    job.last_result = "已回填，核验未通过" if job.verify_status == "failed" else "结果页面核验"
     job.last_detail = note
     job.last_checked_at = datetime.now(timezone.utc)
     if job.gap_id:

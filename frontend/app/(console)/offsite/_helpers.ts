@@ -32,11 +32,27 @@ export const gapLabel: Record<string, string> = {
   ignored: "暂不处理",
 };
 
+export function jobStatusText(job: { status: string; last_result?: string; blocked_reason?: string }) {
+  if (
+    job.status === "blocked" &&
+    (job.last_result === "缺账号" || (job.blocked_reason || "").includes("needs_account"))
+  ) {
+    return "缺账号受阻";
+  }
+  return jobStatusLabel[job.status] ?? job.status;
+}
+
+export function jobChannelLabel(job: { platform_id?: string | null; provider_key: string }, platforms: { id: string; name: string }[]) {
+  const platform = platforms.find((row) => row.id === job.platform_id);
+  if (platform?.name) return platform.name;
+  return "客户自己发";
+}
+
 export const jobStatusLabel: Record<string, string> = {
   draft: "草稿",
   ready: "资料齐全",
   in_progress: "执行中",
-  submitted: "已提交",
+  submitted: "已回填",
   verifying: "核验中",
   done: "已完成",
   queued: "待人工执行",

@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import type { BacklinkGap, ContentAsset, DistGuide, DistJob, DistProvider, PlacementCheck, SourcePlatform, PlatformAccount } from "@/lib/api";
 
-import { jobStatusLabel, taskTypeLabel } from "../_helpers";
+import { jobChannelLabel, jobStatusText, taskTypeLabel } from "../_helpers";
 
 type DistForm = {
   gap_id: string;
@@ -82,7 +82,7 @@ export function DistributionTab({
                     <div className="flex flex-wrap items-center gap-2">
                       <div className="font-semibold text-slate-950">{j.title}</div>
                       <Badge tone={j.status === "sent" ? "green" : j.status === "failed" ? "red" : "amber"}>
-                        {jobStatusLabel[j.status] ?? j.status}
+                        {jobStatusText(j)}
                       </Badge>
                       <Badge>{taskTypeLabel[j.task_type] ?? j.task_type}</Badge>
                       {j.gap_id ? <Badge tone="blue">已绑定渠道</Badge> : null}
@@ -92,7 +92,7 @@ export function DistributionTab({
                     <div className="mt-2 grid gap-2 text-xs text-slate-500 md:grid-cols-3">
                       <span>负责人：{j.owner_hint || "未指定"}</span>
                       <span>核验：{j.verify_status || "pending"}</span>
-                      <span>渠道：{j.provider_key}</span>
+                      <span>渠道：{jobChannelLabel(j, platforms)}</span>
                     </div>
                     {j.result_url ? (
                       <a className="mt-2 block break-all text-sm font-medium text-brand-700 underline" href={j.result_url} target="_blank" rel="noreferrer">

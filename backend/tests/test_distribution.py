@@ -118,6 +118,9 @@ def test_distribution_task_writes_back_to_offsite_issue(client: TestClient, demo
     assert submitted.status_code == 200
     assert submitted.json()["result_url"] == "https://www.thomasnet.com/profile/example"
     assert submitted.json()["verify_status"] == "live"
+    assert submitted.json()["last_result"] == "已回填结果链接"
+    assert "已提交结果" not in (submitted.json()["last_result"] or "")
+    assert "登记≠我们代发" in (submitted.json()["last_detail"] or "")
 
     final_gap = client.get("/api/offsite/gaps", headers=headers).json()
     row = next(g for g in final_gap if g["id"] == gap_id)
@@ -167,6 +170,7 @@ def test_platform_account_connector_and_manual_login_block(client: TestClient, d
     )
     assert blocked.status_code == 201
     assert blocked.json()["status"] == "blocked"
+    assert blocked.json()["last_result"] == "缺账号"
     assert "needs_account" in blocked.json()["blocked_reason"]
 
     account = client.post(
