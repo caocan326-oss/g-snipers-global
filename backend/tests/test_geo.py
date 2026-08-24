@@ -1153,6 +1153,8 @@ def test_same_question_title_stays_full_and_follows_latest_sample(client: TestCl
     assert "这周请改这几处" in brief["paste_text"]
     assert "工作台打勾" not in brief["paste_text"]
     assert "不保证这次被提到" in brief["paste_text"]
+    assert "Buyers are asking:" in brief["paste_text"]
+    assert "我们不代发" in brief["paste_text"]
     retest = next(section for section in brief["sections"] if section["key"] == "retest")
     assert any("客户页没上线" in item for item in retest["items"])
 
@@ -1208,6 +1210,27 @@ def test_opening_list_aligns_stale_verify_badge_to_handoff(client: TestClient, d
     assert items[leftover.id]["handoff"] == "drafted"
     assert items[sent.id]["status"] == "in_progress"
     assert items[live.id]["status"] == "verify"
+
+
+def test_ticket_paste_includes_offsite_english_draft() -> None:
+    from app.geo_loop import ticket_paste
+    from app.models import GeoPrompt, GeoTicket
+
+    question = "Which brand makes the best 100W USB-C charger for laptops?"
+    prompt = GeoPrompt(tenant_id="t", prompt_text=question, locale="en-US")
+    ticket = GeoTicket(
+        tenant_id="t",
+        prompt_id="p",
+        title=f"买家问「{question}」时提到了品牌，但没给出官网",
+        diagnosis="mentioned",
+        evidence='{"kind": "no_owned", "page_url": "https://www.ugreen.com/products/usa-65585", "channel": "LinkedIn Company Page"}',
+    )
+    paste = ticket_paste(ticket, prompt)
+    assert "请改这一页" in paste or "usa-65585" in paste
+    assert "Buyers are asking:" in paste
+    assert question in paste
+    assert "我们不代发" in paste
+    assert "工作台打勾" not in paste
 
 
 def test_offsite_post_draft_quotes_question_and_page() -> None:

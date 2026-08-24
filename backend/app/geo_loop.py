@@ -487,6 +487,9 @@ def ticket_offsite_draft(ticket: GeoTicket, prompt: GeoPrompt | None = None) -> 
         found = re.search(r"「([^」]+)」", ticket.title or "")
         question = found.group(1) if found else ""
     page_url = str(ev.get("page_url") or "").strip()
+    if not page_url:
+        found_url = re.search(r"https?://[^\s]+", ticket.recommended_action or "")
+        page_url = found_url.group(0).rstrip("。.") if found_url else ""
     return offsite_post_draft(question=question, page_url=page_url)
 
 
@@ -572,9 +575,17 @@ def ticket_customer_note(ticket: GeoTicket, prompt: GeoPrompt | None = None) -> 
     return note
 
 
+def ticket_offsite_ask(ticket: GeoTicket, prompt: GeoPrompt | None = None) -> str:
+    draft = ticket_offsite_draft(ticket, prompt).strip()
+    if not draft:
+        return ""
+    channel = ticket_channel_name(ticket) or "站外"
+    return f"请在「{channel}」自己发这一条（我们不代发）：\n{draft}"
+
+
 def ticket_paste(ticket: GeoTicket, prompt: GeoPrompt | None = None) -> str:
     note = ticket_customer_note(ticket, prompt)
-    parts = [ticket.title.strip(), note.strip()]
+    parts = [ticket.title.strip(), note.strip(), ticket_offsite_ask(ticket, prompt)]
     return "\n\n".join(part for part in parts if part)
 
 

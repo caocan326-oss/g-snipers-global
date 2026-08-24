@@ -14,6 +14,7 @@ from app.geo_loop import (
     ticket_customer_note,
     ticket_handoff,
     ticket_live_url,
+    ticket_offsite_ask,
     weekly_paste,
 )
 from app.onsite_loop import issue_customer_note
@@ -219,7 +220,11 @@ def build_customer_brief(user: User, db: Session) -> CustomerBriefOut:
     geo_lines: list[str] = []
     for ticket in tickets[:1]:
         note = ticket_customer_note(ticket, ticket.prompt)
-        geo_lines.append(f"{ticket.title}\n{note}".strip() if note else ticket.title)
+        ask = ticket_offsite_ask(ticket, ticket.prompt)
+        block = f"{ticket.title}\n{note}".strip() if note else ticket.title
+        if ask:
+            block = f"{block}\n{ask}"
+        geo_lines.append(block)
     onsite_slots = max(0, 3 - len(this_week) - len(geo_lines))
     for issue in priority_issues[:onsite_slots]:
         note = issue_customer_note(issue, issue.page, site_origin)
