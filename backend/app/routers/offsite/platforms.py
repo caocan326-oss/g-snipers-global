@@ -61,6 +61,7 @@ def check_platform_profile(
             profile_url=profile_url,
             site_origin=(tenant.site_origin if tenant else "") or "",
             brand=(tenant.name if tenant else "") or "",
+            platform_name=platform.name or "",
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

@@ -42,6 +42,7 @@ def _platform_out(row: SourcePlatform) -> SourcePlatformOut:
         profile_site_found=bool(row.profile_site_found),
         profile_checked_at=row.profile_checked_at,
         profile_note=row.profile_note or "",
+        profile_missing_page="该渠道还没有可核的公开档案" in (row.profile_note or ""),
     )
 
 

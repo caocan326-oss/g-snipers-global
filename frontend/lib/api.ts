@@ -1213,6 +1213,7 @@ export type SourcePlatform = {
   profile_site_found?: boolean;
   profile_checked_at?: string | null;
   profile_note?: string;
+  profile_missing_page?: boolean;
 };
 
 export type ProfileCheck = {
@@ -1222,6 +1223,7 @@ export type ProfileCheck = {
   is_live: boolean;
   site_found: boolean;
   brand_mentioned: boolean;
+  missing_channel_page: boolean;
   note: string;
   sent: boolean;
 };

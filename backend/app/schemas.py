@@ -1530,6 +1530,7 @@ class SourcePlatformOut(SourcePlatformCreate):
     profile_site_found: bool = False
     profile_checked_at: datetime | None = None
     profile_note: str = ""
+    profile_missing_page: bool = False
 
 
 class CheckProfileIn(BaseModel):
@@ -1543,6 +1544,7 @@ class ProfileCheckOut(BaseModel):
     is_live: bool = False
     site_found: bool = False
     brand_mentioned: bool = False
+    missing_channel_page: bool = False
     note: str
     sent: bool = False
 

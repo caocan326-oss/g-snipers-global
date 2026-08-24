@@ -123,7 +123,7 @@ export function ChannelCards({
                       <div className="flex flex-col gap-2">
                         <Input
                           className="h-9"
-                          placeholder="公开主页 URL，不要填发帖入口"
+                          placeholder="该渠道的公司页 URL；官网首页会记成还没有档案"
                           value={profileForms[platform.id] ?? platform.profile_url ?? ""}
                           onChange={(e) => setProfileUrl(platform.id, e.target.value)}
                         />
@@ -131,8 +131,11 @@ export function ChannelCards({
                           <Button size="sm" variant="outline" onClick={() => checkProfile(platform.id)} disabled={checkingId === platform.id}>
                             {checkingId === platform.id ? "在核…" : "核对档案"}
                           </Button>
+                          {platform.profile_missing_page ? <Badge tone="amber">该渠道无公开档案</Badge> : null}
                           {platform.profile_site_found ? <Badge tone="green">页上有官网</Badge> : null}
-                          {platform.profile_note && !platform.profile_site_found ? <Badge tone="amber">档案未对齐</Badge> : null}
+                          {platform.profile_note && !platform.profile_site_found && !platform.profile_missing_page ? (
+                            <Badge tone="amber">档案未对齐</Badge>
+                          ) : null}
                         </div>
                         {platform.profile_note ? <p className="text-xs leading-5 text-slate-500">{platform.profile_note}</p> : null}
                       </div>

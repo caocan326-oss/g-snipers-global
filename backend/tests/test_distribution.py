@@ -474,6 +474,8 @@ def test_check_profile_needs_real_page_and_does_not_send(client: TestClient, dem
         json={"profile_url": "https://www.linkedin.com/company/"},
     )
     assert generic.status_code == 400
+    assert "发帖入口" in generic.json()["detail"]
+    assert "站点首页" not in generic.json()["detail"]
 
     class FakeResponse:
         status_code = 200
@@ -490,12 +492,36 @@ def test_check_profile_needs_real_page_and_does_not_send(client: TestClient, dem
             return False
 
         def get(self, url: str):
-            assert "linkedin.com/company/snipers" in url
             return FakeResponse()
 
     from app import offsite_profile
 
+    assert offsite_profile.is_own_site("https://www.snipers.com.cn/", "https://www.snipers.com.cn")
+    assert not offsite_profile.is_compose_url("https://www.snipers.com.cn/")
+    assert offsite_profile.is_compose_url("https://www.linkedin.com/company/")
+
     monkeypatch.setattr(offsite_profile.httpx, "Client", FakeClient)
+    homepage = client.post(
+        f"/api/offsite/platforms/{linkedin['id']}/check-profile",
+        headers=headers,
+        json={"profile_url": "https://www.snipers.com.cn/"},
+    )
+    assert homepage.status_code == 200, homepage.text
+    missing = homepage.json()
+    assert missing["sent"] is False
+    assert missing["missing_channel_page"] is True
+    assert missing["is_live"] is False
+    assert missing["site_found"] is False
+    assert missing["profile_url"] == ""
+    assert "该渠道还没有" in missing["note"]
+    assert "发帖入口" not in missing["note"]
+    assert "官网打得开" in missing["note"]
+    listed = client.get("/api/offsite/platforms", headers=headers)
+    stored = next(row for row in listed.json() if row["id"] == linkedin["id"])
+    assert stored["profile_url"] == ""
+    assert stored["profile_missing_page"] is True
+    assert stored["profile_is_live"] is False
+
     checked = client.post(
         f"/api/offsite/platforms/{linkedin['id']}/check-profile",
         headers=headers,
@@ -506,6 +532,7 @@ def test_check_profile_needs_real_page_and_does_not_send(client: TestClient, dem
     assert body["sent"] is False
     assert body["is_live"] is True
     assert body["site_found"] is True
+    assert body["missing_channel_page"] is False
     assert "登记≠我们代发" in body["note"]
 
     class BlockedResponse:
