@@ -256,6 +256,7 @@ powershell -File deploy/sync-from-local.ps1
 | 2026-08-24 | 产品/运维 | 公司发到 `f5bdd92`（`sync-from-local.ps1 -Rebuild`）。执行记录回填帖链接写成「已回填」，渠道显示平台名，不写 directory。登记≠代发。 |
 | 2026-08-24 | 产品/运维 | 公司发到 `e00f8d6`（`sync-from-local.ps1 -Rebuild`）。旧 451 核验行也带出「登记≠我们代发」。不改库、不重核验。 |
 | 2026-08-24 | 产品/运维 | 公司发到 `1e91706`（`sync-from-local.ps1 -Rebuild`）。站外可复制给客户、可看接口报文、可记自备接口。不代发、不存钥匙。 |
+| 2026-08-24 | 产品/运维 | 公司发到 `011c912`（`sync-from-local.ps1 -Rebuild`）。站外可核对公开主页：打不打得开、有没有官网链。不注册、不代登。 |
 
 ---
 
