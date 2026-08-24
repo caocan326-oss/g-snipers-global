@@ -1208,3 +1208,100 @@ def test_opening_list_aligns_stale_verify_badge_to_handoff(client: TestClient, d
     assert items[leftover.id]["handoff"] == "drafted"
     assert items[sent.id]["status"] == "in_progress"
     assert items[live.id]["status"] == "verify"
+
+
+def test_offsite_post_draft_quotes_question_and_page() -> None:
+    from app.geo_loop import offsite_post_draft
+
+    question = "Which brand makes the best 100W USB-C charger for laptops?"
+    draft = offsite_post_draft(question=question, page_url="https://www.ugreen.com/products/usa-65585")
+    assert draft.startswith("Buyers are asking:")
+    assert question in draft
+    assert "https://www.ugreen.com/products/usa-65585" in draft
+    assert "best charger" not in draft.lower() or question in draft
+    assert "代发" not in draft
+    assert "群发" not in draft
+
+
+def test_apply_loop_spec_keeps_page_and_post_urls() -> None:
+    from app.geo_loop import apply_loop_spec, parse_ticket_evidence, set_ticket_handoff, set_ticket_offsite_url
+    from app.models import GeoTicket
+
+    ticket = GeoTicket(tenant_id="t", prompt_id="p", title="x", diagnosis="mentioned")
+    set_ticket_handoff(ticket, "live", "https://www.ugreen.com/products/usa-65585")
+    set_ticket_offsite_url(ticket, "https://www.linkedin.com/feed/update/urn:li:activity:1")
+    apply_loop_spec(
+        ticket,
+        {
+            "title": "买家问「Which brand makes the best 100W USB-C charger for laptops?」时提到了品牌，但没给出官网",
+            "diagnosis": "mentioned",
+            "rationale": "对应页：100W · 渠道：LinkedIn Company Page",
+            "recommended_action": "请改这一页",
+            "acceptance_criteria": "同一问再测",
+            "retest_method": "再抽查一次",
+            "evidence": {
+                "kind": "no_owned",
+                "channel": "LinkedIn Company Page",
+                "channel_key": "linkedin_company",
+            },
+        },
+        keep_handoff=True,
+    )
+    ev = parse_ticket_evidence(ticket)
+    assert ev["handoff"] == "live"
+    assert ev["live_url"] == "https://www.ugreen.com/products/usa-65585"
+    assert ev["offsite_url"] == "https://www.linkedin.com/feed/update/urn:li:activity:1"
+
+
+def test_geo_ticket_offsite_draft_and_fill_back(client: TestClient, demo_user, db) -> None:
+    import json
+
+    from app.models import GeoPrompt, GeoTicket
+
+    question = "Which brand makes the best 100W USB-C charger for laptops?"
+    prompt = GeoPrompt(tenant_id=demo_user.tenant_id, prompt_text=question, locale="en-US")
+    db.add(prompt)
+    db.flush()
+    ticket = GeoTicket(
+        tenant_id=demo_user.tenant_id,
+        prompt_id=prompt.id,
+        title=f"买家问「{question}」时提到了品牌，但没给出官网",
+        diagnosis="mentioned",
+        status="open",
+        evidence=json.dumps(
+            {
+                "kind": "no_owned",
+                "page_url": "https://www.ugreen.com/products/usa-65585",
+                "channel": "LinkedIn Company Page",
+                "channel_key": "linkedin_company",
+                "handoff": "drafted",
+            },
+            ensure_ascii=False,
+        ),
+    )
+    db.add(ticket)
+    db.commit()
+
+    headers = auth_header(client)
+    row = next(item for item in client.get("/api/geo/tickets", headers=headers).json() if item["id"] == ticket.id)
+    assert row["channel"] == "LinkedIn Company Page"
+    assert row["compose_url"].startswith("https://www.linkedin.com")
+    assert question in row["offsite_draft"]
+    assert "usa-65585" in row["offsite_draft"]
+    assert "代发" not in row["offsite_draft"]
+    assert row["offsite_url"] == ""
+    assert row["handoff"] == "drafted"
+
+    denied = client.post(f"/api/geo/tickets/{ticket.id}/offsite", headers=headers, json={"post_url": ""})
+    assert denied.status_code == 400
+    assert "不代发" in denied.json()["detail"]
+
+    saved = client.post(
+        f"/api/geo/tickets/{ticket.id}/offsite",
+        headers=headers,
+        json={"post_url": "https://www.linkedin.com/feed/update/urn:li:activity:1"},
+    )
+    assert saved.status_code == 200
+    assert saved.json()["offsite_url"] == "https://www.linkedin.com/feed/update/urn:li:activity:1"
+    assert saved.json()["handoff"] == "drafted"
+    assert saved.json()["result_url"] == ""

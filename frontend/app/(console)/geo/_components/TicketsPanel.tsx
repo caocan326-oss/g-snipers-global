@@ -38,6 +38,7 @@ export function TicketsPanel({
   setTicketForm,
   addTicket,
   setHandoff,
+  saveOffsite,
   retestSameQuestions,
   canRetestSame,
   busyAction,
@@ -48,12 +49,15 @@ export function TicketsPanel({
   setTicketForm: (form: TicketForm) => void;
   addTicket: (e: FormEvent) => void;
   setHandoff: (id: string, handoff: "drafted" | "sent" | "live", resultUrl?: string) => void;
+  saveOffsite: (id: string, postUrl: string) => void;
   retestSameQuestions: () => void;
   canRetestSame: boolean;
   busyAction: string;
 }) {
   const [copied, setCopied] = useState("");
+  const [copiedPost, setCopiedPost] = useState("");
   const [liveUrls, setLiveUrls] = useState<Record<string, string>>({});
+  const [postUrls, setPostUrls] = useState<Record<string, string>>({});
 
   return (
     <div className="space-y-4">
@@ -67,7 +71,9 @@ export function TicketsPanel({
 
       {tickets.map((t) => {
         const liveUrl = (liveUrls[t.id] ?? t.result_url ?? "").trim();
+        const postUrl = (postUrls[t.id] ?? t.offsite_url ?? "").trim();
         const canMarkLive = /^https?:\/\//i.test(liveUrl);
+        const canSavePost = /^https?:\/\//i.test(postUrl);
         const prompt = prompts.find((p) => p.id === t.prompt_id);
         return (
           <Card key={t.id}>
@@ -111,6 +117,61 @@ export function TicketsPanel({
                   <p className="mt-1 text-sm text-slate-500">短稿里会写建议页；还没有自动对应到站内页时，按短稿里的链接改。</p>
                 )}
               </div>
+
+              {t.offsite_draft ? (
+                <div className="rounded-md border border-slate-200 bg-white px-3 py-2">
+                  <p className="text-xs font-medium text-slate-500">站外这一条</p>
+                  <p className="mt-1 text-sm text-slate-800">
+                    渠道：{t.channel || "站外分发里的一张渠道卡"}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">请客户自己打开官方页发出。我们不代发、不代登、不群发。</p>
+                  <pre className="mt-2 whitespace-pre-wrap rounded-md bg-slate-50 px-3 py-2 text-sm leading-6 text-slate-800">
+                    {t.offsite_draft}
+                  </pre>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={async () => {
+                        const ok = await copyText(t.offsite_draft || "");
+                        setCopiedPost(ok ? t.id : "");
+                      }}
+                    >
+                      {copiedPost === t.id ? "稿已复制" : "复制这一篇"}
+                    </Button>
+                    {t.compose_url ? (
+                      <a
+                        className="inline-flex h-8 items-center rounded-md border border-slate-200 bg-white px-2.5 text-xs font-medium text-brand-700 hover:bg-slate-50"
+                        href={t.compose_url}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        打开官方发帖页
+                      </a>
+                    ) : null}
+                  </div>
+                  <div className="mt-3 space-y-2">
+                    <p className="text-xs font-medium text-slate-500">发完把帖子链接填回来</p>
+                    <Input
+                      placeholder="例如 https://www.linkedin.com/feed/update/..."
+                      value={postUrls[t.id] ?? t.offsite_url ?? ""}
+                      onChange={(e) => setPostUrls((current) => ({ ...current, [t.id]: e.target.value }))}
+                    />
+                    <Button size="sm" disabled={!canSavePost} onClick={() => saveOffsite(t.id, postUrl)}>
+                      记下帖子链接
+                    </Button>
+                    {t.offsite_url ? (
+                      <p className="text-xs text-slate-500">
+                        已登记帖：
+                        <a className="ml-1 break-all text-brand-700 underline" href={t.offsite_url} target="_blank" rel="noreferrer">
+                          {t.offsite_url}
+                        </a>
+                        （登记≠我们代发）
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
 
               {(t.customer_note || t.recommended_action) && (
                 <div className="rounded-md border border-amber-200 bg-amber-50/70 px-3 py-2">

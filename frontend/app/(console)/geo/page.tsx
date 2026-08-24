@@ -361,6 +361,20 @@ export default function GeoPage() {
     }
   }
 
+  async function saveOffsite(id: string, postUrl: string) {
+    setError("");
+    try {
+      await api(`/api/geo/tickets/${id}/offsite`, {
+        method: "POST",
+        body: JSON.stringify({ post_url: postUrl }),
+      });
+      setNote("已记下帖子链接。登记不等于我们代发。");
+      loadTickets();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "帖子链接没记上");
+    }
+  }
+
   async function generateLlms() {
     await api("/api/geo/assets/llms.txt/generate", { method: "POST" });
     loadAssets();
@@ -491,6 +505,7 @@ export default function GeoPage() {
           setTicketForm={setTicketForm}
           addTicket={addTicket}
           setHandoff={setHandoff}
+          saveOffsite={saveOffsite}
           retestSameQuestions={retestSameQuestions}
           canRetestSame={Boolean(runs[0]?.results?.length)}
           busyAction={busyAction}

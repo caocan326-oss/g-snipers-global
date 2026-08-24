@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.geo_helpers import ENGINE_LABELS
 from app.models import GeoPrompt, GeoSampleResult, GeoSampleRun, GeoTicket, SitePage, SourcePlatform, Tenant
-from app.official_apis import OFFICIAL_APIS
+from app.official_apis import OFFICIAL_APIS, official_api_for
 
 HONEST_ACCEPTANCE = (
     "对应页已上线，或帖已发出；同一买家问题再抽查一次。"
@@ -346,7 +346,7 @@ def suggest_page(db: Session, tenant_id: str, prompt_text: str) -> SitePage | No
     return next((page for page in pages if (page.path or "/").strip() in {"", "/"}), pages[0])
 
 
-def suggest_channel(db: Session, tenant_id: str) -> tuple[str, str]:
+def suggest_channel(db: Session, tenant_id: str) -> tuple[str, str, str]:
     rows = (
         db.query(SourcePlatform)
         .filter(SourcePlatform.tenant_id == tenant_id, SourcePlatform.status == "active")
@@ -355,7 +355,7 @@ def suggest_channel(db: Session, tenant_id: str) -> tuple[str, str]:
     official = [row for row in rows if row.has_official_api or row.platform_key in OFFICIAL_APIS]
     pool = official or rows
     if not pool:
-        return "站外分发里的一张渠道卡", "/offsite"
+        return "站外分发里的一张渠道卡", "", "/offsite"
 
     def rank(row: SourcePlatform) -> tuple[int, str]:
         try:
@@ -365,7 +365,7 @@ def suggest_channel(db: Session, tenant_id: str) -> tuple[str, str]:
         return (order, row.name or row.platform_key)
 
     pick = sorted(pool, key=rank)[0]
-    return pick.name or pick.platform_key, "/offsite"
+    return pick.name or pick.platform_key, pick.platform_key or "", "/offsite"
 
 
 def page_label(page: SitePage | None) -> str:
@@ -425,6 +425,78 @@ def is_http_url(url: str) -> bool:
 
 def ticket_live_url(ticket: GeoTicket) -> str:
     return str(parse_ticket_evidence(ticket).get("live_url") or "").strip()
+
+
+def ticket_offsite_url(ticket: GeoTicket) -> str:
+    return str(parse_ticket_evidence(ticket).get("offsite_url") or "").strip()
+
+
+def ticket_channel_key(ticket: GeoTicket) -> str:
+    ev = parse_ticket_evidence(ticket)
+    key = str(ev.get("channel_key") or "").strip()
+    if key in OFFICIAL_APIS:
+        return key
+    blob = " ".join(
+        part
+        for part in (
+            str(ev.get("channel") or ""),
+            key,
+            ticket.rationale or "",
+            ticket.recommended_action or "",
+        )
+        if part
+    ).lower()
+    for api_key, spec in OFFICIAL_APIS.items():
+        if api_key.replace("_", " ") in blob or spec.label.lower() in blob:
+            return api_key
+    if "linkedin" in blob:
+        return "linkedin_company"
+    return ""
+
+
+def ticket_channel_name(ticket: GeoTicket) -> str:
+    ev = parse_ticket_evidence(ticket)
+    name = str(ev.get("channel") or "").strip()
+    if name:
+        return name
+    spec = official_api_for(ticket_channel_key(ticket))
+    return spec.label if spec else ""
+
+
+def ticket_compose_url(ticket: GeoTicket) -> str:
+    spec = official_api_for(ticket_channel_key(ticket))
+    return spec.compose_url if spec else ""
+
+
+def offsite_post_draft(*, question: str, page_url: str) -> str:
+    question = " ".join((question or "").split()) or "this product"
+    url = (page_url or "").strip()
+    lines = [f'Buyers are asking: "{question}"']
+    if url:
+        lines.append(f"Official page: {url}")
+    else:
+        lines.append("Official page: add the product URL first.")
+    return "\n".join(lines)
+
+
+def ticket_offsite_draft(ticket: GeoTicket, prompt: GeoPrompt | None = None) -> str:
+    ev = parse_ticket_evidence(ticket)
+    prompt = prompt if prompt is not None else getattr(ticket, "prompt", None)
+    question = " ".join(((prompt.prompt_text if prompt else "") or "").split())
+    if not question:
+        found = re.search(r"「([^」]+)」", ticket.title or "")
+        question = found.group(1) if found else ""
+    page_url = str(ev.get("page_url") or "").strip()
+    return offsite_post_draft(question=question, page_url=page_url)
+
+
+def set_ticket_offsite_url(ticket: GeoTicket, post_url: str) -> None:
+    url = (post_url or "").strip()
+    if not is_http_url(url):
+        raise ValueError("offsite_url")
+    payload = parse_ticket_evidence(ticket)
+    payload["offsite_url"] = url
+    ticket.evidence = json.dumps(payload, ensure_ascii=False, indent=2)
 
 
 def customer_note(
@@ -572,7 +644,7 @@ def loop_ticket_spec(
     sample_rows: list[GeoSampleResult] | None = None,
 ) -> dict:
     page = suggest_page(db, tenant_id, prompt.prompt_text)
-    channel_name, _channel_href = suggest_channel(db, tenant_id)
+    channel_name, channel_key, _channel_href = suggest_channel(db, tenant_id)
     short = short_prompt(prompt.prompt_text)
     page_bit = page_label(page)
     url = page_url(db, tenant_id, page)
@@ -625,6 +697,7 @@ def loop_ticket_spec(
             "page_label": page_bit if page else "",
             "page_url": url,
             "channel": channel_name,
+            "channel_key": channel_key,
             "handoff": "drafted",
             "honest_loop": True,
         },
@@ -641,6 +714,13 @@ def apply_loop_spec(ticket: GeoTicket, spec: dict, *, keep_handoff: bool = True)
     ticket.retest_method = spec["retest_method"]
     evidence = dict(spec["evidence"])
     evidence["handoff"] = handoff
+    if keep_handoff:
+        live_url = ticket_live_url(ticket)
+        offsite_url = ticket_offsite_url(ticket)
+        if live_url:
+            evidence["live_url"] = live_url
+        if offsite_url:
+            evidence["offsite_url"] = offsite_url
     ticket.evidence = json.dumps(evidence, ensure_ascii=False, indent=2)
 
 

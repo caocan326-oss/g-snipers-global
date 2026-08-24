@@ -500,6 +500,11 @@ class GeoTicketOut(BaseModel):
     customer_paste: str = ""
     page_label: str = ""
     page_url: str = ""
+    channel: str = ""
+    channel_key: str = ""
+    compose_url: str = ""
+    offsite_draft: str = ""
+    offsite_url: str = ""
     retest_method: str = ""
     retest_result: str = ""
     sample_note: str = ""
@@ -527,6 +532,10 @@ class GeoTicketHandoffIn(BaseModel):
     handoff: str
     note: str | None = None
     result_url: str = ""
+
+
+class GeoTicketOffsiteIn(BaseModel):
+    post_url: str = ""
 
 
 class GeoAssetOut(BaseModel):

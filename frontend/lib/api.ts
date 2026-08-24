@@ -829,6 +829,11 @@ export type GeoTicket = {
   customer_paste?: string;
   page_label?: string;
   page_url?: string;
+  channel?: string;
+  channel_key?: string;
+  compose_url?: string;
+  offsite_draft?: string;
+  offsite_url?: string;
   retest_method: string;
   retest_result: string;
   sample_note?: string;

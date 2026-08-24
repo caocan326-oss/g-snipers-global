@@ -8,7 +8,19 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.geo_citations import is_owned_url, marketplace_urls, split_citations
 from app.geo_helpers import DIAGNOSES, ENGINE_LABELS, ENGINES, engine_region
-from app.geo_loop import HANDOFF_LABELS, parse_ticket_evidence, ticket_customer_note, ticket_handoff, ticket_live_url, ticket_paste
+from app.geo_loop import (
+    HANDOFF_LABELS,
+    parse_ticket_evidence,
+    ticket_channel_key,
+    ticket_channel_name,
+    ticket_compose_url,
+    ticket_customer_note,
+    ticket_handoff,
+    ticket_live_url,
+    ticket_offsite_draft,
+    ticket_offsite_url,
+    ticket_paste,
+)
 from app.models import (
     Competitor,
     GeoObservation,
@@ -409,6 +421,11 @@ def _ticket_out(row: GeoTicket, sample_note: str = "") -> GeoTicketOut:
         customer_paste=ticket_paste(row, getattr(row, "prompt", None)),
         page_label=page_label,
         page_url=page_url,
+        channel=ticket_channel_name(row),
+        channel_key=ticket_channel_key(row),
+        compose_url=ticket_compose_url(row),
+        offsite_draft=ticket_offsite_draft(row, getattr(row, "prompt", None)),
+        offsite_url=ticket_offsite_url(row),
         retest_method=row.retest_method or "对同一买家问题再抽查一次，只记有没有变化，不要求这次必须提到。",
         retest_result=row.retest_result or "",
         sample_note=sample_note,

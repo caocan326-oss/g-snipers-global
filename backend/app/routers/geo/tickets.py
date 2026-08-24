@@ -14,12 +14,21 @@ from app.geo_loop import (
     reconcile_open_ticket_status,
     refresh_open_tickets_from_samples,
     set_ticket_handoff,
+    set_ticket_offsite_url,
     ticket_handoff,
     ticket_live_url,
 )
 from app.models import GeoPrompt, GeoTicket, Tenant, User
 from app.risk import require_confirm
-from app.schemas import AiAssistOut, AiStepIn, GeoTicketCreate, GeoTicketHandoffIn, GeoTicketOut, GeoTicketVerifyIn
+from app.schemas import (
+    AiAssistOut,
+    AiStepIn,
+    GeoTicketCreate,
+    GeoTicketHandoffIn,
+    GeoTicketOffsiteIn,
+    GeoTicketOut,
+    GeoTicketVerifyIn,
+)
 from app.site_identity import adopt_live_site
 
 from . import router
@@ -105,6 +114,31 @@ def mark_ticket_handoff(
         raise
     if body.note:
         row.verified_note = body.note
+    row.last_checked_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(row)
+    return _ticket_out(row)
+
+
+@router.post("/tickets/{ticket_id}/offsite", response_model=GeoTicketOut)
+def mark_ticket_offsite(
+    ticket_id: str,
+    body: GeoTicketOffsiteIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> GeoTicketOut:
+    row = db.get(GeoTicket, ticket_id)
+    if row is None or row.tenant_id != user.tenant_id:
+        raise HTTPException(status_code=404, detail="整改项不存在")
+    try:
+        set_ticket_offsite_url(row, body.post_url or "")
+    except ValueError as exc:
+        if str(exc) == "offsite_url":
+            raise HTTPException(
+                status_code=400,
+                detail="请先填写已发出的帖子地址（http/https）。我们不代发，只记下客户自己发完的链接。",
+            ) from exc
+        raise
     row.last_checked_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(row)
