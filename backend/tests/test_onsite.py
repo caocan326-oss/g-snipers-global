@@ -1,6 +1,7 @@
 import json
 
 from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
 
 from tests.conftest import auth_header
 
@@ -264,6 +265,137 @@ def test_site_context_archive_restore_switches_seo_geo_and_execution(client: Tes
     assert client.get("/api/onsite/board", headers=headers).json()["pages"] == 1
     assert client.get("/api/geo/summary", headers=headers).json()["prompts"] >= 1
     assert client.get("/api/execution/items", headers=headers).json()["total_open"] >= 1
+
+
+def test_site_switch_does_not_mix_tickets_pages_or_gaps(client: TestClient, db: Session, demo_user) -> None:
+    from app.models import IntegrationSetting, UsageDaily
+    from app.usage import usage_day
+
+    headers = auth_header(client)
+    us_market = {
+        "name": "United States",
+        "region": "North America",
+        "country_code": "US",
+        "primary_locale": "en-US",
+        "status": "priority",
+        "opportunity_score": 80,
+    }
+    first = client.put(
+        "/api/project-targets",
+        headers=headers,
+        json={
+            "tenant_name": "UGREEN",
+            "site_origin": "https://www.ugreen.com",
+            "markets": [us_market],
+            "keywords": [{"theme": "100W USB-C charger", "locale": "en-US", "country_code": "US"}],
+            "competitors": [{"name": "Anker", "website": "https://www.anker.com", "country_code": "US"}],
+        },
+    )
+    assert first.status_code == 200, first.text
+    page = client.post(
+        "/api/onsite/pages",
+        headers=headers,
+        json={"path": "/products/usa-65585", "locale": "en-US", "title": "UGREEN 100W"},
+    ).json()
+    client.post(
+        f"/api/onsite/pages/{page['id']}/issues",
+        headers=headers,
+        json={"category": "tdk", "title": "UGREEN-ONLY-ISSUE", "priority": "P1"},
+    )
+    prompt = client.post(
+        "/api/geo/prompts",
+        headers=headers,
+        json={"prompt_text": "Which brand makes the best 100W USB-C charger for laptops?", "locale": "en-US"},
+    ).json()
+    client.post(
+        "/api/geo/tickets",
+        headers=headers,
+        json={
+            "prompt_id": prompt["id"],
+            "title": "UGREEN-ONLY-TICKET",
+            "diagnosis": "no_owned",
+            "rationale": "https://www.ugreen.com/products/usa-65585",
+        },
+    )
+    client.post(
+        "/api/offsite/gaps",
+        headers=headers,
+        json={
+            "title": "UGREEN-ONLY-GAP",
+            "competitor_name": "Anker",
+            "referring_domain": "linkedin.com",
+        },
+    )
+    db.add(UsageDaily(tenant_id=demo_user.tenant_id, meter="bocha", used_on=usage_day(), used_count=7))
+    db.add(IntegrationSetting(tenant_id=demo_user.tenant_id, key="pagespeed_api_key", value="keep-me"))
+    db.commit()
+
+    switched = client.put(
+        "/api/project-targets",
+        headers=headers,
+        json={
+            "tenant_name": "UGREEN",
+            "site_origin": "https://gsnipers.snipers.com.cn",
+            "markets": [us_market],
+            "keywords": [],
+            "competitors": [],
+            "confirm_site_switch": True,
+        },
+    )
+    assert switched.status_code == 200, switched.text
+    assert switched.json()["site_origin"] == "https://gsnipers.snipers.com.cn"
+
+    exec_blob = json.dumps(client.get("/api/execution/items", headers=headers).json(), ensure_ascii=False)
+    assert "UGREEN-ONLY-TICKET" not in exec_blob
+    assert "UGREEN-ONLY-ISSUE" not in exec_blob
+    assert "UGREEN-ONLY-GAP" not in exec_blob
+    assert "usa-65585" not in exec_blob
+    assert client.get("/api/execution/items", headers=headers).json()["total_open"] == 0
+    assert client.get("/api/geo/tickets", headers=headers).json() == []
+    assert client.get("/api/offsite/gaps", headers=headers).json() == []
+    assert client.get("/api/onsite/board", headers=headers).json()["pages"] == 0
+    assert client.get("/api/geo/summary", headers=headers).json()["prompts"] == 0
+    assert "100W USB-C charger" not in json.dumps(client.get("/api/project-targets", headers=headers).json())
+    assert "Anker" not in json.dumps(client.get("/api/project-targets", headers=headers).json())
+    today = client.get("/api/usage/today", headers=headers).json()
+    bocha = next(row for row in today["meters"] if row["key"] == "bocha")
+    assert bocha["used"] == 7
+    integrations = {row["key"]: row for row in client.get("/api/onsite/integrations", headers=headers).json()["fields"]}
+    assert integrations["pagespeed_api_key"]["configured"] is True
+
+    b_prompt = client.post(
+        "/api/geo/prompts",
+        headers=headers,
+        json={"prompt_text": "own site publish test", "locale": "en-US"},
+    ).json()
+    client.post(
+        "/api/geo/tickets",
+        headers=headers,
+        json={"prompt_id": b_prompt["id"], "title": "SNIPERS-ONLY-TICKET", "diagnosis": "absent"},
+    )
+    archives = client.get("/api/site-context/archives", headers=headers).json()
+    ugreen = next(row for row in archives if "ugreen.com" in row["site_origin"])
+    restored = client.post(f"/api/site-context/archives/{ugreen['id']}/restore", headers=headers)
+    assert restored.status_code == 200, restored.text
+    assert restored.json()["site_origin"] == "https://www.ugreen.com"
+    me = client.get("/api/auth/me", headers=headers).json()
+    assert me["site_origin"] == "https://www.ugreen.com"
+    assert me["tenant_name"] == "UGREEN"
+    live = json.dumps(
+        {
+            "execution": client.get("/api/execution/items", headers=headers).json(),
+            "tickets": client.get("/api/geo/tickets", headers=headers).json(),
+            "prompts": client.get("/api/geo/prompts", headers=headers).json(),
+            "gaps": client.get("/api/offsite/gaps", headers=headers).json(),
+        },
+        ensure_ascii=False,
+    )
+    assert "UGREEN-ONLY-ISSUE" in live
+    assert "UGREEN-ONLY-GAP" in live
+    assert "100W USB-C charger" in live
+    assert "SNIPERS-ONLY-TICKET" not in live
+    assert "own site publish test" not in live
+    assert any("/products/usa-65585" in (row.get("path") or "") for row in client.get("/api/onsite/pages", headers=headers).json())
 
 
 def test_project_targets_reject_invalid_origin(client: TestClient, demo_user) -> None:

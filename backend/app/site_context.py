@@ -281,5 +281,8 @@ def restore_archive_context(db: Session, user: User, archive: SiteArchive) -> No
     tenant = db.get(Tenant, user.tenant_id)
     if tenant:
         tenant.site_origin = archive.site_origin
+        next_name = name_from_origin(archive.site_origin)
+        if next_name:
+            tenant.name = next_name
     archive.restored_at = _now()
     db.flush()
