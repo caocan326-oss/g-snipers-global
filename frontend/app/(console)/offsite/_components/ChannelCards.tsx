@@ -8,8 +8,9 @@ import type { ContentAsset, DistJob, PlatformAccount, PlatformConnector, SourceP
 import { platformTypeLabel } from "../_helpers";
 
 function sendWay(platform: SourcePlatform, connector?: PlatformConnector, account?: PlatformAccount) {
-  if (connector && (connector.status === "ready" || connector.auth_mode === "api")) return "可用客户自己的接口（人确认）";
-  if (platform.has_official_api) return "可接客户自己的官方接口";
+  if (connector?.status === "customer_own" || (connector?.notes || "").includes("已自备接口")) return "客户已自备接口";
+  if (connector && (connector.status === "ready" || connector.auth_mode === "api")) return "客户自己的接口（人确认）";
+  if (platform.has_official_api) return "客户自己的官方接口";
   if (account) return "已记下账号，客户自己登号发";
   if (platform.submission_mode === "manual_login") return "客户自己登号发";
   if (platform.submission_mode === "form_public") return "客户自己填公开表单";
@@ -27,7 +28,13 @@ export function ChannelCards({
   seedBusy,
   writeForChannel,
   queueOnChannel,
+  copyChannelPaste,
+  copiedAssetId,
   writingId,
+  payloadById,
+  loadOfficialPayload,
+  copyOfficialPayload,
+  markOwnApi,
 }: {
   platforms: SourcePlatform[];
   accounts: PlatformAccount[];
@@ -38,7 +45,13 @@ export function ChannelCards({
   seedBusy?: boolean;
   writeForChannel: (platform: SourcePlatform) => void;
   queueOnChannel: (platform: SourcePlatform) => void;
+  copyChannelPaste: (platform: SourcePlatform) => void;
+  copiedAssetId: string;
   writingId: string;
+  payloadById: Record<string, { sent: boolean; compose_url: string; api_endpoint: string; http_method?: string; note: string; customer_body: Record<string, unknown> }>;
+  loadOfficialPayload: (platformId: string) => void;
+  copyOfficialPayload: (platformId: string) => void;
+  markOwnApi: (platformId: string) => void;
 }) {
   const social = platforms.filter((p) => p.source_type === "social_profile");
   const others = platforms.filter((p) => p.source_type !== "social_profile");
@@ -66,7 +79,7 @@ export function ChannelCards({
   return (
     <div className="space-y-6">
       <p className="text-sm text-slate-500">
-        想发哪个就点哪张。AI 写稿；打开官方页后由客户自己发。我们不代发。内置浏览器还没做。
+        想发哪个就点哪张。AI 写稿；打开官方页后由客户自己发。我们不代发、不代登。
       </p>
       {groups.map((group) =>
         group.rows.length ? (
@@ -90,7 +103,7 @@ export function ChannelCards({
                       </div>
                       <div className="flex flex-wrap gap-1">
                         <Badge tone="blue">{sendWay(platform, connector, account)}</Badge>
-                        {platform.has_official_api || platform.api_endpoint ? <Badge tone="green">官方接口可自己接</Badge> : <Badge tone="default">内置浏览器稍后</Badge>}
+                        {platform.has_official_api || platform.api_endpoint ? <Badge tone="green">客户自己的官方接口</Badge> : <Badge tone="default">打开官方页自己发</Badge>}
                       </div>
                       {platform.industry_tags ? (
                         <p className="text-xs leading-5 text-slate-500">关键词：{platform.industry_tags}</p>
@@ -107,6 +120,13 @@ export function ChannelCards({
                           <Radio className="mr-1 h-3.5 w-3.5" />
                           记下要发
                         </Button>
+                        {drafts ? (
+                          <Button size="sm" variant="outline" onClick={() => copyChannelPaste(platform)}>
+                            {assets.some((asset) => asset.title.includes(platform.name) && copiedAssetId === asset.id)
+                              ? "已复制"
+                              : "复制给客户"}
+                          </Button>
+                        ) : null}
                         {platform.compose_url ? (
                           <a href={platform.compose_url} target="_blank" rel="noreferrer" className="inline-flex">
                             <Button size="sm" variant="outline">打开官方发帖页</Button>
@@ -124,6 +144,16 @@ export function ChannelCards({
                             <Button size="sm" variant="ghost">自己的接口说明</Button>
                           </a>
                         ) : null}
+                        {platform.has_official_api || platform.api_endpoint ? (
+                          <Button size="sm" variant="ghost" onClick={() => loadOfficialPayload(platform.id)}>
+                            接口报文
+                          </Button>
+                        ) : null}
+                        {platform.has_official_api || platform.api_endpoint ? (
+                          <Button size="sm" variant="ghost" onClick={() => markOwnApi(platform.id)} disabled={connector?.status === "customer_own"}>
+                            {connector?.status === "customer_own" ? "已记下自备接口" : "记下客户已自备接口"}
+                          </Button>
+                        ) : null}
                         {account ? (
                           <span className="inline-flex items-center gap-1 text-xs text-slate-500">
                             <KeyRound className="h-3.5 w-3.5" />
@@ -131,7 +161,14 @@ export function ChannelCards({
                           </span>
                         ) : null}
                       </div>
-                    </CardContent>
+                      {payloadById[platform.id] ? (
+                        <div className="space-y-2 rounded-md bg-slate-50 p-3 text-xs leading-5 text-slate-600">
+                          <p>未发送。{payloadById[platform.id].note}</p>
+                          <p className="break-all">接口：{payloadById[platform.id].http_method || "POST"} {payloadById[platform.id].api_endpoint}</p>
+                          <p className="whitespace-pre-wrap">{JSON.stringify(payloadById[platform.id].customer_body, null, 2)}</p>
+                          <Button size="sm" variant="outline" onClick={() => copyOfficialPayload(platform.id)}>复制报文</Button>
+                        </div>
+                      ) : null}
                   </Card>
                 );
               })}

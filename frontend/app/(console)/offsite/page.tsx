@@ -18,6 +18,7 @@ import {
   type SourcePlatform,
   type SourcePlatformSeed,
 } from "@/lib/api";
+import { copyText } from "@/lib/utils";
 
 import { ChannelCards } from "./_components/ChannelCards";
 import { ContentTab } from "./_components/ContentTab";
@@ -32,6 +33,8 @@ import type { Tab } from "./_helpers";
 export default function OffsitePage() {
   const [tab, setTab] = useState<Tab>("channels");
   const [writingId, setWritingId] = useState("");
+  const [copiedAssetId, setCopiedAssetId] = useState("");
+  const [payloadById, setPayloadById] = useState<Record<string, { sent: boolean; compose_url: string; api_endpoint: string; http_method?: string; note: string; customer_body: Record<string, unknown> }>>({});
   const [filter, setFilter] = useState<"all" | "unverified" | "valid" | "dead" | "spam">("all");
   const [platformQuery, setPlatformQuery] = useState("");
   const [platformTypeFilter, setPlatformTypeFilter] = useState("all");
@@ -428,6 +431,62 @@ export default function OffsitePage() {
     }
   }
 
+  async function copyCustomerPaste(assetId: string) {
+    setError("");
+    setNote("");
+    try {
+      const row = await api<{ paste: string }>(`/api/offsite/content-assets/${assetId}/customer-paste`);
+      const ok = await copyText(row.paste || "");
+      setCopiedAssetId(ok ? assetId : "");
+      setNote(ok ? "短稿已复制。" : "短稿已写出，这台复制不到剪贴板。请按页面原文发给客户。");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "复制给客户失败");
+    }
+  }
+
+  async function loadOfficialPayload(platformId: string) {
+    setError("");
+    setNote("");
+    try {
+      const row = await api<(typeof payloadById)[string]>(`/api/offsite/platforms/${platformId}/official-payload`);
+      setPayloadById({ ...payloadById, [platformId]: row });
+      setNote(row.sent ? "报文已写出。" : "接口报文已写出。未发送。我们不代发。");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "读接口报文失败");
+    }
+  }
+
+  async function copyOfficialPayload(platformId: string) {
+    const row = payloadById[platformId];
+    if (!row) return;
+    const ok = await copyText(JSON.stringify({ ...row, sent: false }, null, 2));
+    setNote(ok ? "报文已复制。客户用自己的接口发。我们不代发。" : "报文已写出，这台复制不到剪贴板。");
+  }
+
+  async function markOwnApi(platformId: string) {
+    setError("");
+    setNote("");
+    try {
+      await api(`/api/offsite/platforms/${platformId}/mark-own-api`, {
+        method: "POST",
+        body: JSON.stringify({ confirmed: true }),
+      });
+      setNote("已记下：客户自备接口。我们不代发、不存他们的钥匙。");
+      loadPlatforms();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "登记自备接口失败");
+    }
+  }
+
+  function copyChannelPaste(platform: SourcePlatform) {
+    const draft = assets.find((asset) => asset.title.includes(platform.name) && (asset.body_md || "").trim());
+    if (!draft) {
+      setError("这个渠道还没有对外稿，先点「AI 写一篇」。");
+      return;
+    }
+    void copyCustomerPaste(draft.id);
+  }
+
   function queueOnChannel(platform: SourcePlatform) {
     const draft = assets.find((asset) => asset.title.includes(platform.name));
     setDistForm({
@@ -582,7 +641,13 @@ export default function OffsitePage() {
           seedBusy={seedBusy}
           writeForChannel={writeForChannel}
           queueOnChannel={queueOnChannel}
+          copyChannelPaste={copyChannelPaste}
+          copiedAssetId={copiedAssetId}
           writingId={writingId}
+          payloadById={payloadById}
+          loadOfficialPayload={loadOfficialPayload}
+          copyOfficialPayload={copyOfficialPayload}
+          markOwnApi={markOwnApi}
         />
       ) : null}
 
@@ -643,6 +708,8 @@ export default function OffsitePage() {
           setAssetForm={setAssetForm}
           generateAsset={generateAsset}
           saveAsset={saveAsset}
+          copyCustomerPaste={copyCustomerPaste}
+          copiedAssetId={copiedAssetId}
         />
       ) : null}
 

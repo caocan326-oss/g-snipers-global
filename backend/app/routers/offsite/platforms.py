@@ -3,11 +3,13 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.auth import get_current_user
 from app.database import get_db
-from app.models import PlatformAccount, PlatformConnector, SourcePlatform, User
-from app.official_apis import OFFICIAL_APIS, OfficialApi
+from app.models import ContentAsset, PlatformAccount, PlatformConnector, SourcePlatform, Tenant, User
+from app.official_apis import OFFICIAL_APIS, OfficialApi, official_api_for, official_api_payload
 from app.schemas import (
+    MarkOwnApiIn,
     OfficialApiOut,
     OfficialApiSeedOut,
+    OfficialPayloadOut,
     PlatformAccountCreate,
     PlatformAccountOut,
     PlatformConnectorCreate,
@@ -153,6 +155,70 @@ def seed_official_apis(user: User = Depends(get_current_user), db: Session = Dep
         created += 1
     db.commit()
     return OfficialApiSeedOut(created=created, updated=updated, apis=[_api_out(spec) for spec in OFFICIAL_APIS.values()])
+
+
+@router.get("/platforms/{platform_id}/official-payload", response_model=OfficialPayloadOut)
+def platform_official_payload(
+    platform_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> OfficialPayloadOut:
+    platform = db.get(SourcePlatform, platform_id)
+    if platform is None or platform.tenant_id != user.tenant_id:
+        raise HTTPException(status_code=404, detail="平台不存在")
+    spec = official_api_for(platform.platform_key)
+    if spec is None:
+        raise HTTPException(status_code=400, detail="这个渠道还没有挂客户自己的官方接口。请打开官方发帖页，或登记客户自己的接口。")
+    tenant = db.get(Tenant, user.tenant_id)
+    assets = db.query(ContentAsset).filter(ContentAsset.tenant_id == user.tenant_id).all()
+    asset = next((row for row in assets if platform.name in (row.title or "") and (row.body_md or "").strip()), None)
+    body = asset.body_md if asset else ""
+    title = asset.title if asset else f"在 {platform.name} 发一篇"
+    target = (tenant.site_origin if tenant else "") or ""
+    payload = official_api_payload(platform_key=platform.platform_key, title=title, body=body, target_url=target)
+    return OfficialPayloadOut(sent=False, **payload)
+
+
+@router.post("/platforms/{platform_id}/mark-own-api", response_model=PlatformConnectorOut)
+def mark_own_api(
+    platform_id: str,
+    body: MarkOwnApiIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> PlatformConnectorOut:
+    if not body.confirmed:
+        raise HTTPException(status_code=400, detail="登记客户已自备接口需要确认。我们不代发、不收他们的钥匙。")
+    platform = db.get(SourcePlatform, platform_id)
+    if platform is None or platform.tenant_id != user.tenant_id:
+        raise HTTPException(status_code=404, detail="平台不存在")
+    spec = official_api_for(platform.platform_key)
+    note = "客户说已自备接口。我们不代发、不存他们的钥匙。"
+    row = (
+        db.query(PlatformConnector)
+        .filter(PlatformConnector.tenant_id == user.tenant_id, PlatformConnector.platform_id == platform.id)
+        .first()
+    )
+    if row is None:
+        row = PlatformConnector(
+            tenant_id=user.tenant_id,
+            platform_id=platform.id,
+            provider_key=platform.platform_key or "customer_api",
+            auth_mode=spec.auth_mode if spec else "api",
+            capabilities="customer_post",
+            status="customer_own",
+            env_var=spec.env_hint if spec else "",
+            notes=note,
+        )
+        db.add(row)
+    else:
+        row.status = "customer_own"
+        row.capabilities = "customer_post"
+        row.notes = note
+        row.env_var = spec.env_hint if spec else row.env_var
+    db.commit()
+    db.refresh(row)
+    row.platform = platform
+    return _connector_out(row)
 
 
 @router.get("/accounts", response_model=list[PlatformAccountOut])

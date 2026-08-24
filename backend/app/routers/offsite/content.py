@@ -5,7 +5,8 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.auth import get_current_user
 from app.database import get_db
-from app.models import ContentAsset, FactPack, User
+from app.models import ContentAsset, FactPack, SourcePlatform, User
+from app.official_apis import official_api_for, offsite_customer_ask
 from app.schemas import (
     ContentAssetApproveIn,
     ContentAssetCreate,
@@ -16,6 +17,7 @@ from app.schemas import (
     FactPackCreate,
     FactPackOut,
     FactPackUpdate,
+    OffsiteCustomerPasteOut,
 )
 
 from . import router
@@ -100,6 +102,33 @@ def list_content_assets(user: User = Depends(get_current_user), db: Session = De
         .all()
     )
     return [_asset_out(row) for row in rows]
+
+
+def _platform_for_asset(db: Session, tenant_id: str, asset: ContentAsset) -> SourcePlatform | None:
+    title = asset.title or ""
+    rows = db.query(SourcePlatform).filter(SourcePlatform.tenant_id == tenant_id).all()
+    hits = [row for row in rows if row.name and row.name in title]
+    hits.sort(key=lambda row: len(row.name), reverse=True)
+    return hits[0] if hits else None
+
+
+@router.get("/content-assets/{asset_id}/customer-paste", response_model=OffsiteCustomerPasteOut)
+def content_asset_customer_paste(
+    asset_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> OffsiteCustomerPasteOut:
+    row = db.get(ContentAsset, asset_id)
+    if row is None or row.tenant_id != user.tenant_id:
+        raise HTTPException(status_code=404, detail="内容资产不存在")
+    if not (row.body_md or "").strip():
+        raise HTTPException(status_code=400, detail="这篇还没有正文，不能复制给客户。")
+    platform = _platform_for_asset(db, user.tenant_id, row)
+    spec = official_api_for(platform.platform_key) if platform else None
+    channel = platform.name if platform else "站外"
+    compose_url = spec.compose_url if spec else ""
+    paste = offsite_customer_ask(channel=channel, body=row.body_md, compose_url=compose_url)
+    return OffsiteCustomerPasteOut(asset_id=row.id, channel=channel, compose_url=compose_url, paste=paste)
 
 
 @router.post("/content-assets", response_model=ContentAssetOut, status_code=201)

@@ -42,6 +42,8 @@ export function ContentTab({
   setAssetForm,
   generateAsset,
   saveAsset,
+  copyCustomerPaste,
+  copiedAssetId,
 }: {
   factPacks: FactPack[];
   assets: ContentAsset[];
@@ -55,6 +57,8 @@ export function ContentTab({
   setAssetForm: (form: AssetForm) => void;
   generateAsset: () => void;
   saveAsset: (e: FormEvent) => void;
+  copyCustomerPaste: (assetId: string) => void;
+  copiedAssetId: string;
 }) {
   return (
     <section className="grid gap-5 xl:grid-cols-[1fr_420px]">
@@ -111,6 +115,9 @@ export function ContentTab({
                     {asset.ai_review ? <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-slate-500">{asset.ai_review}</p> : null}
                   </div>
                   <div className="flex shrink-0 flex-wrap gap-2 lg:w-40">
+                    <Button size="sm" variant="outline" onClick={() => copyCustomerPaste(asset.id)} disabled={!(asset.body_md || "").trim()}>
+                      {copiedAssetId === asset.id ? "已复制" : "复制给客户"}
+                    </Button>
                     <Button size="sm" variant="outline" onClick={() => reviewAsset(asset.id)}>AI 初审</Button>
                     <Button size="sm" onClick={() => approveAsset(asset.id)} disabled={asset.status === "human_approved"}>人工批准</Button>
                   </div>

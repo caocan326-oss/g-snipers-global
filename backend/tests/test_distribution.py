@@ -377,3 +377,78 @@ def test_list_jobs_shows_fillback_note_on_old_451_detail(client: TestClient, dem
     assert listed.status_code == 200
     out = next(item for item in listed.json() if item["id"] == job_id)
     assert out["last_detail"] == "URL 返回 HTTP 451，暂未通过存活核验。登记≠我们代发。"
+
+
+def test_offsite_customer_paste_is_ask_not_send(client: TestClient, demo_user) -> None:
+    headers = auth_header(client)
+    seeded = client.post("/api/offsite/platforms/seed-b2b", headers=headers)
+    assert seeded.status_code == 200
+    linkedin = next(row for row in seeded.json()["platforms"] if row["platform_key"] == "linkedin_company")
+
+    empty = client.post(
+        "/api/offsite/content-assets",
+        headers=headers,
+        json={"asset_type": "social_snippet", "title": f"{linkedin['name']} 发布稿", "body_md": "   ", "locale": "en"},
+    )
+    assert empty.status_code == 201
+    missing = client.get(f"/api/offsite/content-assets/{empty.json()['id']}/customer-paste", headers=headers)
+    assert missing.status_code == 400
+
+    created = client.post(
+        "/api/offsite/content-assets",
+        headers=headers,
+        json={
+            "asset_type": "social_snippet",
+            "title": f"{linkedin['name']} 发布稿",
+            "body_md": (
+                "Buyers are asking: \"Which brand makes the best 100W USB-C charger for laptops?\" "
+                "Official page: https://www.ugreen.com/products/usa-65585"
+            ),
+            "locale": "en",
+        },
+    )
+    assert created.status_code == 201, created.text
+    pasted = client.get(f"/api/offsite/content-assets/{created.json()['id']}/customer-paste", headers=headers)
+    assert pasted.status_code == 200, pasted.text
+    body = pasted.json()
+    assert body["channel"] == "LinkedIn Company Page"
+    assert body["compose_url"].startswith("https://www.linkedin.com")
+    assert "请在「LinkedIn Company Page」自己发这一条（我们不代发）：" in body["paste"]
+    assert "https://www.ugreen.com/products/usa-65585" in body["paste"]
+    assert "打开官方发帖页：https://www.linkedin.com" in body["paste"]
+    assert "我们不代发、不代登" in body["paste"]
+    assert "工作台打勾" not in body["paste"]
+    assert "代发" in body["paste"]
+
+
+def test_platform_payload_and_own_api_never_send_or_store_key(client: TestClient, demo_user) -> None:
+    headers = auth_header(client)
+    seeded = client.post("/api/offsite/platforms/seed-b2b", headers=headers)
+    assert seeded.status_code == 200
+    linkedin = next(row for row in seeded.json()["platforms"] if row["platform_key"] == "linkedin_company")
+
+    payload = client.get(f"/api/offsite/platforms/{linkedin['id']}/official-payload", headers=headers)
+    assert payload.status_code == 200, payload.text
+    body = payload.json()
+    assert body["sent"] is False
+    assert body["compose_url"].startswith("https://www.linkedin.com")
+    assert "api.linkedin.com" in body["api_endpoint"]
+    assert "不代登" in body["note"] or "不代发" in body["note"]
+
+    rejected = client.post(
+        f"/api/offsite/platforms/{linkedin['id']}/mark-own-api",
+        headers=headers,
+        json={"confirmed": True, "token": "should-not-be-accepted"},
+    )
+    assert rejected.status_code == 422
+
+    marked = client.post(
+        f"/api/offsite/platforms/{linkedin['id']}/mark-own-api",
+        headers=headers,
+        json={"confirmed": True},
+    )
+    assert marked.status_code == 200, marked.text
+    assert marked.json()["status"] == "customer_own"
+    assert "不存他们的钥匙" in marked.json()["notes"]
+    assert "token" not in marked.json()
+    assert "should-not-be-accepted" not in str(marked.json())

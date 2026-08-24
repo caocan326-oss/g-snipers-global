@@ -107,6 +107,19 @@ def official_api_for(platform_key: str) -> OfficialApi | None:
     return OFFICIAL_APIS.get(platform_key or "")
 
 
+def offsite_customer_ask(*, channel: str, body: str, compose_url: str = "") -> str:
+    text = (body or "").strip()
+    if not text:
+        return ""
+    name = (channel or "站外").strip() or "站外"
+    parts = [f"请在「{name}」自己发这一条（我们不代发）：", text]
+    url = (compose_url or "").strip()
+    if url:
+        parts.append(f"打开官方发帖页：{url}")
+    parts.append("我们不代发、不代登。发完把帖子链接告诉我，我再回填。")
+    return "\n\n".join(parts)
+
+
 def official_api_payload(*, platform_key: str, title: str, body: str, target_url: str) -> dict:
     spec = official_api_for(platform_key)
     if spec is None:

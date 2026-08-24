@@ -1558,6 +1558,18 @@ class OfficialPayloadOut(BaseModel):
     customer_body: dict = {}
 
 
+class OffsiteCustomerPasteOut(BaseModel):
+    asset_id: str
+    channel: str
+    compose_url: str = ""
+    paste: str
+
+
+class MarkOwnApiIn(BaseModel):
+    model_config = {"extra": "forbid"}
+    confirmed: bool
+
+
 class SourcePlatformSeedOut(BaseModel):
     created: int
     skipped: int
