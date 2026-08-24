@@ -413,7 +413,7 @@ def job_official_payload(
     key = platform.platform_key if platform else ""
     spec = official_api_for(key)
     if spec is None:
-        raise HTTPException(status_code=400, detail="这个渠道还没有挂官方接口。先去官网发，或登记自己的接口。")
+        raise HTTPException(status_code=400, detail="这个渠道还没有挂客户自己的官方接口。请打开官方发帖页，或登记客户自己的接口。")
     body = job.payload_summary or ""
     if job.content_asset_id:
         asset = db.get(ContentAsset, job.content_asset_id)

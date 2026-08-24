@@ -8,13 +8,13 @@ import type { ContentAsset, DistJob, PlatformAccount, PlatformConnector, SourceP
 import { platformTypeLabel } from "../_helpers";
 
 function sendWay(platform: SourcePlatform, connector?: PlatformConnector, account?: PlatformAccount) {
-  if (connector && (connector.status === "ready" || connector.auth_mode === "api")) return "接口可发";
-  if (platform.has_official_api) return "可接官方接口";
-  if (account) return "已记下账号，自己登号发";
-  if (platform.submission_mode === "manual_login") return "自己登号发";
-  if (platform.submission_mode === "form_public") return "填公开表单";
+  if (connector && (connector.status === "ready" || connector.auth_mode === "api")) return "可用客户自己的接口（人确认）";
+  if (platform.has_official_api) return "可接客户自己的官方接口";
+  if (account) return "已记下账号，客户自己登号发";
+  if (platform.submission_mode === "manual_login") return "客户自己登号发";
+  if (platform.submission_mode === "form_public") return "客户自己填公开表单";
   if (platform.submission_mode === "email_outreach") return "邮件联系";
-  return "人工发出";
+  return "客户自己发出";
 }
 
 export function ChannelCards({
@@ -53,7 +53,7 @@ export function ChannelCards({
         <CardContent className="space-y-3 p-6">
           <h2 className="text-lg font-semibold text-slate-950">还没有渠道卡片</h2>
           <p className="text-sm leading-6 text-slate-500">
-            一张卡片就是一个渠道。客户想发 LinkedIn、Facebook 或行业目录，点那张卡：AI 写稿、加上关键词，人用接口或自己登号发出去。不自动群发。
+            一张卡片就是一个渠道。点开后 AI 写稿；发出去要打开官方页，由客户自己登号或用自己的接口。我们不代发、不代登。
           </p>
           <Button onClick={seedPlatforms} disabled={seedBusy}>
             {seedBusy ? "载入中…" : "载入常用渠道"}
@@ -66,7 +66,7 @@ export function ChannelCards({
   return (
     <div className="space-y-6">
       <p className="text-sm text-slate-500">
-        想发哪个就点哪张。AI 写文章、加关键词；发出去用他们的接口，或自己登号。内置浏览器还没做。
+        想发哪个就点哪张。AI 写稿；打开官方页后由客户自己发。我们不代发。内置浏览器还没做。
       </p>
       {groups.map((group) =>
         group.rows.length ? (
@@ -109,7 +109,7 @@ export function ChannelCards({
                         </Button>
                         {platform.compose_url ? (
                           <a href={platform.compose_url} target="_blank" rel="noreferrer" className="inline-flex">
-                            <Button size="sm" variant="outline">去官网发</Button>
+                            <Button size="sm" variant="outline">打开官方发帖页</Button>
                           </a>
                         ) : platform.base_url ? (
                           <a href={platform.base_url} target="_blank" rel="noreferrer" className="inline-flex">
