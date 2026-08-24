@@ -1524,6 +1524,27 @@ class SourcePlatformOut(SourcePlatformCreate):
     docs_url: str = ""
     api_endpoint: str = ""
     api_auth_mode: str = ""
+    profile_url: str = ""
+    profile_http_status: int | None = None
+    profile_is_live: bool = False
+    profile_site_found: bool = False
+    profile_checked_at: datetime | None = None
+    profile_note: str = ""
+
+
+class CheckProfileIn(BaseModel):
+    profile_url: str = ""
+
+
+class ProfileCheckOut(BaseModel):
+    platform_id: str
+    profile_url: str
+    http_status: int | None = None
+    is_live: bool = False
+    site_found: bool = False
+    brand_mentioned: bool = False
+    note: str
+    sent: bool = False
 
 
 class OfficialApiOut(BaseModel):

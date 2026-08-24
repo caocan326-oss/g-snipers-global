@@ -1,13 +1,18 @@
+from datetime import datetime, timezone
+
 from fastapi import Depends, HTTPException
 from sqlalchemy.orm import Session, selectinload
 
 from app.auth import get_current_user
 from app.database import get_db
 from app.models import ContentAsset, PlatformAccount, PlatformConnector, SourcePlatform, Tenant, User
+from app.offsite_profile import check_public_profile
 from app.official_apis import OFFICIAL_APIS, OfficialApi, official_api_for, official_api_payload
 from app.schemas import (
+    CheckProfileIn,
     MarkOwnApiIn,
     OfficialApiOut,
+    ProfileCheckOut,
     OfficialApiSeedOut,
     OfficialPayloadOut,
     PlatformAccountCreate,
@@ -35,6 +40,38 @@ def list_platforms(user: User = Depends(get_current_user), db: Session = Depends
         .all()
     )
     return [_platform_out(row) for row in rows]
+
+
+@router.post("/platforms/{platform_id}/check-profile", response_model=ProfileCheckOut)
+def check_platform_profile(
+    platform_id: str,
+    body: CheckProfileIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ProfileCheckOut:
+    platform = db.get(SourcePlatform, platform_id)
+    if platform is None or platform.tenant_id != user.tenant_id:
+        raise HTTPException(status_code=404, detail="平台不存在")
+    tenant = db.get(Tenant, user.tenant_id)
+    profile_url = (body.profile_url or platform.profile_url or "").strip()
+    if not profile_url:
+        raise HTTPException(status_code=400, detail="先填这家客户的公开主页 URL。不要猜，我们不注册、不代登。")
+    try:
+        result = check_public_profile(
+            profile_url=profile_url,
+            site_origin=(tenant.site_origin if tenant else "") or "",
+            brand=(tenant.name if tenant else "") or "",
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    platform.profile_url = result["profile_url"]
+    platform.profile_http_status = result["http_status"]
+    platform.profile_is_live = result["is_live"]
+    platform.profile_site_found = result["site_found"]
+    platform.profile_checked_at = datetime.now(timezone.utc)
+    platform.profile_note = result["note"]
+    db.commit()
+    return ProfileCheckOut(platform_id=platform.id, **result)
 
 
 @router.post("/platforms", response_model=SourcePlatformOut, status_code=201)

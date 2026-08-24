@@ -1,7 +1,7 @@
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from app.models import DistributionJob
+from app.models import DistributionJob, Tenant
 from tests.conftest import auth_header
 
 
@@ -452,3 +452,77 @@ def test_platform_payload_and_own_api_never_send_or_store_key(client: TestClient
     assert "不存他们的钥匙" in marked.json()["notes"]
     assert "token" not in marked.json()
     assert "should-not-be-accepted" not in str(marked.json())
+
+
+def test_check_profile_needs_real_page_and_does_not_send(client: TestClient, demo_user, db: Session, monkeypatch) -> None:
+    headers = auth_header(client)
+    tenant = db.get(Tenant, demo_user.tenant_id)
+    assert tenant is not None
+    tenant.site_origin = "https://www.snipers.com.cn"
+    tenant.name = "SNIPERS"
+    db.commit()
+
+    seeded = client.post("/api/offsite/platforms/seed-b2b", headers=headers)
+    assert seeded.status_code == 200
+    linkedin = next(row for row in seeded.json()["platforms"] if row["platform_key"] == "linkedin_company")
+
+    empty = client.post(f"/api/offsite/platforms/{linkedin['id']}/check-profile", headers=headers, json={})
+    assert empty.status_code == 400
+    generic = client.post(
+        f"/api/offsite/platforms/{linkedin['id']}/check-profile",
+        headers=headers,
+        json={"profile_url": "https://www.linkedin.com/company/"},
+    )
+    assert generic.status_code == 400
+
+    class FakeResponse:
+        status_code = 200
+        text = '<html><body>SNIPERS <a href="https://www.snipers.com.cn/">site</a></body></html>'
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def get(self, url: str):
+            assert "linkedin.com/company/snipers" in url
+            return FakeResponse()
+
+    from app import offsite_profile
+
+    monkeypatch.setattr(offsite_profile.httpx, "Client", FakeClient)
+    checked = client.post(
+        f"/api/offsite/platforms/{linkedin['id']}/check-profile",
+        headers=headers,
+        json={"profile_url": "https://www.linkedin.com/company/snipers"},
+    )
+    assert checked.status_code == 200, checked.text
+    body = checked.json()
+    assert body["sent"] is False
+    assert body["is_live"] is True
+    assert body["site_found"] is True
+    assert "登记≠我们代发" in body["note"]
+
+    class BlockedResponse:
+        status_code = 451
+        text = "Unavailable"
+
+    class BlockedClient(FakeClient):
+        def get(self, url: str):
+            return BlockedResponse()
+
+    monkeypatch.setattr(offsite_profile.httpx, "Client", BlockedClient)
+    blocked = client.post(
+        f"/api/offsite/platforms/{linkedin['id']}/check-profile",
+        headers=headers,
+        json={"profile_url": "https://www.linkedin.com/company/snipers"},
+    )
+    assert blocked.status_code == 200
+    assert blocked.json()["is_live"] is False
+    assert "不等于没有主页" in blocked.json()["note"]
+    assert blocked.json()["sent"] is False

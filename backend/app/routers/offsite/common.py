@@ -36,6 +36,12 @@ def _platform_out(row: SourcePlatform) -> SourcePlatformOut:
         docs_url=spec.docs_url if spec else "",
         api_endpoint=spec.api_endpoint if spec else "",
         api_auth_mode=spec.auth_mode if spec else "",
+        profile_url=row.profile_url or "",
+        profile_http_status=row.profile_http_status,
+        profile_is_live=bool(row.profile_is_live),
+        profile_site_found=bool(row.profile_site_found),
+        profile_checked_at=row.profile_checked_at,
+        profile_note=row.profile_note or "",
     )
 
 

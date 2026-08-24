@@ -702,6 +702,12 @@ class SourcePlatform(Base):
     risk_level: Mapped[str] = mapped_column(String(20), default="medium")
     status: Mapped[str] = mapped_column(String(20), default="active", index=True)
     notes: Mapped[str] = mapped_column(Text, default="")
+    profile_url: Mapped[str] = mapped_column(String(500), default="")
+    profile_http_status: Mapped[int | None] = mapped_column(Integer)
+    profile_is_live: Mapped[bool] = mapped_column(Boolean, default=False)
+    profile_site_found: Mapped[bool] = mapped_column(Boolean, default=False)
+    profile_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    profile_note: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

@@ -15,6 +15,7 @@ import {
   type PlacementCheck,
   type PlatformAccount,
   type PlatformConnector,
+  type ProfileCheck,
   type SourcePlatform,
   type SourcePlatformSeed,
 } from "@/lib/api";
@@ -34,6 +35,8 @@ export default function OffsitePage() {
   const [tab, setTab] = useState<Tab>("channels");
   const [writingId, setWritingId] = useState("");
   const [copiedAssetId, setCopiedAssetId] = useState("");
+  const [checkingId, setCheckingId] = useState("");
+  const [profileForms, setProfileForms] = useState<Record<string, string>>({});
   const [payloadById, setPayloadById] = useState<Record<string, { sent: boolean; compose_url: string; api_endpoint: string; http_method?: string; note: string; customer_body: Record<string, unknown> }>>({});
   const [filter, setFilter] = useState<"all" | "unverified" | "valid" | "dead" | "spam">("all");
   const [platformQuery, setPlatformQuery] = useState("");
@@ -463,6 +466,28 @@ export default function OffsitePage() {
     setNote(ok ? "报文已复制。客户用自己的接口发。我们不代发。" : "报文已写出，这台复制不到剪贴板。");
   }
 
+  function setProfileUrl(platformId: string, url: string) {
+    setProfileForms({ ...profileForms, [platformId]: url });
+  }
+
+  async function checkProfile(platformId: string) {
+    setError("");
+    setNote("");
+    setCheckingId(platformId);
+    try {
+      const checked = await api<ProfileCheck>(`/api/offsite/platforms/${platformId}/check-profile`, {
+        method: "POST",
+        body: JSON.stringify({ profile_url: profileForms[platformId] || "" }),
+      });
+      setNote(checked.note);
+      loadPlatforms();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "核对档案失败");
+    } finally {
+      setCheckingId("");
+    }
+  }
+
   async function markOwnApi(platformId: string) {
     setError("");
     setNote("");
@@ -648,6 +673,10 @@ export default function OffsitePage() {
           loadOfficialPayload={loadOfficialPayload}
           copyOfficialPayload={copyOfficialPayload}
           markOwnApi={markOwnApi}
+          profileForms={profileForms}
+          setProfileUrl={setProfileUrl}
+          checkProfile={checkProfile}
+          checkingId={checkingId}
         />
       ) : null}
 

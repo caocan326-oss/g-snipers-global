@@ -3,6 +3,7 @@ import { ExternalLink, KeyRound, PenLine, Radio } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import type { ContentAsset, DistJob, PlatformAccount, PlatformConnector, SourcePlatform } from "@/lib/api";
 
 import { platformTypeLabel } from "../_helpers";
@@ -35,6 +36,10 @@ export function ChannelCards({
   loadOfficialPayload,
   copyOfficialPayload,
   markOwnApi,
+  profileForms,
+  setProfileUrl,
+  checkProfile,
+  checkingId,
 }: {
   platforms: SourcePlatform[];
   accounts: PlatformAccount[];
@@ -52,6 +57,10 @@ export function ChannelCards({
   loadOfficialPayload: (platformId: string) => void;
   copyOfficialPayload: (platformId: string) => void;
   markOwnApi: (platformId: string) => void;
+  profileForms: Record<string, string>;
+  setProfileUrl: (platformId: string, url: string) => void;
+  checkProfile: (platformId: string) => void;
+  checkingId: string;
 }) {
   const social = platforms.filter((p) => p.source_type === "social_profile");
   const others = platforms.filter((p) => p.source_type !== "social_profile");
@@ -111,6 +120,22 @@ export function ChannelCards({
                       <p className="text-xs text-slate-400">
                         稿 {drafts} · 待发 {channelJobs.filter((job) => !["sent", "done", "cancelled"].includes(job.status)).length}
                       </p>
+                      <div className="flex flex-col gap-2">
+                        <Input
+                          className="h-9"
+                          placeholder="公开主页 URL，不要填发帖入口"
+                          value={profileForms[platform.id] ?? platform.profile_url ?? ""}
+                          onChange={(e) => setProfileUrl(platform.id, e.target.value)}
+                        />
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Button size="sm" variant="outline" onClick={() => checkProfile(platform.id)} disabled={checkingId === platform.id}>
+                            {checkingId === platform.id ? "在核…" : "核对档案"}
+                          </Button>
+                          {platform.profile_site_found ? <Badge tone="green">页上有官网</Badge> : null}
+                          {platform.profile_note && !platform.profile_site_found ? <Badge tone="amber">档案未对齐</Badge> : null}
+                        </div>
+                        {platform.profile_note ? <p className="text-xs leading-5 text-slate-500">{platform.profile_note}</p> : null}
+                      </div>
                       <div className="flex flex-wrap gap-2">
                         <Button size="sm" onClick={() => writeForChannel(platform)} disabled={writingId === platform.id}>
                           <PenLine className="mr-1 h-3.5 w-3.5" />

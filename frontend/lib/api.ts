@@ -1207,6 +1207,23 @@ export type SourcePlatform = {
   docs_url?: string;
   api_endpoint?: string;
   api_auth_mode?: string;
+  profile_url?: string;
+  profile_http_status?: number | null;
+  profile_is_live?: boolean;
+  profile_site_found?: boolean;
+  profile_checked_at?: string | null;
+  profile_note?: string;
+};
+
+export type ProfileCheck = {
+  platform_id: string;
+  profile_url: string;
+  http_status: number | null;
+  is_live: boolean;
+  site_found: boolean;
+  brand_mentioned: boolean;
+  note: string;
+  sent: boolean;
 };
 
 export type SourcePlatformSeed = {
