@@ -7,7 +7,7 @@
 
 约定：家里和公司**不会同时改**。换机器前必须把这边 push 完。
 
-最后更新：2026-08-24 13:41（公司。产品 `1e91706`。站外可复制给客户、可看报文、可记自备接口。不代发。）。
+最后更新：2026-08-24 13:55（公司。现网当前站已换成 SNIPERS / snipers.com.cn。绿联进历史网站。产品 `1e91706`。）。
 
 ---
 
@@ -492,15 +492,15 @@ git log -1 --oneline
 
 | 项 | 值 |
 | --- | --- |
-| 日期 | 2026-08-24 13:41 |
+| 日期 | 2026-08-24 13:55 |
 | 最后一台 | 公司 `E:\G-snipers海外版` |
 | 分支 | `main` |
-| 提交 | 产品 `1e91706`（§4.18 复制给客户 / 报文 / 自备接口）。§4.15–4.17 人测过。 |
+| 提交 | 产品 `1e91706`。现网当前站 **SNIPERS** `https://www.snipers.com.cn`（从历史恢复）。绿联已归档。 |
 | 已 push origin / upstream | 是。 |
-| 已发版生产 | **是。** `1e91706` 已 `sync-from-local.ps1 -Rebuild`。`DEMO_LOGIN_ENABLED` 仍关。Postgres 仍不映射 5432。 |
-| 接口实测 | `test_distribution` 10 通过。站外新按钮待硬刷新人测。 |
-| 未完成 | 真发须客户自己的号。A8 有额度再测。绿联页须客户改。 |
-| 下一台先做 | 家里先 `git pull origin main`。硬刷新站外看复制给客户。不要两边同时改。家里 `localtest.db` 不要提交。 |
+| 已发版生产 | **是。** 产品未改。只换了当前官网。`DEMO_LOGIN_ENABLED` 仍关。 |
+| 接口实测 | 换站后页头应为 SNIPERS / snipers.com.cn。GEO 票 2，站内问题 123。绿联在历史网站。 |
+| 未完成 | 真发须客户自己的号。要绿联时从历史网站恢复，不要再手改库。 |
+| 下一台先做 | 家里先 `git pull origin main`。硬刷新看页头 SNIPERS。不要两边同时改。家里 `localtest.db` 不要提交。 |
 
 `www` 灰云、A 仍 `39.97.52.149`。`relay.weiyids.com` 橙云，不要 CNAME 回 `workers.dev`。不要开 Google Ads。不要在服务器 `git pull`。
 
