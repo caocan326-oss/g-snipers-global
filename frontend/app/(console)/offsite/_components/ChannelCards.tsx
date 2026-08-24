@@ -169,6 +169,7 @@ export function ChannelCards({
                           <Button size="sm" variant="outline" onClick={() => copyOfficialPayload(platform.id)}>复制报文</Button>
                         </div>
                       ) : null}
+                    </CardContent>
                   </Card>
                 );
               })}
