@@ -50,7 +50,7 @@ export function jobChannelLabel(job: { platform_id?: string | null; provider_key
 
 const FILLBACK_NOT_SEND = "登记≠我们代发";
 
-export function jobVerifyNote(job: { last_detail?: string; status?: string; result_url?: string }) {
+export function jobVerifyNote(job: { last_detail?: string | null; status?: string; result_url?: string | null }) {
   const detail = (job.last_detail || "").trim();
   if (!detail) return "";
   if (detail.includes(FILLBACK_NOT_SEND)) return detail;
