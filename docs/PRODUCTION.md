@@ -250,6 +250,7 @@ powershell -File deploy/sync-from-local.ps1
 | 2026-08-23 | 产品/运维 | 家里发到 `363b37b`（`sync-from-local.ps1 -Rebuild`）。GEO 官网核验收口：只能对着客户官网链接勾通过。 |
 | 2026-08-23 | 产品/运维 | 家里发到 `d905cbf`（`sync-from-local.ps1 -Rebuild`）。没给出官网短稿写实；无客户官网链接时说明为何没有核对按钮。 |
 | 2026-08-24 | 产品/运维 | 公司发到 `6e09125`（`sync-from-local.ps1 -Rebuild`）。GEO 待处理卡接站外一篇英文稿、官方发帖页和帖子链接回填。不代发。记下帖子不会自动上线。 |
+| 2026-08-24 | 产品/运维 | 公司发到 `9006ec6`（`sync-from-local.ps1 -Rebuild`）。发给客户的短稿带上「自己发这一条」和两行英文。黄框不重复。不代发。站外仍不进清单。 |
 
 ---
 
