@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import type { BacklinkGap, ContentAsset, DistGuide, DistJob, DistProvider, PlacementCheck, SourcePlatform, PlatformAccount } from "@/lib/api";
 
-import { jobChannelLabel, jobStatusText, taskTypeLabel } from "../_helpers";
+import { jobChannelLabel, jobStatusText, jobVerifyNote, taskTypeLabel } from "../_helpers";
 
 type DistForm = {
   gap_id: string;
@@ -99,7 +99,7 @@ export function DistributionTab({
                         {j.result_url}
                       </a>
                     ) : null}
-                    {j.last_detail ? <p className="mt-2 text-xs leading-5 text-slate-500">{j.last_detail}</p> : null}
+                    {jobVerifyNote(j) ? <p className="mt-2 text-xs leading-5 text-slate-500">{jobVerifyNote(j)}</p> : null}
                     {guides[j.id] ? (
                       <div className="mt-3 grid gap-2 text-sm md:grid-cols-2">
                         <div className="rounded-md border border-slate-200 bg-slate-50 p-3">

@@ -1,5 +1,7 @@
 from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
 
+from app.models import DistributionJob
 from tests.conftest import auth_header
 
 
@@ -346,3 +348,32 @@ def test_official_apis_are_customer_owned_not_auto_sent(client: TestClient, demo
     assert "api.linkedin.com" in body["api_endpoint"]
     assert body["customer_body"]["link"] == "https://www.snipers.com.cn/"
     assert "代登" not in body["note"] or "不代登" in body["note"]
+
+
+def test_list_jobs_shows_fillback_note_on_old_451_detail(client: TestClient, demo_user, db: Session) -> None:
+    headers = auth_header(client)
+    created = client.post(
+        "/api/distribution/jobs",
+        headers=headers,
+        json={
+            "title": "在 LinkedIn Company Page 发一篇",
+            "target_url": "https://www.ugreen.com/products/usa-65585",
+            "provider_key": "directory",
+            "task_type": "social_post_plan",
+        },
+    )
+    assert created.status_code == 201
+    job_id = created.json()["id"]
+
+    row = db.get(DistributionJob, job_id)
+    assert row is not None
+    row.status = "submitted"
+    row.result_url = "https://www.linkedin.com/feed/update/test-ugreen-100w"
+    row.verify_status = "failed"
+    row.last_detail = "URL 返回 HTTP 451，暂未通过存活核验。"
+    db.commit()
+
+    listed = client.get("/api/distribution/jobs", headers=headers)
+    assert listed.status_code == 200
+    out = next(item for item in listed.json() if item["id"] == job_id)
+    assert out["last_detail"] == "URL 返回 HTTP 451，暂未通过存活核验。登记≠我们代发。"

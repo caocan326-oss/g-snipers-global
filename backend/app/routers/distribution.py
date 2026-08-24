@@ -103,8 +103,24 @@ def _host_match(url: str, target_url: str) -> bool:
     return parsed_target.netloc.lower() in parsed_url.netloc.lower()
 
 
+FILLBACK_NOT_SEND = "登记≠我们代发"
+
+
+def _with_fillback_note(detail: str | None, *, result_url: str | None, status: str) -> str | None:
+    text = (detail or "").strip()
+    if not text:
+        return detail
+    if FILLBACK_NOT_SEND in text:
+        return text
+    if (result_url or "").strip() or status in {"submitted", "verifying", "done"}:
+        return f"{text}{FILLBACK_NOT_SEND}。"
+    return text
+
+
 def _job_out(row: DistributionJob) -> DistributionJobOut:
-    return DistributionJobOut.model_validate(row, from_attributes=True)
+    out = DistributionJobOut.model_validate(row, from_attributes=True)
+    out.last_detail = _with_fillback_note(out.last_detail, result_url=out.result_url, status=out.status)
+    return out
 
 
 @router.get("/providers", response_model=list[ProviderOut])
@@ -122,13 +138,14 @@ def list_providers(_user: User = Depends(get_current_user)) -> list[ProviderOut]
 
 
 @router.get("/jobs", response_model=list[DistributionJobOut])
-def list_jobs(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> list[DistributionJob]:
-    return (
+def list_jobs(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> list[DistributionJobOut]:
+    rows = (
         db.query(DistributionJob)
         .filter(DistributionJob.tenant_id == user.tenant_id)
         .order_by(DistributionJob.created_at.desc())
         .all()
     )
+    return [_job_out(row) for row in rows]
 
 
 @router.post("/jobs", response_model=DistributionJobOut, status_code=201)
