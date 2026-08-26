@@ -593,6 +593,22 @@ T5 过的时候，客户说明多了一条「买家问智能锁许可」。SNIPE
 
 **谁改、改什么（等推广，我们不代改）。** 改的是他们网站**模板**里的 JSON-LD，不是后台文章。页：`https://www.snipers.com.cn/snipers/article/articlelist/cat_id/3.html`。只许补正文里有的：公司赛珀 / Snipers、数字化转型服务商、邮箱 `snipers@snipers.com.cn`、地址上海市闵行区宜山路2000号利丰广场2号楼、产品 G-Snipers（AI 智能获客，SEM / SEO / GEO）。认证不写。不许厦门、成都、ISO、TÜV、编规格。经理改完硬刷新再核。
 
+### 4.27 有一份审查 diff 方向反了，不要按那份改代码
+
+2026-08-26 有人用落后本地仓对 `origin/main` 跑了 8 路审查，把「远程已经修好的」读成「HEAD 新引入的破坏」。审查自己也收回了，结论作废。那份仓后来快进到 `15ff509`，**不是**我们这份 `origin/main`（现 `b3dd2c2`）。不要去「修」下面这些，公司仓已经是对的：
+
+| 审查说被破坏 | 公司 `main` 现在 |
+| --- | --- |
+| `seed_prompt_panel` 又用模板编买家问题 | 只拷已记原句。门锁或非问句丢掉。来源 `recorded-original`。按钮「采用已记原句」。 |
+| `adopt_live_site` 只看域名、条件放宽、测试删了 | 仍是 `租户名 == 演示客户 · 智能门锁出海` **且** SNIPERS 主机才跳过清洗。`backend/tests/test_site_identity.py` 还在。 |
+| 门锁标记两处各用一份词 | 问句/工单一律 `LOCK_PROMPT_MARKERS`（6 个，含「智能锁」「智能门锁」）。`LOCK_ASSET_MARKERS` 只管引用材料，且 SNIPERS 主机不洗资产。 |
+| 「登记≠我们代发」和测试删了 | `distribution.py` 的 `FILLBACK_NOT_SEND` 还在，核验失败也会补上。`test_distribution.py` 还断言这句。 |
+| 迁移 `023_platform_profile_check.py` 删了会断 alembic | 文件还在，有 `downgrade()`。 |
+
+「生成买家问题」循环里每条单独查竞品/市场：那是旧模板路径。现 `seed_prompt_panel` 不走 `_prompt_pack_candidates`。这个函数还留在 `geo/common.py`，没有调用方。不要再接到「采用已记原句」上。量小，不单开一轮改。
+
+不要按那 8 路报告改产品。下一台先 `git pull origin main`，对照本仓，不要对照那份落后快照。
+
 ---
 
 ## 5. 收工 / 换到另一台电脑之前
@@ -626,15 +642,15 @@ git log -1 --oneline
 
 | 项 | 值 |
 | --- | --- |
-| 日期 | 2026-08-26 19:55 |
+| 日期 | 2026-08-26 20:00 |
 | 最后一台 | 公司 `E:\G-snipers海外版` |
 | 分支 | `main` |
-| 提交 | 产品 `6b5532c`。交接写清：推广改模板 JSON-LD，只补公司/产品，认证空着。 |
+| 提交 | 产品仍 `6b5532c`。交接写了：8 路审查 diff 方向反了，不要按那份改代码。 |
 | 已 push origin / upstream | 是。 |
 | 已发版生产 | **是。** 产品未改，只同步交接。`DEMO_LOGIN_ENABLED` 仍关。 |
 | 接口实测 | 绿联两轮抽查已踩实。`cat_id/3` 现网标记仍只有 name+url。 |
 | 未完成 | 等推广改模板。再核公司/产品在不在、认证须空。 |
-| 下一台先做 | 家里先 `git pull origin main`。推广改完只核标记。不代改、不编问句、不抽第三轮绿联。 |
+| 下一台先做 | 家里先 `git pull origin main`。不要按那份 8 路审查改产品。推广改完只核标记。不代改、不编问句、不抽第三轮绿联。 |
 
 `www` 灰云、A 仍 `39.97.52.149`。`relay.weiyids.com` 橙云，不要 CNAME 回 `workers.dev`。不要开 Google Ads。不要在服务器 `git pull`。
 
@@ -654,3 +670,4 @@ git log -1 --oneline
 - 不要配置 Google Ads。
 - 不要假设 `weiyids.com`（无 www）已经能开。正式地址是 https://www.weiyids.com 。
 - 不要把客户库 dump / `.json.gz` 提交进 git。异地副本在仓库旁边的 `g-snipers-db-offsite\`，见 §4.1。
+- 不要按 2026-08-26 那份 8 路审查改产品：diff 方向反了，见 §4.27。不要把「采用已记原句」接回模板编句，不要放宽 `adopt_live_site`，不要删「登记≠我们代发」，不要删 `023` 迁移。
