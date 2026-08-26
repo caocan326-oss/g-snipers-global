@@ -149,7 +149,7 @@ export default function GeoPage() {
       }
       loadPrompts();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "生成买家问题失败");
+      setError(e instanceof Error ? e.message : "采用已记原句失败");
     } finally {
       setBusyAction("");
     }

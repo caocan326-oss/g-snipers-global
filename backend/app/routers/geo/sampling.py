@@ -212,7 +212,7 @@ def _load_sample_prompts(db: Session, user: User, body: GeoAutoSampleIn) -> list
         q = q.filter(GeoPrompt.id.in_(body.prompt_ids))
     prompts = q.order_by(GeoPrompt.created_at.desc()).limit(body.limit).all()
     if not prompts:
-        raise HTTPException(status_code=400, detail="没有可检查的买家问题。请先点「生成买家问题」，或手写一句英文问句再测。")
+        raise HTTPException(status_code=400, detail="没有可检查的买家问题。先采用已记原句，或手写一句再测。不要编问句。")
     return prompts
 
 

@@ -23,7 +23,7 @@ def test_project_targets_seed_customer_context_and_geo_prompts(client: TestClien
         ],
         "keywords": [
             {"theme": "industrial pump supplier", "locale": "en-US", "country_code": "US", "intent": "commercial", "intensity": 5},
-            {"theme": "industrial pump supplier", "locale": "en-US", "country_code": "US", "intent": "commercial", "intensity": 5},
+            {"theme": "Which industrial pump supplier is reliable for export?", "locale": "en-US", "country_code": "US", "intent": "commercial", "intensity": 5},
         ],
         "competitors": [
             {"name": "Pump Rival", "website": "https://rival.example", "country_code": "US"},
@@ -37,20 +37,21 @@ def test_project_targets_seed_customer_context_and_geo_prompts(client: TestClien
     assert body["site_origin"] == "https://example.com"
     assert body["readiness"] == "ready"
     assert body["target_market_count"] == 1
-    assert body["keyword_count"] == 1
+    assert body["keyword_count"] == 2
     assert body["competitor_count"] == 1
-    assert body["markets"][0]["demand_signals"][0]["theme"] == "industrial pump supplier"
+    themes = {row["theme"] for row in body["markets"][0]["demand_signals"]}
+    assert themes == {"industrial pump supplier", "Which industrial pump supplier is reliable for export?"}
 
     again = client.put("/api/project-targets", headers=headers, json=payload)
     assert again.status_code == 200, again.text
-    assert again.json()["keyword_count"] == 1
+    assert again.json()["keyword_count"] == 2
     assert again.json()["competitor_count"] == 1
 
     seeded = client.post("/api/geo/prompt-panel/seed", headers=headers)
     assert seeded.status_code == 200, seeded.text
-    assert seeded.json()["created"] >= 1
+    assert seeded.json()["created"] == 1
     prompts = client.get("/api/geo/prompts", headers=headers).json()
-    assert any("industrial pump supplier" in row["prompt_text"] for row in prompts)
+    assert [row["prompt_text"] for row in prompts] == ["Which industrial pump supplier is reliable for export?"]
 
 
 def test_project_targets_replace_old_target_setup_when_site_changes(client: TestClient, demo_user) -> None:
@@ -180,7 +181,7 @@ def test_site_context_archive_restore_switches_seo_geo_and_execution(client: Tes
                     "opportunity_score": 80,
                 }
             ],
-            "keywords": [{"theme": "industrial pump", "locale": "en-US", "country_code": "US"}],
+            "keywords": [{"theme": "Which industrial pump is reliable for export?", "locale": "en-US", "country_code": "US"}],
             "competitors": [{"name": "Old Rival", "website": "https://old.example", "country_code": "US"}],
         },
     )

@@ -58,7 +58,7 @@ export function geoEvidenceVerdict(summary: GeoSummary | null, runs: GeoSampleRu
   if (!summary?.recorded && runs.length === 0 && !(summary?.evidence_results || summary?.latest_sampled)) {
     return {
       title: "还没有可写入说明的检查记录",
-      text: "先生成买家问题，再用联网数据源或人工记录回答。尚未检查时，不能写成 AI 已经提到你们。",
+      text: "先采用已记原句或手写一句，再用联网数据源或人工记录回答。尚未检查时，不能写成 AI 已经提到你们。不要编问句。",
       tone: "amber" as const,
       level: "尚未检查",
     };

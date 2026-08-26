@@ -5,7 +5,7 @@ from sqlalchemy import select
 
 from app.models import GeoAsset, GeoPrompt, GeoTicket, Tenant
 from app.seed import seed
-from app.site_identity import adopt_live_site, is_lock_leftover_text
+from app.site_identity import adopt_live_site, is_buyer_question, is_lock_leftover_text
 from tests.conftest import auth_header
 
 
@@ -15,6 +15,10 @@ def test_lock_leftover_matches_chinese_lock_not_bare_license() -> None:
     assert is_lock_leftover_text("How do renters install a smart lock?")
     assert not is_lock_leftover_text("export license for fasteners")
     assert not is_lock_leftover_text("许可")
+    assert is_buyer_question("Which industrial pump supplier is reliable for export?")
+    assert is_buyer_question("哪家紧固件出口商能供货？")
+    assert not is_buyer_question("industrial pump supplier")
+    assert not is_buyer_question("智能锁许可")
 
 
 def test_snipers_drops_lock_prompts_and_keeps_own_cite(demo_user, db: Session) -> None:

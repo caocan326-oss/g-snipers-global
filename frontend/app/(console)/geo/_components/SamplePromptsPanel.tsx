@@ -124,6 +124,11 @@ export function SamplePromptsPanel({
           </Card>
         );
       })}
+      {prompts.length === 0 ? (
+        <p className="rounded-md border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+          还没有买家原句。不要编。可点「采用已记原句」，或在下面手写一句再抽查。只有搜索词时仍会空着。
+        </p>
+      ) : null}
       <Card>
         <CardHeader>
           <CardTitle>新增买家问题</CardTitle>

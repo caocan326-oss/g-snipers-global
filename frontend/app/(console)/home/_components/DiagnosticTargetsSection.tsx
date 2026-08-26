@@ -154,7 +154,7 @@ export function DiagnosticTargetsSection({
               placeholder={keywordPlaceholder(targetForm.site_origin, targetForm.tenant_name)}
             />
             <p className="mt-1 text-xs text-slate-400">
-              灰字是示例，不是已保存的词。空着保存后，排名和买家问题都不会自己有词。一行一个。日文词跟日本，英文词跟美英德澳。
+              灰字是示例，不是已保存的词。空着保存后，排名不会自己有词。搜索词不会编成买家问题；要抽查先记下原句。一行一个。日文词跟日本，英文词跟美英德澳。
             </p>
           </div>
           <div>

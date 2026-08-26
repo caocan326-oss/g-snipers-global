@@ -75,6 +75,19 @@ def is_lock_leftover_text(text: str) -> bool:
     return bool(blob) and any(marker.lower() in blob for marker in LOCK_PROMPT_MARKERS)
 
 
+def is_buyer_question(text: str) -> bool:
+    """A recorded buyer sentence, not a 1–3 word keyword and not a lock leftover."""
+    raw = (text or "").strip()
+    if not raw or is_lock_leftover_text(raw):
+        return False
+    if "?" in raw or "？" in raw:
+        return True
+    if len(raw.split()) >= 6:
+        return True
+    starters = ("怎么", "什么", "哪家", "哪些", "如何", "有没有", "能不能", "是否")
+    return len(raw) >= 8 and any(mark in raw for mark in starters)
+
+
 def _purge_lock_prompt(db: Session, prompt: GeoPrompt) -> None:
     db.query(GeoSampleResult).filter(GeoSampleResult.prompt_id == prompt.id).delete(synchronize_session=False)
     db.query(GeoObservation).filter(GeoObservation.prompt_id == prompt.id).delete(synchronize_session=False)

@@ -69,7 +69,7 @@ def test_geo_seed_prompt_panel_explains_missing_targets(client: TestClient, demo
     assert body["created"] == 0
     assert body["skipped"] == 0
     assert body["prompts"] == 0
-    assert "没有可生成问句" in body["note"]
+    assert "没有记下的买家原句" in body["note"]
 
 
 def test_record_observation_and_llms_asset_confirm(client: TestClient, demo_user) -> None:
@@ -266,11 +266,16 @@ def test_geo_prompt_panel_evidence_rates_and_exports(client: TestClient, demo_us
     client.post(
         "/api/seo-pages",
         headers=headers,
-        json={"title": "Industrial Pump Guide", "target_keyword": "industrial pump supplier", "locale": "en-US"},
+        json={
+            "title": "Industrial Pump Guide",
+            "target_keyword": "Which industrial pump supplier is reliable for export?",
+            "locale": "en-US",
+        },
     )
     seeded = client.post("/api/geo/prompt-panel/seed", headers=headers)
     assert seeded.status_code == 200
-    assert seeded.json()["created"] >= 1
+    assert seeded.json()["created"] == 1
+    assert "没有新编问句" in seeded.json()["note"]
 
     prompts = client.get("/api/geo/prompts", headers=headers).json()
     prompt = prompts[0]
@@ -319,8 +324,9 @@ def test_geo_prompt_panel_evidence_rates_and_exports(client: TestClient, demo_us
     assert "证据层级,证据说明" in csv_text
     assert "consumer_scrape" in csv_text
     assert "https://example.com/pumps" in csv_text
-    assert prompt["prompt_pack_id"] == "export-b2b-observation-v1"
-    assert prompt["prompt_type"] in {"branded", "category", "competitor", "task"}
+    assert prompt["prompt_pack_id"] == "recorded-original"
+    assert prompt["prompt_type"] == "custom"
+    assert prompt["prompt_text"] == "Which industrial pump supplier is reliable for export?"
 
 
 def test_geo_verified_citation_is_separate_from_plain_citation(client: TestClient, demo_user) -> None:
@@ -426,18 +432,13 @@ def test_geo_sample_run_freezes_manual_observations_as_evidence(client: TestClie
     assert result["evidence_id"] in table
 
 
-def test_geo_b2b_prompt_pack_keeps_prompt_ids_and_types(client: TestClient, demo_user) -> None:
+def test_geo_seed_copies_recorded_question_not_keyword_templates(client: TestClient, demo_user) -> None:
     headers = auth_header(client)
     market = client.post(
         "/api/markets",
         headers=headers,
         json={"name": "United States", "region": "North America", "country_code": "US", "primary_locale": "en-US"},
     ).json()
-    client.post(
-        f"/api/markets/{market['id']}/competitors",
-        headers=headers,
-        json={"name": "ApexFlow", "website": "https://apex.example"},
-    )
     client.post(
         "/api/seo-pages",
         headers=headers,
@@ -448,17 +449,29 @@ def test_geo_b2b_prompt_pack_keeps_prompt_ids_and_types(client: TestClient, demo
             "market_id": market["id"],
         },
     )
+    keyword_only = client.post("/api/geo/prompt-panel/seed", headers=headers).json()
+    assert keyword_only["created"] == 0
+    assert "不是买家原问" in keyword_only["note"]
 
+    client.post(
+        f"/api/markets/{market['id']}/demand-signals",
+        headers=headers,
+        json={
+            "theme": "Which industrial ball valve is reliable for export?",
+            "locale": "en-US",
+            "intensity": 4,
+        },
+    )
     seeded = client.post("/api/geo/prompt-panel/seed", headers=headers).json()
-    assert seeded["created"] >= 8
+    assert seeded["created"] == 1
+    assert "没有新编问句" in seeded["note"]
     prompts = client.get("/api/geo/prompts", headers=headers).json()
-    keys = {p["prompt_key"] for p in prompts}
-    types = {p["prompt_type"] for p in prompts}
-    assert "EX-EN-B01" in keys
-    assert "EX-EN-C01" in keys
-    assert "EX-EN-P01" in keys
-    assert {"branded", "category", "competitor", "task"} <= types
-    assert all(p["prompt_pack_id"] == "export-b2b-observation-v1" for p in prompts)
+    assert [row["prompt_text"] for row in prompts] == ["Which industrial ball valve is reliable for export?"]
+    assert prompts[0]["prompt_pack_id"] == "recorded-original"
+    assert prompts[0]["prompt_type"] == "custom"
+    again = client.post("/api/geo/prompt-panel/seed", headers=headers).json()
+    assert again["created"] == 0
+    assert "已经在买家问题里" in again["note"]
 
 
 def test_geo_draft_tickets_from_evidence_rules(client: TestClient, demo_user) -> None:

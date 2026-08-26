@@ -24,7 +24,7 @@ from app.models import (
     Tenant,
     User,
 )
-from app.site_identity import adopt_live_site
+from app.site_identity import adopt_live_site, is_buyer_question, is_lock_leftover_text
 from app.schemas import (
     AiAssistOut,
     AiStepIn,
@@ -47,7 +47,6 @@ from .common import (
     _obs_out,
     _prompt_key,
     _prompt_out,
-    _prompt_pack_candidates,
     _rate,
 )
 from .constants import PROMPT_TYPES, RECORDED_OBS
@@ -214,31 +213,41 @@ def create_prompt(
 
 @router.post("/prompt-panel/seed", response_model=GeoSeedOut)
 def seed_prompt_panel(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> GeoSeedOut:
+    tenant = db.get(Tenant, user.tenant_id)
+    if tenant is not None and adopt_live_site(db, tenant):
+        db.commit()
     existing = {
         _prompt_key(p.prompt_text, p.locale)
         for p in db.query(GeoPrompt).filter(GeoPrompt.tenant_id == user.tenant_id).all()
     }
     created = skipped = 0
+    seen_records = 0
     candidates: list[dict[str, str | None]] = []
-    tenant = db.get(Tenant, user.tenant_id)
+
+    def _consider(text: str, locale: str, *, seo_page_id: str | None = None, demand_signal_id: str | None = None, market_id: str | None = None) -> None:
+        nonlocal seen_records
+        raw = (text or "").strip()
+        if not raw:
+            return
+        seen_records += 1
+        if is_lock_leftover_text(raw) or not is_buyer_question(raw):
+            return
+        candidates.append(
+            {
+                "prompt_text": raw,
+                "locale": locale,
+                "market_id": market_id,
+                "seo_page_id": seo_page_id,
+                "demand_signal_id": demand_signal_id,
+                "prompt_pack_id": "recorded-original",
+                "prompt_key": "",
+                "prompt_type": "custom",
+            }
+        )
+
     seo_pages = db.query(SeoPage).filter(SeoPage.tenant_id == user.tenant_id).order_by(SeoPage.created_at.desc()).limit(12).all()
     for page in seo_pages:
-        keyword = (page.target_keyword or page.title or "").strip()
-        if not keyword:
-            continue
-        market = db.get(Market, page.market_id) if page.market_id else None
-        candidates.extend(
-            _prompt_pack_candidates(
-                db,
-                user,
-                tenant=tenant,
-                market=market,
-                keyword=keyword,
-                locale=page.locale,
-                seo_page_id=page.id,
-                limit_per_source=20,
-            )
-        )
+        _consider(page.target_keyword or "", page.locale, seo_page_id=page.id, market_id=page.market_id)
     signals = (
         db.query(DemandSignal)
         .filter(
@@ -250,30 +259,14 @@ def seed_prompt_panel(user: User = Depends(get_current_user), db: Session = Depe
         .all()
     )
     for signal in signals:
-        theme = (signal.theme or "").strip()
-        if not theme:
-            continue
-        market = db.get(Market, signal.market_id) if signal.market_id else None
-        candidates.extend(
-            _prompt_pack_candidates(
-                db,
-                user,
-                tenant=tenant,
-                market=market,
-                keyword=theme,
-                locale=signal.locale,
-                demand_signal_id=signal.id,
-                limit_per_source=20,
-            )
-        )
+        _consider(signal.theme or "", signal.locale, demand_signal_id=signal.id, market_id=signal.market_id)
+    total = db.query(func.count(GeoPrompt.id)).filter(GeoPrompt.tenant_id == user.tenant_id).scalar() or 0
     if not candidates:
-        total = db.query(func.count(GeoPrompt.id)).filter(GeoPrompt.tenant_id == user.tenant_id).scalar() or 0
-        return GeoSeedOut(
-            created=0,
-            skipped=0,
-            prompts=total,
-            note="没有可生成问句的 SEO 目标。请先回总览填写搜索词并点「保存诊断目标」，或在 SEO 选题里登记 target keyword。空着点不会自己长出问题。",
-        )
+        if seen_records:
+            note = "总览或选题里有搜索词，但不是买家原问。不会编成问句。请把原句记下来，或在本页手写一句再抽查。"
+        else:
+            note = "没有记下的买家原句。搜索词不是问句，空着点不会自己长出问题。回总览记下原句，或在本页手写一句再抽查。"
+        return GeoSeedOut(created=0, skipped=0, prompts=total, note=note)
     for item in candidates:
         key = _prompt_key(str(item["prompt_text"]), str(item["locale"]))
         if key in existing:
@@ -289,9 +282,9 @@ def seed_prompt_panel(user: User = Depends(get_current_user), db: Session = Depe
             break
     db.commit()
     total = db.query(func.count(GeoPrompt.id)).filter(GeoPrompt.tenant_id == user.tenant_id).scalar() or 0
-    note = "已按出口 B2B GEO 观测包生成 branded/category/competitor/task 问句。"
+    note = "已采用记下的买家原句。没有新编问句。"
     if created == 0 and skipped > 0:
-        note = "这些 SEO 目标已经生成过问句，本次没有新增。"
+        note = "这些原句已经在买家问题里了，本次没有新增。"
     return GeoSeedOut(created=created, skipped=skipped, prompts=total, note=note)
 
 

@@ -56,7 +56,7 @@ export function HeroSection({
           </div>
           <h1 className="mt-3 text-2xl font-semibold text-slate-950">AI 搜索可见度</h1>
           <p className="mt-1 max-w-4xl text-sm leading-6 text-slate-500">
-            看老外那句问有没有提到客户、有没有给出官网；下面待处理项是短稿和再测。默认抽查是 Tavily / 博查，不是 ChatGPT 本人。
+            看老外那句问有没有提到客户、有没有给出官网；下面待处理项是短稿和再测。默认抽查是 Tavily / 博查，不是 ChatGPT 本人。不编买家问题：只有总览或选题里记下的原句能采用，搜索词不会自己长出问句。
           </p>
           <div className="mt-2">
             <UsageTodayBar meters={["bocha", "bailian", "tavily", "llm"]} refreshToken={busyAction} />
@@ -80,7 +80,7 @@ export function HeroSection({
       <div className="mt-4 flex flex-wrap gap-2">
         <Button size="sm" onClick={seedPromptPanel} disabled={busyAction === "seed-prompts"}>
           <Wand2 className="mr-2 h-4 w-4" />
-          {busyAction === "seed-prompts" ? "生成中…" : "生成买家问题"}
+          {busyAction === "seed-prompts" ? "选用中…" : "采用已记原句"}
         </Button>
         <Button
           size="sm"
