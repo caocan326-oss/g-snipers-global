@@ -7,7 +7,7 @@
 
 约定：家里和公司**不会同时改**。换机器前必须把这边 push 完。
 
-最后更新：2026-08-26 16:12（公司。产品 `f2be066`。站内三处与客户说明对齐。现网当前站 SNIPERS。）。
+最后更新：2026-08-26 16:49（公司。§4.23 T5 人测过。现网当前站 SNIPERS。）。
 
 ---
 
@@ -511,6 +511,12 @@ GEO 待处理卡增加「站外这一条」：一篇英文发帖稿（只引买�
 
 站内卡和客户说明共用同一查询、同一排序（含 id）。先写出这三页，GEO 可以另附一条，不许顶掉站内页。不代改。
 
+**生产 SNIPERS 人测（2026-08-26 16:49，硬刷新，不改官网、不切绿联）过。** 页头 SNIPERS / `https://www.snipers.com.cn`。
+
+- T5 过：站内三张卡是 `/snipers/article/articlelist/cat_id/3.html`、`/snipers/article/articlelist/cat_id/1.html`、`/en/Article/detail/article_id/4.html`。客户说明「这周带给客户改的三处」和「发给客户的短稿」路径一一对上。每条有「请改这一页」，末行「我们不代改官网。改完告诉我，我再打开该页核对。」`cat_id/2` 没了。`cat_id/3` 是这轮第 1 张卡，不是顶替。没摊开几十条。
+- GEO 另附一条：买家问智能锁许可时没提到我们，指向官网首页 `/`，让客户自己在 LinkedIn Company Page 发。末行「我们不代改官网、不代发。改完告诉我，我再用同一问看一次。不保证这次被提到。」没挤掉三页，不算第四个站内页。
+- 处理清单未关闭 110。没代改。站内「这周改三处」收口。
+
 ---
 
 ## 5. 收工 / 换到另一台电脑之前
@@ -544,15 +550,15 @@ git log -1 --oneline
 
 | 项 | 值 |
 | --- | --- |
-| 日期 | 2026-08-26 16:12 |
+| 日期 | 2026-08-26 16:49 |
 | 最后一台 | 公司 `E:\G-snipers海外版` |
 | 分支 | `main` |
-| 提交 | 产品 `f2be066`（§4.23 客户说明对齐站内三处）。现网当前站 **SNIPERS**。绿联已归档。 |
-| 已 push origin / upstream | 否（推完再改是）。 |
-| 已发版生产 | **否。** `f2be066` 待 `sync-from-local.ps1 -Rebuild`。`DEMO_LOGIN_ENABLED` 仍关。 |
+| 提交 | 产品 `f2be066`（§4.23 T5 人测过）。现网当前站 **SNIPERS**。绿联已归档。 |
+| 已 push origin / upstream | 是。 |
+| 已发版生产 | **是。** `f2be066` 已 `sync-from-local.ps1 -Rebuild`。`DEMO_LOGIN_ENABLED` 仍关。 |
 | 接口实测 | `test_onsite_loop` + `test_board_this_week` + `test_customer_brief` 14 通过。 |
 | 未完成 | 真发须客户自己的号。SNIPERS 没有可填的 LinkedIn / Facebook 公司页。要绿联时从历史网站恢复。 |
-| 下一台先做 | 家里先 `git pull origin main`。硬刷新后只复走 T5：客户说明站内项必须是站内卡那三页。不要两边同时改。家里 `localtest.db` 不要提交。 |
+| 下一台先做 | 家里先 `git pull origin main`。站内「这周改三处」和站外核对档案都已收口，不要重开。下一刀不是代发。不要两边同时改。家里 `localtest.db` 不要提交。 |
 
 `www` 灰云、A 仍 `39.97.52.149`。`relay.weiyids.com` 橙云，不要 CNAME 回 `workers.dev`。不要开 Google Ads。不要在服务器 `git pull`。
 
