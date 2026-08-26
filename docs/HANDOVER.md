@@ -7,7 +7,7 @@
 
 约定：家里和公司**不会同时改**。换机器前必须把这边 push 完。
 
-最后更新：2026-08-26 14:55（公司。产品 `3c81758`。核对档案只认当前输入框。现网当前站 SNIPERS。）。
+最后更新：2026-08-26 14:56（公司。产品 `3c81758` 已发版。核对档案只认当前输入框。现网当前站 SNIPERS。）。
 
 ---
 
@@ -520,13 +520,13 @@ git log -1 --oneline
 
 | 项 | 值 |
 | --- | --- |
-| 日期 | 2026-08-26 14:55 |
+| 日期 | 2026-08-26 14:56 |
 | 最后一台 | 公司 `E:\G-snipers海外版` |
 | 分支 | `main` |
 | 提交 | 产品 `3c81758`（§4.21 核对只认当前框）。现网当前站 **SNIPERS**。绿联已归档。 |
-| 已 push origin / upstream | 否（推完再改是）。 |
-| 已发版生产 | **否。** `3c81758` 待 `sync-from-local.ps1 -Rebuild`。`DEMO_LOGIN_ENABLED` 仍关。 |
-| 接口实测 | `test_distribution` + `test_onsite` 34 通过。 |
+| 已 push origin / upstream | 是。 |
+| 已发版生产 | **是。** `3c81758` 已 `sync-from-local.ps1 -Rebuild`。`DEMO_LOGIN_ENABLED` 仍关。 |
+| 接口实测 | `test_distribution` + `test_onsite` 34 通过。`/api/health` 200。 |
 | 未完成 | 真发须客户自己的号。SNIPERS 没有可填的 LinkedIn / Facebook 公司页。要绿联时从历史网站恢复。 |
 | 下一台先做 | 家里先 `git pull origin main`。硬刷新站外复走 T2 / T3：发帖入口要红条「这是官方发帖入口」，空字段要红条「先填…我们不猜、不注册、不代登」，不要再回官网结论。不要两边同时改。家里 `localtest.db` 不要提交。 |
 
