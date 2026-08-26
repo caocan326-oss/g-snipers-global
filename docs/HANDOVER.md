@@ -7,7 +7,7 @@
 
 约定：家里和公司**不会同时改**。换机器前必须把这边 push 完。
 
-最后更新：2026-08-26 16:49（公司。§4.23 T5 人测过。现网当前站 SNIPERS。）。
+最后更新：2026-08-26 18:35（公司。§4.24 产品 `d794b55` 已发版，人测未做。现网当前站 SNIPERS。）。
 
 ---
 
@@ -117,7 +117,7 @@ python -m app.provision_tenant --name "客户名" --email am@customer.com --pass
 
 不要做公开注册页。
 
-官网已经不是 snipers 时，容器启动 seed **不会**再灌门锁演示。它会把客户名改成跟域名走（`www.ugreen.com` → `UGREEN`），并清掉门锁问句/示例。有抽查记录时必须先删 `geo_sample_results`，否则 backend 起不来（502）。
+官网已经不是 snipers 时，容器启动 seed **不会**再灌门锁演示。它会把客户名改成跟域名走（`www.ugreen.com` → `UGREEN`），并清掉门锁问句/示例。客户名已经是 **SNIPERS** 时，seed 和打开总览 / GEO / 客户说明 / 处理清单也会清掉门锁问句，不会再灌回去；演示客户名仍挂 `snipers.com.cn` 时不动。有抽查记录时必须先删 `geo_sample_results`，否则 backend 起不来（502）。
 
 3. 改完在本机看 `git status`、`git diff`，确认没有把 `.env`、私钥、密钥加进去。
 4. 用户明确要求提交时才 commit。不要主动 commit。
@@ -514,8 +514,23 @@ GEO 待处理卡增加「站外这一条」：一篇英文发帖稿（只引买�
 **生产 SNIPERS 人测（2026-08-26 16:49，硬刷新，不改官网、不切绿联）过。** 页头 SNIPERS / `https://www.snipers.com.cn`。
 
 - T5 过：站内三张卡是 `/snipers/article/articlelist/cat_id/3.html`、`/snipers/article/articlelist/cat_id/1.html`、`/en/Article/detail/article_id/4.html`。客户说明「这周带给客户改的三处」和「发给客户的短稿」路径一一对上。每条有「请改这一页」，末行「我们不代改官网。改完告诉我，我再打开该页核对。」`cat_id/2` 没了。`cat_id/3` 是这轮第 1 张卡，不是顶替。没摊开几十条。
-- GEO 另附一条：买家问智能锁许可时没提到我们，指向官网首页 `/`，让客户自己在 LinkedIn Company Page 发。末行「我们不代改官网、不代发。改完告诉我，我再用同一问看一次。不保证这次被提到。」没挤掉三页，不算第四个站内页。
+- GEO 另附一条：买家问智能锁许可时没提到我们，指向官网首页 `/`，让客户自己在 LinkedIn Company Page 发。末行「我们不代改官网、不代发。改完告诉我，我再用同一问看一次。不保证这次被提到。」没挤掉三页，不算第四个站内页。这条是门锁演示残留，见 §4.24。
 - 处理清单未关闭 110。没代改。站内「这周改三处」收口。
+
+### 4.24 买家问题必须跟当前客户，门锁残留要从 SNIPERS 清掉
+
+T5 过的时候，客户说明多了一条「买家问智能锁许可」。SNIPERS 做紧固件，不是智能锁。这条是演示租户留在 `snipers.com.cn` 上的。
+
+原先 `adopt_live_site` 遇到 SNIPERS 主机直接返回，中文「智能锁」也不在清洗词里，客户说明又不走清洗。所以现网一直挂着。
+
+现在：客户名已经不是「演示客户 · 智能门锁出海」时，打开总览 / GEO / 客户说明 / 处理清单会清掉门锁买家问题、待处理项和门锁搜索词。SNIPERS 自己的引用材料（含 `snipers.com.cn`）不动。seed 不会再往已改名的 SNIPERS 灌门锁问句。光写「许可」不算门锁，避免误伤出口许可类问题。空的 GEO 是实话，不要编 SNIPERS 买家问题。不代发。
+
+**人测（生产 SNIPERS，硬刷新，不改官网、不切绿联、不编问句）。** 页头仍是 SNIPERS / `https://www.snipers.com.cn`。
+
+- 客户说明「这周带给客户改的三处」和「发给客户的短稿」不再出现「智能锁」。站内三页仍是 `/snipers/article/articlelist/cat_id/3.html`、`/snipers/article/articlelist/cat_id/1.html`、`/en/Article/detail/article_id/4.html`。可以没有 GEO 附条；有附条也必须跟 SNIPERS 有关，不能是门锁。
+- GEO 买家问题和待处理项里没有「智能锁 / smart lock / スマートロック」。没有问句时保持空，不要手加。
+- 处理清单里那条「买家问智能锁许可」没了。未关闭条数比 T5 的 110 少 1 才对（门锁 GEO 清掉了）。站内项还在。
+- 没代改、没代发。没有新编的 SNIPERS 买家问题。
 
 ---
 
@@ -550,15 +565,15 @@ git log -1 --oneline
 
 | 项 | 值 |
 | --- | --- |
-| 日期 | 2026-08-26 16:49 |
+| 日期 | 2026-08-26 18:35 |
 | 最后一台 | 公司 `E:\G-snipers海外版` |
 | 分支 | `main` |
-| 提交 | 产品 `f2be066`（§4.23 T5 人测过）。现网当前站 **SNIPERS**。绿联已归档。 |
+| 提交 | 产品 `d794b55`（§4.24 清门锁残留，人测未做）。现网当前站 **SNIPERS**。绿联已归档。 |
 | 已 push origin / upstream | 是。 |
-| 已发版生产 | **是。** `f2be066` 已 `sync-from-local.ps1 -Rebuild`。`DEMO_LOGIN_ENABLED` 仍关。 |
-| 接口实测 | `test_onsite_loop` + `test_board_this_week` + `test_customer_brief` 14 通过。 |
-| 未完成 | 真发须客户自己的号。SNIPERS 没有可填的 LinkedIn / Facebook 公司页。要绿联时从历史网站恢复。 |
-| 下一台先做 | 家里先 `git pull origin main`。站内「这周改三处」和站外核对档案都已收口，不要重开。下一刀不是代发。不要两边同时改。家里 `localtest.db` 不要提交。 |
+| 已发版生产 | **是。** `d794b55` 已 `sync-from-local.ps1 -Rebuild`。`DEMO_LOGIN_ENABLED` 仍关。 |
+| 接口实测 | `test_site_identity` + `test_onsite_inventory` + `test_customer_brief` + `test_board_this_week` 18 过；`test_geo` / `test_execution` / `test_onsite` / `test_distribution` / `test_insights` 69 过。 |
+| 未完成 | §4.24 等人测。真发须客户自己的号。SNIPERS 没有可填的 LinkedIn / Facebook 公司页。要绿联时从历史网站恢复。 |
+| 下一台先做 | 家里先 `git pull origin main`。人测 §4.24（硬刷新客户说明 / GEO / 处理清单，不能再看到智能锁）。不要编 SNIPERS 买家问题。不要代发。不要两边同时改。家里 `localtest.db` 不要提交。 |
 
 `www` 灰云、A 仍 `39.97.52.149`。`relay.weiyids.com` 橙云，不要 CNAME 回 `workers.dev`。不要开 Google Ads。不要在服务器 `git pull`。
 
