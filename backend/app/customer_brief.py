@@ -17,11 +17,10 @@ from app.geo_loop import (
     ticket_offsite_ask,
     weekly_paste,
 )
-from app.onsite_loop import issue_customer_note
+from app.onsite_loop import issue_customer_note, weekly_onsite_picks
 from app.routers.geo.prompts import geo_summary
 from app.routers.onsite.common import (
     _active_issue,
-    _issue_sort_key,
     _page_short,
     _plain_title,
     _severity_label,
@@ -122,7 +121,7 @@ def build_customer_brief(user: User, db: Session) -> CustomerBriefOut:
     active = [issue for issue in issues if _active_issue(issue)]
     critical = [issue for issue in active if issue.severity == "critical"]
     high = [issue for issue in active if issue.severity == "high"]
-    priority_issues = sorted(active, key=_issue_sort_key)[:3]
+    priority_issues = weekly_onsite_picks(active)
     waiting = [issue for issue in active if issue.status in {"confirmed", "draft_applied"}]
 
     geo = geo_summary(user, db)

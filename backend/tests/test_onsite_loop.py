@@ -1,5 +1,12 @@
 from app.models import OnsiteIssue, SitePage
-from app.onsite_loop import ONSITE_CUSTOMER_CLOSE, issue_customer_note, issue_customer_paste, plain_issue_title
+from app.onsite_loop import (
+    ONSITE_CUSTOMER_CLOSE,
+    issue_customer_note,
+    issue_customer_paste,
+    plain_issue_title,
+    weekly_onsite_paste,
+    weekly_onsite_picks,
+)
 
 
 def test_plain_issue_title_strips_internal_codes() -> None:
@@ -66,3 +73,24 @@ def test_issue_customer_note_falls_back_to_category_action() -> None:
     assert "问题：页面缺少给搜索看的说明" in note
     assert "请做：起草页面说明标记" in note
     assert ONSITE_CUSTOMER_CLOSE in note
+
+
+def test_weekly_onsite_picks_one_issue_per_page_prefers_urgent() -> None:
+    home = SitePage(id="p-home", tenant_id="t1", path="/", title="Home")
+    product = SitePage(id="p-pro", tenant_id="t1", path="/products/a", title="A")
+    about = SitePage(id="p-about", tenant_id="t1", path="/about", title="About")
+    extra = SitePage(id="p-blog", tenant_id="t1", path="/blog", title="Blog")
+    issues = [
+        OnsiteIssue(id="l1", tenant_id="t1", page_id=home.id, category="image", title="图片没有文字说明", severity="low", status="open"),
+        OnsiteIssue(id="c1", tenant_id="t1", page_id=home.id, category="tdk", title="首页标题过长", severity="critical", status="open"),
+        OnsiteIssue(id="c2", tenant_id="t1", page_id=home.id, category="heading", title="页面缺少主标题", severity="critical", status="open"),
+        OnsiteIssue(id="h1", tenant_id="t1", page_id=product.id, category="content", title="正文太少，买家看不够", severity="high", status="open"),
+        OnsiteIssue(id="h2", tenant_id="t1", page_id=about.id, category="schema", title="缺少 JSON-LD / schema", severity="high", status="open"),
+        OnsiteIssue(id="l2", tenant_id="t1", page_id=extra.id, category="image", title="图片没有文字说明", severity="low", status="open"),
+    ]
+    picks = weekly_onsite_picks(issues)
+    assert [row.id for row in picks] == ["c1", "h1", "h2"]
+    assert len({row.page_id for row in picks}) == 3
+    paste = weekly_onsite_paste("SNIPERS", [issue_customer_note(row, home if row.page_id == home.id else product) for row in picks[:1]])
+    assert "SNIPERS 这周请改这几处" in paste
+    assert ONSITE_CUSTOMER_CLOSE in paste

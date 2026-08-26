@@ -824,6 +824,7 @@ class OnsiteBoardOut(BaseModel):
     status_counts: dict[str, int] = {}
     workflow_counts: dict[str, int] = {}
     groups: dict[str, list[OnsiteIssueOut]]
+    this_week: list[OnsiteIssueOut] = []
 
 
 class OnsiteGuideStepOut(BaseModel):

@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.auth import get_current_user
 from app.database import get_db
 from app.models import OnsiteIssue, SeoPage, SitePage, User
+from app.onsite_loop import weekly_onsite_picks
 from app.risk import needs_confirm
 from app.schemas import (
     ContentBriefOut,
@@ -120,6 +121,7 @@ def issue_board(user: User = Depends(get_current_user), db: Session = Depends(ge
     for row in rows:
         sev = row.severity if row.severity in groups else "low"
         groups[sev].append(_issue_out(row, site_origin=origin))
+    this_week = [_issue_out(row, site_origin=origin) for row in weekly_onsite_picks(rows)]
     return OnsiteBoardOut(
         pages=len(pages),
         analyzed_pages=analyzed,
@@ -127,6 +129,7 @@ def issue_board(user: User = Depends(get_current_user), db: Session = Depends(ge
         status_counts=status_counts,
         workflow_counts=workflow_counts,
         groups=groups,
+        this_week=this_week,
     )
 
 

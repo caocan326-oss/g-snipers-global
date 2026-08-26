@@ -32,6 +32,7 @@ import {
 } from "@/lib/api";
 import { explainServiceError } from "@/lib/errors";
 import { crawlFinishedNote, isHostSwitch, recrawlSavedSite } from "@/lib/site-origin";
+import { copyText } from "@/lib/utils";
 
 import { DiagnosisSection } from "./_components/DiagnosisSection";
 import { IssueBoard } from "./_components/IssueBoard";
@@ -42,6 +43,7 @@ import { RankAuthoritySection } from "./_components/RankAuthoritySection";
 import { SiteSetupCard } from "./_components/SiteSetupCard";
 import { StatsGrid } from "./_components/StatsGrid";
 import { TargetMarketsCard } from "./_components/TargetMarketsCard";
+import { WeeklyFixesCard } from "./_components/WeeklyFixesCard";
 import {
   type FilterKey,
   matchesFilter,
@@ -810,8 +812,22 @@ export default function OnsiteBoardPage() {
       setError("没有可复制的短稿。");
       return;
     }
-    await navigator.clipboard.writeText(text);
-    setNote("短稿已复制，可直接贴微信或邮件。");
+    const ok = await copyText(text);
+    setNote(ok ? "短稿已复制，可直接贴微信或邮件。" : "短稿已写出，这台复制不到剪贴板。");
+  }
+
+  async function copyWeek() {
+    const notes = (board?.this_week || [])
+      .map((issue) => (issue.customer_paste || issue.customer_note || "").trim())
+      .filter(Boolean);
+    if (!notes.length) {
+      setError("没有可复制的短稿。");
+      return;
+    }
+    setError("");
+    const text = notes.map((note, index) => `${index + 1}. ${note}`).join("\n\n");
+    const ok = await copyText(text);
+    setNote(ok ? "这三处短稿已复制，可直接贴微信或邮件。" : "短稿已写出，这台复制不到剪贴板。");
   }
 
   async function create(e: FormEvent) {
@@ -906,6 +922,17 @@ export default function OnsiteBoardPage() {
           这些数字只算网站检查。紧急/优先是严重程度；需确认、待上线、待复查是进度，所以也会对不上。总览右侧「执行项」还加上了 AI 搜索和站外。
         </p>
       </div>
+
+      <WeeklyFixesCard
+        issues={board.this_week || []}
+        copyOne={copyDraft}
+        copyAll={() => void copyWeek()}
+        openIssue={(id) => {
+          setFilter("all");
+          setExpandedId(id);
+          setQuery("");
+        }}
+      />
 
       <IssueBoard
         visibleIssues={visibleIssues}

@@ -3,6 +3,7 @@ import json
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
+from app.models import OnsiteIssue, SitePage, Tenant
 from tests.conftest import auth_header
 
 
@@ -543,6 +544,11 @@ def test_analyze_does_not_apply_and_board_groups_severity(client: TestClient, de
     assert "critical" in board["groups"]
     assert "status_counts" in board
     assert "workflow_counts" in board
+    assert "this_week" in board
+    assert len(board["this_week"]) <= 3
+    if board["this_week"]:
+        assert "不代改" in board["this_week"][0]["customer_note"]
+        assert "请改这一页" in board["this_week"][0]["customer_note"]
     assert board["counts"]["critical"] + board["counts"]["high"] + board["counts"]["low"] >= 1
     assert all(i["metric_status"] == "untested" for i in board["groups"]["critical"])
     first_issue = (board["groups"]["critical"] + board["groups"]["high"] + board["groups"]["low"])[0]
@@ -1190,3 +1196,35 @@ def test_pagespeed_without_ce17_key_records_error(client: TestClient, demo_user)
     assert res.status_code == 200, res.text
     assert res.json()[0]["status"] == "error"
     assert "17CE" in res.json()[0]["detail"]
+
+
+def test_board_this_week_picks_three_pages_not_all_issues(client: TestClient, demo_user, db: Session) -> None:
+    tenant = db.get(Tenant, demo_user.tenant_id)
+    assert tenant is not None
+    tenant.site_origin = "https://www.snipers.com.cn"
+    tenant.name = "SNIPERS"
+    home = SitePage(tenant_id=demo_user.tenant_id, path="/", locale="en-US", title="Home", crawl_status="ok")
+    product = SitePage(tenant_id=demo_user.tenant_id, path="/products/a", locale="en-US", title="A", crawl_status="ok")
+    about = SitePage(tenant_id=demo_user.tenant_id, path="/about", locale="en-US", title="About", crawl_status="ok")
+    db.add_all([home, product, about])
+    db.flush()
+    db.add_all(
+        [
+            OnsiteIssue(tenant_id=demo_user.tenant_id, page_id=home.id, category="tdk", title="首页标题过长", severity="critical", status="open", risk="high"),
+            OnsiteIssue(tenant_id=demo_user.tenant_id, page_id=home.id, category="image", title="图片没有文字说明", severity="low", status="open", risk="low"),
+            OnsiteIssue(tenant_id=demo_user.tenant_id, page_id=product.id, category="content", title="正文太少，买家看不够", severity="high", status="open", risk="high"),
+            OnsiteIssue(tenant_id=demo_user.tenant_id, page_id=about.id, category="schema", title="缺少 JSON-LD / schema", severity="high", status="open", risk="high"),
+        ]
+    )
+    db.commit()
+
+    headers = auth_header(client)
+    board = client.get("/api/onsite/board", headers=headers).json()
+    week = board["this_week"]
+    assert len(week) == 3
+    assert len({row["page_id"] for row in week}) == 3
+    assert all("不代改官网" in row["customer_note"] for row in week)
+    assert all("请改这一页" in row["customer_note"] for row in week)
+    assert "www.snipers.com.cn" in week[0]["customer_note"]
+    brief = client.get("/api/dashboard/customer-brief", headers=headers).json()
+    assert any("请改这一页" in item for item in brief["this_week"])

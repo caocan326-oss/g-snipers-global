@@ -988,6 +988,7 @@ export type OnsiteBoard = {
   status_counts: Record<string, number>;
   workflow_counts: Record<string, number>;
   groups: { critical: OnsiteIssue[]; high: OnsiteIssue[]; low: OnsiteIssue[] };
+  this_week?: OnsiteIssue[];
 };
 
 export type OnsiteGuide = {
