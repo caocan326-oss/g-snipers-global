@@ -522,6 +522,26 @@ def test_check_profile_needs_real_page_and_does_not_send(client: TestClient, dem
     assert stored["profile_missing_page"] is True
     assert stored["profile_is_live"] is False
 
+    compose_again = client.post(
+        f"/api/offsite/platforms/{linkedin['id']}/check-profile",
+        headers=headers,
+        json={"profile_url": "https://www.linkedin.com/company/"},
+    )
+    assert compose_again.status_code == 400
+    assert "发帖入口" in compose_again.json()["detail"]
+    after_compose = next(row for row in client.get("/api/offsite/platforms", headers=headers).json() if row["id"] == linkedin["id"])
+    assert after_compose["profile_missing_page"] is False
+    assert "发帖入口" in after_compose["profile_note"]
+    assert "该渠道还没有" not in after_compose["profile_note"]
+
+    empty_again = client.post(f"/api/offsite/platforms/{linkedin['id']}/check-profile", headers=headers, json={"profile_url": ""})
+    assert empty_again.status_code == 400
+    assert "先填这家客户的公开主页 URL" in empty_again.json()["detail"]
+    assert "我们不猜、不注册、不代登" in empty_again.json()["detail"]
+    after_empty = next(row for row in client.get("/api/offsite/platforms", headers=headers).json() if row["id"] == linkedin["id"])
+    assert after_empty["profile_missing_page"] is False
+    assert "官网打得开" not in after_empty["profile_note"]
+
     checked = client.post(
         f"/api/offsite/platforms/{linkedin['id']}/check-profile",
         headers=headers,

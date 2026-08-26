@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   api,
   type AiAssist,
@@ -37,6 +37,7 @@ export default function OffsitePage() {
   const [copiedAssetId, setCopiedAssetId] = useState("");
   const [checkingId, setCheckingId] = useState("");
   const [profileForms, setProfileForms] = useState<Record<string, string>>({});
+  const profileFormsRef = useRef<Record<string, string>>({});
   const [payloadById, setPayloadById] = useState<Record<string, { sent: boolean; compose_url: string; api_endpoint: string; http_method?: string; note: string; customer_body: Record<string, unknown> }>>({});
   const [filter, setFilter] = useState<"all" | "unverified" | "valid" | "dead" | "spam">("all");
   const [platformQuery, setPlatformQuery] = useState("");
@@ -467,22 +468,32 @@ export default function OffsitePage() {
   }
 
   function setProfileUrl(platformId: string, url: string) {
-    setProfileForms({ ...profileForms, [platformId]: url });
+    profileFormsRef.current = { ...profileFormsRef.current, [platformId]: url };
+    setProfileForms(profileFormsRef.current);
   }
 
   async function checkProfile(platformId: string) {
     setError("");
     setNote("");
     setCheckingId(platformId);
+    const field = document.getElementById(`profile-url-${platformId}`);
+    const typed = (field instanceof HTMLInputElement ? field.value : profileFormsRef.current[platformId] ?? "").trim();
+    profileFormsRef.current = { ...profileFormsRef.current, [platformId]: typed };
+    setProfileForms(profileFormsRef.current);
     try {
       const checked = await api<ProfileCheck>(`/api/offsite/platforms/${platformId}/check-profile`, {
         method: "POST",
-        body: JSON.stringify({ profile_url: profileForms[platformId] || "" }),
+        body: JSON.stringify({ profile_url: typed }),
       });
       setNote(checked.note);
+      if (checked.missing_channel_page) {
+        profileFormsRef.current = { ...profileFormsRef.current, [platformId]: "" };
+        setProfileForms(profileFormsRef.current);
+      }
       loadPlatforms();
     } catch (e) {
       setError(e instanceof Error ? e.message : "核对档案失败");
+      loadPlatforms();
     } finally {
       setCheckingId("");
     }

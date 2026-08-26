@@ -53,9 +53,11 @@ def check_platform_profile(
     if platform is None or platform.tenant_id != user.tenant_id:
         raise HTTPException(status_code=404, detail="平台不存在")
     tenant = db.get(Tenant, user.tenant_id)
-    profile_url = (body.profile_url or platform.profile_url or "").strip()
+    profile_url = (body.profile_url or "").strip()
     if not profile_url:
-        raise HTTPException(status_code=400, detail="先填这家客户的公开主页 URL。不要猜，我们不注册、不代登。")
+        _store_profile_reject(platform, "先填这家客户的公开主页 URL。我们不猜、不注册、不代登。")
+        db.commit()
+        raise HTTPException(status_code=400, detail=platform.profile_note)
     try:
         result = check_public_profile(
             profile_url=profile_url,
@@ -64,6 +66,8 @@ def check_platform_profile(
             platform_name=platform.name or "",
         )
     except ValueError as exc:
+        _store_profile_reject(platform, str(exc))
+        db.commit()
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     platform.profile_url = result["profile_url"]
     platform.profile_http_status = result["http_status"]
@@ -73,6 +77,15 @@ def check_platform_profile(
     platform.profile_note = result["note"]
     db.commit()
     return ProfileCheckOut(platform_id=platform.id, **result)
+
+
+def _store_profile_reject(platform: SourcePlatform, detail: str) -> None:
+    platform.profile_url = ""
+    platform.profile_http_status = None
+    platform.profile_is_live = False
+    platform.profile_site_found = False
+    platform.profile_checked_at = datetime.now(timezone.utc)
+    platform.profile_note = detail
 
 
 @router.post("/platforms", response_model=SourcePlatformOut, status_code=201)

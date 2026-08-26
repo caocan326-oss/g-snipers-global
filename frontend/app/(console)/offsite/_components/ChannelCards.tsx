@@ -122,9 +122,10 @@ export function ChannelCards({
                       </p>
                       <div className="flex flex-col gap-2">
                         <Input
+                          id={`profile-url-${platform.id}`}
                           className="h-9"
                           placeholder="该渠道的公司页 URL；官网首页会记成还没有档案"
-                          value={profileForms[platform.id] ?? platform.profile_url ?? ""}
+                          value={Object.prototype.hasOwnProperty.call(profileForms, platform.id) ? profileForms[platform.id] : platform.profile_url ?? ""}
                           onChange={(e) => setProfileUrl(platform.id, e.target.value)}
                         />
                         <div className="flex flex-wrap items-center gap-2">
