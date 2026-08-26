@@ -17,13 +17,14 @@ from app.geo_loop import (
     ticket_offsite_ask,
     weekly_paste,
 )
-from app.onsite_loop import issue_customer_note, weekly_onsite_picks
+from app.onsite_loop import issue_customer_note
 from app.routers.geo.prompts import geo_summary
 from app.routers.onsite.common import (
     _active_issue,
     _page_short,
     _plain_title,
     _severity_label,
+    load_weekly_onsite_issues,
 )
 from app.schemas import CustomerBriefOut, CustomerBriefSection
 
@@ -121,7 +122,7 @@ def build_customer_brief(user: User, db: Session) -> CustomerBriefOut:
     active = [issue for issue in issues if _active_issue(issue)]
     critical = [issue for issue in active if issue.severity == "critical"]
     high = [issue for issue in active if issue.severity == "high"]
-    priority_issues = weekly_onsite_picks(active)
+    priority_issues = load_weekly_onsite_issues(db, user.tenant_id)
     waiting = [issue for issue in active if issue.status in {"confirmed", "draft_applied"}]
 
     geo = geo_summary(user, db)
@@ -224,14 +225,12 @@ def build_customer_brief(user: User, db: Session) -> CustomerBriefOut:
         if ask:
             block = f"{block}\n{ask}"
         geo_lines.append(block)
-    onsite_slots = max(0, 3 - len(this_week) - len(geo_lines))
-    for issue in priority_issues[:onsite_slots]:
+    for issue in priority_issues:
         note = issue_customer_note(issue, issue.page, site_origin)
         this_week.append(f"{_severity_label(issue.severity)}\n{note}".strip() if note else _plain_title(issue.title))
-    this_week.extend(geo_lines)
+    this_week.extend(geo_lines[:1])
     if not this_week:
         this_week.append("对照已有记录，整理给客户的说明，并安排下一轮复查。")
-    this_week = this_week[:3]
 
     retest: list[str] = []
     geo_waiting = [ticket for ticket in tickets if ticket_handoff(ticket) in {"drafted", "sent"}]

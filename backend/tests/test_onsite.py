@@ -1219,6 +1219,12 @@ def test_board_this_week_picks_three_pages_not_all_issues(client: TestClient, de
     db.commit()
 
     headers = auth_header(client)
+    prompt = client.post(
+        "/api/geo/prompts",
+        headers=headers,
+        json={"prompt_text": "best industrial fastener for export", "locale": "en-US"},
+    )
+    assert prompt.status_code == 201, prompt.text
     board = client.get("/api/onsite/board", headers=headers).json()
     week = board["this_week"]
     assert len(week) == 3
@@ -1227,4 +1233,7 @@ def test_board_this_week_picks_three_pages_not_all_issues(client: TestClient, de
     assert all("请改这一页" in row["customer_note"] for row in week)
     assert "www.snipers.com.cn" in week[0]["customer_note"]
     brief = client.get("/api/dashboard/customer-brief", headers=headers).json()
-    assert any("请改这一页" in item for item in brief["this_week"])
+    brief_text = "\n".join(brief["this_week"])
+    for row in week:
+        assert row["page_path"] in brief_text
+        assert "请改这一页" in brief_text

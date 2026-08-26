@@ -94,3 +94,25 @@ def test_weekly_onsite_picks_one_issue_per_page_prefers_urgent() -> None:
     paste = weekly_onsite_paste("SNIPERS", [issue_customer_note(row, home if row.page_id == home.id else product) for row in picks[:1]])
     assert "SNIPERS 这周请改这几处" in paste
     assert ONSITE_CUSTOMER_CLOSE in paste
+
+
+def test_weekly_onsite_picks_same_when_created_at_ties() -> None:
+    from datetime import datetime, timezone
+
+    stamped = datetime(2026, 8, 26, 8, 0, tzinfo=timezone.utc)
+    issues = [
+        OnsiteIssue(
+            id=f"i{index}",
+            tenant_id="t1",
+            page_id=f"p{index}",
+            category="tdk",
+            title="首页标题过长",
+            severity="critical",
+            status="open",
+            created_at=stamped,
+        )
+        for index in range(4)
+    ]
+    forward = [row.id for row in weekly_onsite_picks(issues)]
+    backward = [row.id for row in weekly_onsite_picks(list(reversed(issues)))]
+    assert forward == backward == ["i0", "i1", "i2"]

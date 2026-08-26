@@ -105,12 +105,13 @@ def weekly_onsite_picks(issues: list[OnsiteIssue], *, limit: int = WEEKLY_ONSITE
     urgent = [issue for issue in active if (issue.severity or "low") in {"critical", "high"}]
     pool = urgent or active
 
-    def sort_key(issue: OnsiteIssue) -> tuple[int, int, str]:
+    def sort_key(issue: OnsiteIssue) -> tuple[int, int, str, str]:
         created = (issue.created_at or datetime.min.replace(tzinfo=timezone.utc)).isoformat()
         return (
             _SEV_RANK.get(issue.severity or "low", 3),
             _STATUS_RANK.get(issue.status or "", 9),
             created,
+            issue.id or "",
         )
 
     picked: list[OnsiteIssue] = []

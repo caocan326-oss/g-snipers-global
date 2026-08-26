@@ -4,12 +4,12 @@ from datetime import datetime, timezone
 
 from fastapi import HTTPException
 from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.models import CrawlSession, OnsiteIssue, SitePage, Tenant, User
 from app.onsite_analyzer import reconcile_issues
 from app.onsite_fetch import OriginError, normalize_origin
-from app.onsite_loop import issue_customer_note, issue_customer_paste
+from app.onsite_loop import issue_customer_note, issue_customer_paste, weekly_onsite_picks
 from app.risk import needs_confirm
 from app.schemas import CrawlSessionOut, OnsiteIssueOut, SitePageOut
 
@@ -22,6 +22,7 @@ from .constants import (
     CRAWL_LABELS,
     CSV_ALIASES,
     OPENISH,
+    BOARD_ACTIONABLE,
     SEVERITY_LABELS,
     SEVERITY_RANK,
 )
@@ -342,6 +343,16 @@ def _parse_float(value: str) -> float | None:
         return float(cleaned)
     except ValueError:
         return None
+
+
+def load_weekly_onsite_issues(db: Session, tenant_id: str) -> list[OnsiteIssue]:
+    rows = (
+        db.query(OnsiteIssue)
+        .options(selectinload(OnsiteIssue.page))
+        .filter(OnsiteIssue.tenant_id == tenant_id, OnsiteIssue.status.in_(list(BOARD_ACTIONABLE)))
+        .all()
+    )
+    return weekly_onsite_picks(rows)
 
 
 def _tenant(db: Session, user: User) -> Tenant:
