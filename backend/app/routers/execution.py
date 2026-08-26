@@ -17,9 +17,10 @@ from app.geo_loop import (
     ticket_live_url,
     ticket_paste,
 )
-from app.models import BacklinkGap, GeoTicket, OnsiteIssue, SitePage, User
+from app.models import BacklinkGap, GeoTicket, OnsiteIssue, SitePage, Tenant, User
 from app.routers.onsite.common import _category_label, _page_short, _plain_title
 from app.schemas import ExecutionBoardOut, ExecutionItemOut
+from app.site_identity import adopt_live_site
 
 router = APIRouter(prefix="/api/execution", tags=["execution"])
 
@@ -70,7 +71,10 @@ def list_execution_items(user: User = Depends(get_current_user), db: Session = D
             )
         )
 
-    if refresh_open_tickets_from_samples(db, user.tenant_id) or reconcile_open_ticket_status(db, user.tenant_id):
+    tenant = db.get(Tenant, user.tenant_id)
+    cleaned = adopt_live_site(db, tenant) if tenant is not None else ""
+    refreshed = refresh_open_tickets_from_samples(db, user.tenant_id) or reconcile_open_ticket_status(db, user.tenant_id)
+    if cleaned or refreshed:
         db.commit()
     by_prompt = latest_prompt_rows(db, user.tenant_id)
     geo_rows = (

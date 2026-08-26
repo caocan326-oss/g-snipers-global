@@ -24,6 +24,7 @@ from app.models import (
     Tenant,
     User,
 )
+from app.site_identity import adopt_live_site
 from app.schemas import (
     AiAssistOut,
     AiStepIn,
@@ -61,6 +62,9 @@ def geo_provider_status(user: User = Depends(get_current_user)) -> GeoProviderSt
 
 @router.get("/summary", response_model=GeoSummary)
 def geo_summary(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> GeoSummary:
+    tenant = db.get(Tenant, user.tenant_id)
+    if tenant is not None and adopt_live_site(db, tenant):
+        db.commit()
     tid = user.tenant_id
     observations = db.query(GeoObservation).filter(GeoObservation.tenant_id == tid).all()
     recorded_rows = [o for o in observations if o.status in RECORDED_OBS]
@@ -144,6 +148,9 @@ def list_prompts(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[GeoPromptOut]:
+    tenant = db.get(Tenant, user.tenant_id)
+    if tenant is not None and adopt_live_site(db, tenant):
+        db.commit()
     rows = (
         db.query(GeoPrompt)
         .options(selectinload(GeoPrompt.observations))

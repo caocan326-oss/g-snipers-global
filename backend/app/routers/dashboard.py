@@ -36,6 +36,7 @@ from app.onsite_analyzer import rank_distribution
 from app.routers.onsite.constants import OPENISH
 from app.customer_brief import build_customer_brief
 from app.report_export import pdf_response
+from app.site_identity import adopt_live_site
 from app.schemas import (
     CustomerBriefOut,
     DashboardSummary,
@@ -54,6 +55,8 @@ ISSUE_RANK = {"critical": 0, "high": 1, "low": 2}
 def _summary_for(user: User, db: Session) -> DashboardSummary:
     tid = user.tenant_id
     tenant = db.get(Tenant, tid)
+    if tenant is not None and adopt_live_site(db, tenant):
+        db.commit()
     markets = db.query(func.count(Market.id)).filter(Market.tenant_id == tid).scalar() or 0
     priority = (
         db.query(func.count(Market.id)).filter(Market.tenant_id == tid, Market.status == "priority").scalar() or 0

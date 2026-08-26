@@ -81,7 +81,7 @@ def test_customer_brief_merges_onsite_and_geo(client: TestClient, demo_user, db)
     prompt = client.post(
         "/api/geo/prompts",
         headers=headers,
-        json={"prompt_text": "best smart lock for renters", "locale": "en-US"},
+        json={"prompt_text": "best industrial fastener exporter", "locale": "en-US"},
     )
     assert prompt.status_code == 201, prompt.text
 
@@ -164,7 +164,7 @@ def test_customer_brief_uses_sample_run_not_engine_slots(client: TestClient, dem
     )
     prompt = GeoPrompt(
         tenant_id=demo_user.tenant_id,
-        prompt_text="How do renters install a smart lock without replacing the whole door?",
+        prompt_text="best industrial fastener exporter for construction",
         locale="en-US",
     )
     db.add(prompt)
@@ -220,7 +220,7 @@ def test_customer_brief_retest_only_records_sample_change(client: TestClient, de
     db.add(SitePage(tenant_id=demo_user.tenant_id, path="/", locale="en-US", title="Home", crawl_status="ok"))
     prompt = GeoPrompt(
         tenant_id=demo_user.tenant_id,
-        prompt_text="best smart lock for apartment doors",
+        prompt_text="best industrial fastener exporter for construction",
         locale="en-US",
     )
     db.add(prompt)

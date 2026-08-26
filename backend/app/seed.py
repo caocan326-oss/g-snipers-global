@@ -72,11 +72,14 @@ def seed(db: Session) -> None:
     tenant = db.scalar(select(Tenant).where(Tenant.name == DEMO_TENANT_NAME))
     if tenant is None:
         tenant = db.scalar(select(Tenant).order_by(Tenant.created_at.asc()))
-    if tenant is not None and tenant.site_origin and not is_snipers_host(tenant.site_origin):
+    if tenant is not None and tenant.site_origin and not (
+        tenant.name == DEMO_TENANT_NAME and is_snipers_host(tenant.site_origin)
+    ):
         adopt_live_site(db, tenant)
-        ensure_admin(db)
-        db.commit()
-        return
+        if not is_snipers_host(tenant.site_origin):
+            ensure_admin(db)
+            db.commit()
+            return
     if tenant is None:
         tenant = Tenant(name=DEMO_TENANT_NAME, industry="智能家居", site_origin=SNIPERS_TEST_ORIGIN)
         db.add(tenant)
@@ -300,10 +303,14 @@ def _finish_seed(db: Session, tenant: Tenant, user: User) -> None:
     ensure_admin(db)
     purge_demo_leftover_pages(db, tenant.id)
     close_untested_index_findings(db, tenant.id)
+    if tenant.site_origin and not (tenant.name == DEMO_TENANT_NAME and is_snipers_host(tenant.site_origin)):
+        adopt_live_site(db, tenant)
     db.commit()
 
 
 def _seed_geo(db: Session, tenant: Tenant, user: User) -> None:
+    if is_snipers_host(tenant.site_origin) and tenant.name != DEMO_TENANT_NAME:
+        return
     if db.scalar(select(GeoPrompt).where(GeoPrompt.tenant_id == tenant.id)) is not None:
         return
 
