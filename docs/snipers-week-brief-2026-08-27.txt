@@ -92,9 +92,15 @@ Only recorded facts. Mention in AI answers is not guaranteed.
 
 四、改完怎么回我（按条回）
 
-资讯页最终网址：
-英文那篇最终网址：
-三句 FAQ 贴在哪一页（完整 http/https）：
-llms.txt 的网址；没有就写「做不到」
+资讯页最终网址：https://www.snipers.com.cn/snipers/article/articlelist/cat_id/1.html
+受模板限制、本周做不到缩短。页还能打开。
 
-我收到链接后：打开核对站内页；再用上面三句各抽一次。只记有没有变化。没复测不算这周做完。
+英文那篇最终网址：https://www.snipers.com.cn/en/Article/detail/article_id/4.html
+受模板限制、本周做不到缩短。页还能打开。
+
+三句 FAQ 贴在哪一页：https://www.snipers.com.cn/snipers/Article/detail/article_id/11.html
+现成 G-Snipers 文末。首页后台改不了，没新开栏目。经理核过：三问在末尾，原正文没动。
+
+llms.txt：做不到（根目录要主机文件权限，后台放不了）
+
+2026-08-27 已打开核对。同一问再测（博查 + Tavily）：三句都没提到，也没给出官网。贴上了不等于被提到。没复测不算这周做完；复测已记。

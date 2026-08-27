@@ -8,7 +8,7 @@
 
 约定：家里和公司**不会同时改**。换机器前必须把这边 push 完。
 
-最后更新：2026-08-27 14:55（公司。`bbcbed9` GEO 短稿闭环已发版。）。
+最后更新：2026-08-27 15:55（公司。英文周报已发版。）。
 
 ---
 
@@ -716,7 +716,26 @@ T5 过的时候，客户说明多了一条「买家问智能锁许可」。SNIPE
 
 工单「复制短稿」带上 Fact Pack 的英文 FAQ / llms.txt，没有 Fact Pack 就写不能出对外草稿。没有已核公开主页的渠道不进短稿、不出现站外块。页标题去掉厦门/成都。GEO 待处理可走完：复制短稿（记下已发客户）→ 登记已上线 → 同一问再测 → 记下复测关掉。没有复测不能关。工作台打勾不是官网已改。
 
-发给赛珀的本周需求在 `docs/snipers-week-brief-2026-08-27.txt`。他们回四条链接之前不打开官网、不抽查。
+发给赛珀的本周需求在 `docs/snipers-week-brief-2026-08-27.txt`。四条已回，见 §4.42。
+
+### 4.42 赛珀四条已回：FAQ 贴在 article_id/11；同一问复测仍没提到
+
+2026-08-27 客户回：
+
+| 项 | 回告 |
+| --- | --- |
+| 资讯页 | `https://www.snipers.com.cn/snipers/article/articlelist/cat_id/1.html` 还能打开。受模板限制，本周缩不了网址。 |
+| 英文那篇 | `https://www.snipers.com.cn/en/Article/detail/article_id/4.html` 还能打开。受模板限制，本周缩不了网址。 |
+| FAQ | `https://www.snipers.com.cn/snipers/Article/detail/article_id/11.html`（现成 G-Snipers 文末。首页后台改不了，没新开栏目。） |
+| llms.txt | 做不到。根目录要主机文件权限。`https://www.snipers.com.cn/llms.txt` 现是 404。 |
+
+经理核过：三问在该篇末尾，原正文没动。页脚本来就有厦门/成都，不是这次贴上去的。不要写进短稿。
+
+工作台已记：三句 `cite_stage=published`，工单上线地址都是这篇。博查 + Tavily 同一问再测：三句都没提到，也没给出官网。工单已关，备注写清贴上了不等于被提到。资讯页、英文那篇「网址过深」记受模板限制。`cat_id/3` JSON-LD 先前已过，仍钉在这周三处。不代改、不编问句。
+
+### 4.43 客户说明加英文周报给老板
+
+不再切测试站、不再抽客户网站。客户说明页有「复制英文周报给老板」和英文 PDF。同一批已记事实：这周三处、同一问复测过/不过、这个月询盘。已关掉的复查仍写进英文周报，不藏「不过」。没有 Fact Pack 仍出周报，不出对外英文页草稿。不代改、不编问句。
 
 ---
 
@@ -751,15 +770,15 @@ git log -1 --oneline
 
 | 项 | 值 |
 | --- | --- |
-| 日期 | 2026-08-27 14:55 |
+| 日期 | 2026-08-27 15:55 |
 | 最后一台 | 公司 `E:\G-snipers海外版` |
 | 分支 | `main` |
-| 提交 | `bbcbed9` GEO 短稿跟客户说明同一份；没有可核渠道不写 LinkedIn；待处理可关掉。 |
-| 已 push origin / upstream | 是。 |
-| 已发版生产 | **是。** `sync-from-local.ps1 -Rebuild`。生产 git `bbcbed9`。迁移 `025`。`DEMO_LOGIN_ENABLED` 仍关。 |
-| 接口实测 | `/api/health` 200。硬刷新 GEO 后短稿不应再出现 LinkedIn。没有复测不能关。不要编问句、不要打开赛珀站、不要再抽。 |
-| 未完成 | 赛珀回四条链接之前不打开、不抽查。回了再登记真地址、同一问复测、记下过/不过。 |
-| 下一台先做 | 海外版家里先 `git pull origin main`。对照 `docs/POSITIONING.md`。不代改、不编问句、不抽第三轮绿联。活不拆到下一周。 |
+| 提交 | 产品 `ffaa443`。交接随本提交。 |
+| 已 push origin / upstream | 是（随本轮一起推） |
+| 已发版生产 | **是。** `sync-from-local.ps1 -Rebuild`。产品 `ffaa443`。迁移 `025`。`DEMO_LOGIN_ENABLED` 仍关。 |
+| 接口实测 | 客户说明有英文周报复制/PDF。已关复查写进英文，不藏不过。中文短稿仍是「这周请改」。 |
+| 未完成 | 网址过深本周做不到。llms.txt 做不到。贴上了不等于被提到。不要编问句、不要再抽、不要代改、不要再测客户网站。 |
+| 下一台先做 | 海外版家里先 `git pull origin main`。对照 `docs/POSITIONING.md`。客户说明可复制英文周报给老板。 |
 
 `www` 灰云、A 仍 `39.97.52.149`。`relay.weiyids.com` 橙云，不要 CNAME 回 `workers.dev`。不要开 Google Ads。不要在服务器 `git pull`。
 
