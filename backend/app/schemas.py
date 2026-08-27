@@ -33,6 +33,9 @@ class DashboardSummary(BaseModel):
     open_work_orders: int
     inquiries_total: int
     qualified_inquiries: int
+    inquiries_month: int = 0
+    inquiries_month_unlinked: int = 0
+    fact_pack_ready: bool = False
     geo_prompts: int
     geo_untested: int
     geo_recorded: int

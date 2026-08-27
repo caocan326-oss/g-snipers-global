@@ -104,14 +104,18 @@ export default function HomePage() {
     },
     {
       label: "下一步",
-      text: (data.summary.geo_watch_due ?? 0) > 0
-        ? `有 ${data.summary.geo_watch_due} 句已记问句到期该复测。没有原句不会编。`
-        : (data.weekly_onsite ?? []).length
-          ? `这周给客户看 ${data.weekly_onsite.length} 处改法。客户改不改官网不挡我们交付。`
-          : reviewTotal > 0
-            ? `处理清单里还有 ${reviewTotal} 条未关闭事项，先处理紧急网站改法、AI 搜索和站外曝光。`
-            : "本周期暂无阻塞动作，可以进入客户说明或复查。",
-      tone: (data.summary.geo_watch_due ?? 0) > 0 || (data.weekly_onsite ?? []).length || reviewTotal > 0 ? "amber" : "green",
+      text: data.summary.fact_pack_ready === false
+        ? "没有 Fact Pack（已批英文说明 + 官网）不能出对外草稿。不要编规格。周报仍可以出。"
+        : (data.summary.geo_watch_due ?? 0) > 0
+          ? `有 ${data.summary.geo_watch_due} 句已记问句到期该复测。没有原句不会编。`
+          : (data.weekly_onsite ?? []).length
+            ? `这周给客户看 ${data.weekly_onsite.length} 处改法。${(data.summary.inquiries_month_unlinked ?? 0) > 0 ? `这个月有 ${data.summary.inquiries_month_unlinked} 条询盘还没挂问句。` : "客户改不改官网不挡我们交付。"}`
+            : (data.summary.inquiries_month_unlinked ?? 0) > 0
+              ? `这个月有 ${data.summary.inquiries_month_unlinked} 条询盘还没挂问句。挂上不是证明被提到。`
+              : reviewTotal > 0
+                ? `处理清单里还有 ${reviewTotal} 条未关闭事项，先处理紧急网站改法、AI 搜索和站外曝光。`
+                : "本周期暂无阻塞动作，可以进入客户说明或复查。",
+      tone: data.summary.fact_pack_ready === false || (data.summary.geo_watch_due ?? 0) > 0 || (data.weekly_onsite ?? []).length || (data.summary.inquiries_month_unlinked ?? 0) > 0 || reviewTotal > 0 ? "amber" : "green",
     },
   ];
 

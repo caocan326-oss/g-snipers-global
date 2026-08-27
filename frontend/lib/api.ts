@@ -197,6 +197,9 @@ export type DashboardSummary = {
   open_work_orders: number;
   inquiries_total: number;
   qualified_inquiries: number;
+  inquiries_month?: number;
+  inquiries_month_unlinked?: number;
+  fact_pack_ready?: boolean;
   geo_prompts: number;
   geo_untested: number;
   geo_recorded: number;

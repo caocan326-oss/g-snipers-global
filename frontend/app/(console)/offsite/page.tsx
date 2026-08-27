@@ -187,6 +187,12 @@ export default function OffsitePage() {
     });
   }, [platformQuery, platformRiskFilter, platformTypeFilter, platforms]);
 
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("tab") === "content") {
+      setTab("content");
+    }
+  }, []);
+
   function loadGaps() {
     api<BacklinkGap[]>("/api/offsite/gaps").then(setGaps).catch((e) => setError(e.message));
   }

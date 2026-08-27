@@ -3,9 +3,15 @@ from sqlalchemy.orm import Session
 
 from sqlalchemy import select
 
-from app.models import GeoAsset, GeoPrompt, GeoTicket, Tenant
+from app.models import GeoAsset, GeoPrompt, GeoTicket, Inquiry, Tenant
 from app.seed import seed
-from app.site_identity import adopt_live_site, is_buyer_question, is_lock_asset_text, is_lock_leftover_text
+from app.site_identity import (
+    adopt_live_site,
+    is_buyer_question,
+    is_lock_asset_text,
+    is_lock_inquiry_text,
+    is_lock_leftover_text,
+)
 from tests.conftest import auth_header
 
 
@@ -19,6 +25,10 @@ def test_lock_leftover_matches_chinese_lock_not_bare_license() -> None:
     assert is_buyer_question("哪家紧固件出口商能供货？")
     assert not is_buyer_question("industrial pump supplier")
     assert not is_buyer_question("智能锁许可")
+    assert is_lock_inquiry_text("alex@example.com / 加州物业经理", "询问多门锁批量安装，来自英文指南预览页（演示）。")
+    assert is_lock_inquiry_text("采购", "智能门锁询价")
+    assert not is_lock_inquiry_text("buyer@factory.com", "询盘紧固件出口许可")
+    assert not is_lock_inquiry_text("采购", "批量安装")
 
 
 def test_snipers_drops_lock_prompts_and_keeps_own_cite(demo_user, db: Session) -> None:
@@ -49,6 +59,63 @@ def test_snipers_drops_lock_prompts_and_keeps_own_cite(demo_user, db: Session) -
     db.refresh(asset)
     assert "snipers.com.cn" in (asset.body or "")
     assert "门锁" in note
+
+
+def test_snipers_drops_lock_demo_inquiry_keeps_real_one(demo_user, db: Session) -> None:
+    tenant = db.get(Tenant, demo_user.tenant_id)
+    assert tenant is not None
+    tenant.site_origin = "https://www.snipers.com.cn"
+    tenant.name = "SNIPERS"
+    db.add_all(
+        [
+            Inquiry(
+                tenant_id=tenant.id,
+                source="organic_en",
+                contact="alex@example.com / 加州物业经理",
+                quality="qualified",
+                notes="询问多门锁批量安装，来自英文指南预览页（演示）。",
+            ),
+            Inquiry(
+                tenant_id=tenant.id,
+                source="email",
+                contact="buyer@factory.com",
+                quality="unreviewed",
+                notes="询盘紧固件出口许可",
+            ),
+        ]
+    )
+    db.commit()
+
+    note = adopt_live_site(db, tenant)
+    db.commit()
+    contacts = [row.contact for row in db.query(Inquiry).filter(Inquiry.tenant_id == tenant.id).all()]
+    assert contacts == ["buyer@factory.com"]
+    assert "演示询盘" in note
+
+
+def test_snipers_inquiry_list_purges_lock_demo(client: TestClient, demo_user, db: Session) -> None:
+    tenant = db.get(Tenant, demo_user.tenant_id)
+    assert tenant is not None
+    tenant.site_origin = "https://www.snipers.com.cn"
+    tenant.name = "SNIPERS"
+    db.add(
+        Inquiry(
+            tenant_id=tenant.id,
+            source="organic_en",
+            contact="alex@example.com / 加州物业经理",
+            quality="qualified",
+            notes="询问多门锁批量安装，来自英文指南预览页（演示）。",
+        )
+    )
+    db.commit()
+
+    listed = client.get("/api/inquiries", headers=auth_header(client))
+    assert listed.status_code == 200, listed.text
+    assert listed.json() == []
+    workbench = client.get("/api/dashboard/workbench?days=28", headers=auth_header(client)).json()
+    assert workbench["summary"]["inquiries_month"] == 0
+    assert workbench["summary"]["inquiries_month_unlinked"] == 0
+    assert all(item["id"] != "inquiry-link" for item in workbench["next_actions"])
 
 
 def test_snipers_clears_lock_llms_and_keeps_own_cite(demo_user, db: Session) -> None:
@@ -122,3 +189,5 @@ def test_seed_does_not_reinject_lock_onto_named_snipers(db: Session) -> None:
     assert not any("智能锁" in text or "smart lock" in text.lower() or "スマートロック" in text for text in texts)
     titles = [row.title for row in db.query(GeoTicket).filter(GeoTicket.tenant_id == tenant.id).all()]
     assert not any("智能锁" in title for title in titles)
+    contacts = [row.contact for row in db.query(Inquiry).filter(Inquiry.tenant_id == tenant.id).all()]
+    assert not any("alex@example.com" in contact or "加州物业" in contact for contact in contacts)

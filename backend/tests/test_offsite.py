@@ -84,6 +84,32 @@ def test_offsite_gap_and_outreach(client: TestClient, demo_user) -> None:
     assert "domain_rating" not in checker
 
 
+def test_workbench_fact_pack_is_first_until_ready(client: TestClient, demo_user, db: Session) -> None:
+    from app.models import FactPack, Tenant
+
+    headers = auth_header(client)
+    empty = client.get("/api/dashboard/workbench?days=28", headers=headers).json()
+    assert empty["summary"]["fact_pack_ready"] is False
+    assert empty["next_actions"][0]["id"] == "fact-pack"
+    assert empty["next_actions"][0]["href"] == "/offsite?tab=content"
+    assert "不要编规格" in empty["next_actions"][0]["subtitle"]
+
+    tenant = db.get(Tenant, demo_user.tenant_id)
+    assert tenant is not None
+    tenant.site_origin = "https://www.snipers.com.cn"
+    db.add(
+        FactPack(
+            tenant_id=demo_user.tenant_id,
+            website="https://www.snipers.com.cn",
+            approved_boilerplate_en="SNIPERS supplies industrial fasteners for export buyers.",
+        )
+    )
+    db.commit()
+    ready = client.get("/api/dashboard/workbench?days=28", headers=headers).json()
+    assert ready["summary"]["fact_pack_ready"] is True
+    assert all(item["id"] != "fact-pack" for item in ready["next_actions"])
+
+
 def test_fact_pack_content_asset_approval_and_distribution_gate(client: TestClient, demo_user) -> None:
     headers = auth_header(client)
     fact = client.post(

@@ -15,6 +15,7 @@ from app.models import (
     GeoPrompt,
     GeoSampleResult,
     GeoTicket,
+    Inquiry,
     OutreachItem,
     Tenant,
 )
@@ -41,6 +42,11 @@ LOCK_ASSET_MARKERS = (
     "賃貸",
     "スマートロック",
     "snipers.com.cn",
+)
+LOCK_INQUIRY_MARKERS = (
+    "alex@example.com",
+    "加州物业经理",
+    "多门锁",
 )
 
 
@@ -73,6 +79,15 @@ def name_from_origin(origin: str | None) -> str:
 def is_lock_leftover_text(text: str) -> bool:
     blob = (text or "").lower()
     return bool(blob) and any(marker.lower() in blob for marker in LOCK_PROMPT_MARKERS)
+
+
+def is_lock_inquiry_text(*parts: str) -> bool:
+    """Seed leftover from the lock demo (alex@example.com / 多门锁), not a real lead."""
+    blob = " ".join(part or "" for part in parts)
+    if is_lock_leftover_text(blob):
+        return True
+    lower = blob.lower()
+    return bool(lower) and any(marker.lower() in lower for marker in LOCK_INQUIRY_MARKERS)
 
 
 def is_lock_asset_text(text: str, *, keep_snipers_cite: bool = False) -> bool:
@@ -120,6 +135,9 @@ def is_recordable_question(text: str) -> bool:
 
 
 def _purge_lock_prompt(db: Session, prompt: GeoPrompt) -> None:
+    db.query(Inquiry).filter(Inquiry.related_prompt_id == prompt.id).update(
+        {Inquiry.related_prompt_id: None}, synchronize_session=False
+    )
     db.query(GeoSampleResult).filter(GeoSampleResult.prompt_id == prompt.id).delete(synchronize_session=False)
     db.query(GeoObservation).filter(GeoObservation.prompt_id == prompt.id).delete(synchronize_session=False)
     db.query(GeoTicket).filter(GeoTicket.prompt_id == prompt.id).delete(synchronize_session=False)
@@ -127,7 +145,7 @@ def _purge_lock_prompt(db: Session, prompt: GeoPrompt) -> None:
 
 
 def adopt_live_site(db: Session, tenant: Tenant) -> str:
-    """Rename the demo lock tenant and archive lock leftover prompts/keywords."""
+    """Rename the demo lock tenant and drop lock leftover prompts/keywords/inquiries."""
     if not tenant.site_origin:
         return ""
     if tenant.name == DEMO_TENANT_NAME and is_snipers_host(tenant.site_origin):
@@ -146,6 +164,14 @@ def adopt_live_site(db: Session, tenant: Tenant) -> str:
             archived += 1
     if archived:
         notes.append(f"已归档 {archived} 条门锁搜索词")
+
+    inquiries_removed = 0
+    for row in db.query(Inquiry).filter(Inquiry.tenant_id == tenant.id).all():
+        if is_lock_inquiry_text(row.contact or "", row.notes or ""):
+            db.delete(row)
+            inquiries_removed += 1
+    if inquiries_removed:
+        notes.append(f"已去掉 {inquiries_removed} 条门锁演示询盘")
 
     prompts = db.query(GeoPrompt).filter(GeoPrompt.tenant_id == tenant.id).all()
     removed = 0

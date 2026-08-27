@@ -42,6 +42,9 @@ def test_inquiry_create_list_attach(client: TestClient, demo_user) -> None:
     assert listed.json()[0]["related_seo_page_id"] == page["id"]
     assert listed.json()[0]["related_prompt_id"] is None
     assert listed.json()[0]["related_prompt_text"] == ""
+    workbench = client.get("/api/dashboard/workbench?days=28", headers=headers).json()
+    assert workbench["summary"]["inquiries_month_unlinked"] == 1
+    assert any(item["id"] == "inquiry-link" for item in workbench["next_actions"])
 
 
 def test_inquiry_attaches_recorded_prompt_only(client: TestClient, demo_user) -> None:
@@ -99,3 +102,6 @@ def test_inquiry_attaches_recorded_prompt_only(client: TestClient, demo_user) ->
     assert "什么获客软件比较好" in brief["english_markdown"]
     assert "inquiry logged" in brief["english_markdown"]
     assert "not proof of an AI mention" in brief["english_markdown"]
+    after = client.get("/api/dashboard/workbench?days=28", headers=headers).json()
+    assert after["summary"]["inquiries_month_unlinked"] == 0
+    assert all(item["id"] != "inquiry-link" for item in after["next_actions"])

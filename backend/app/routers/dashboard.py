@@ -101,6 +101,14 @@ def _summary_for(user: User, db: Session) -> DashboardSummary:
         db.query(func.count(Inquiry.id)).filter(Inquiry.tenant_id == tid, Inquiry.quality == "qualified").scalar()
         or 0
     )
+    month_start = datetime.now(timezone.utc).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    month_inquiries = (
+        db.query(Inquiry)
+        .filter(Inquiry.tenant_id == tid, Inquiry.created_at >= month_start)
+        .all()
+    )
+    inquiries_month = len(month_inquiries)
+    inquiries_month_unlinked = sum(1 for row in month_inquiries if not row.related_prompt_id)
     geo_prompts = db.query(func.count(GeoPrompt.id)).filter(GeoPrompt.tenant_id == tid).scalar() or 0
     geo_untested = (
         db.query(func.count(GeoObservation.id))
@@ -174,6 +182,7 @@ def _summary_for(user: User, db: Session) -> DashboardSummary:
         or 0
     )
     distribution_jobs = db.query(func.count(DistributionJob.id)).filter(DistributionJob.tenant_id == tid).scalar() or 0
+    pack_ready = fact_pack_ready(load_fact_pack(db, tenant), tenant)
     return DashboardSummary(
         tenant_name=tenant.name if tenant else "",
         markets_count=markets,
@@ -184,6 +193,9 @@ def _summary_for(user: User, db: Session) -> DashboardSummary:
         open_work_orders=open_wo,
         inquiries_total=inquiries,
         qualified_inquiries=qualified,
+        inquiries_month=inquiries_month,
+        inquiries_month_unlinked=inquiries_month_unlinked,
+        fact_pack_ready=pack_ready,
         geo_prompts=geo_prompts,
         geo_untested=geo_untested,
         geo_recorded=geo_recorded,
@@ -578,7 +590,20 @@ def workbench(
             )
         )
 
+    pack_ok = summary.fact_pack_ready
     next_actions: list[WorkbenchItem] = []
+    if not pack_ok:
+        next_actions.append(
+            WorkbenchItem(
+                id="fact-pack",
+                title="先补 Fact Pack",
+                subtitle=FACT_PACK_BLOCK,
+                href="/offsite?tab=content",
+                status="缺 Fact Pack",
+                tone="amber",
+                action_label="去补材料",
+            )
+        )
     if summary.geo_watch_due:
         next_actions.append(
             WorkbenchItem(
@@ -601,6 +626,18 @@ def workbench(
                 status="已钉住" if pin.get("issue_ids") else "待钉住",
                 tone="amber",
                 action_label="去站内",
+            )
+        )
+    if summary.inquiries_month_unlinked:
+        next_actions.append(
+            WorkbenchItem(
+                id="inquiry-link",
+                title=f"这个月 {summary.inquiries_month_unlinked} 条询盘还没挂问句",
+                subtitle="挂上已记原句。没有原句就空着，不要编。挂上不是证明 AI 提到了我们。",
+                href="/inquiries",
+                status="待挂问句",
+                tone="amber",
+                action_label="去询盘",
             )
         )
     if cite_published:
@@ -627,15 +664,14 @@ def workbench(
                 action_label="去作战室",
             )
         )
-    elif cite_draft:
-        pack_ok = fact_pack_ready(load_fact_pack(db, tenant), tenant)
+    elif cite_draft and pack_ok:
         next_actions.append(
             WorkbenchItem(
-                id="cite-send" if pack_ok else "cite-fact-pack",
-                title="把英文段发给客户" if pack_ok else "先补 Fact Pack 再出草稿",
-                subtitle="草稿只写已记事实。客户自己贴。我们不代改。" if pack_ok else FACT_PACK_BLOCK,
+                id="cite-send",
+                title="把英文段发给客户",
+                subtitle="草稿只写已记事实。客户自己贴。我们不代改。",
                 href="/geo",
-                status="草稿待发" if pack_ok else "缺 Fact Pack",
+                status="草稿待发",
                 tone="amber",
                 action_label="去作战室",
             )

@@ -556,7 +556,10 @@ def test_geo_war_room_has_trend_and_cite_pack(client: TestClient, demo_user, db)
     assert row["cite_stage"] == "draft"
     assert "还没把这段发给客户" in row["cite_stage_label"]
     assert row["cite_paste"] == row["page_draft"]
-    assert any(item["id"] == "cite-fact-pack" for item in workbench["next_actions"])
+    assert workbench["summary"]["fact_pack_ready"] is False
+    assert workbench["next_actions"][0]["id"] == "fact-pack"
+    assert workbench["next_actions"][0]["href"] == "/offsite?tab=content"
+    assert all(item["id"] != "cite-fact-pack" for item in workbench["next_actions"])
 
 
 def test_cite_pack_english_when_fact_pack_ready(client: TestClient, demo_user, db) -> None:

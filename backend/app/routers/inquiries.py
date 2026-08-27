@@ -3,8 +3,9 @@ from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
 from app.database import get_db
-from app.models import GeoPrompt, Inquiry, User
+from app.models import GeoPrompt, Inquiry, Tenant, User
 from app.schemas import InquiryCreate, InquiryOut, InquiryPatch
+from app.site_identity import adopt_live_site
 
 router = APIRouter(prefix="/api/inquiries", tags=["inquiries"])
 
@@ -45,6 +46,9 @@ def list_inquiries(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[InquiryOut]:
+    tenant = db.get(Tenant, user.tenant_id)
+    if tenant is not None and adopt_live_site(db, tenant):
+        db.commit()
     q = db.query(Inquiry).filter(Inquiry.tenant_id == user.tenant_id)
     if quality:
         q = q.filter(Inquiry.quality == quality)
