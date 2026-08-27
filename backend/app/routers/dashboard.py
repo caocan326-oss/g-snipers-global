@@ -45,6 +45,7 @@ from app.geo_loop import (
     prompt_trend_points,
     recorded_from_label,
     trend_note,
+    trust_map_for_tenant,
     watch_state,
 )
 from app.customer_brief import build_customer_brief
@@ -511,6 +512,35 @@ def workbench(
             )
         )
 
+    trust_map = trust_map_for_tenant(db, user.tenant_id, tenant)
+    source_tone = {"owned": "green", "marketplace": "amber", "competitor": "red", "other": "blue"}
+    geo_trust_sources = [
+        WorkbenchItem(
+            id=f"src-{row['host']}",
+            title=row["host"],
+            subtitle=row["kind_label"],
+            href="/geo",
+            status=f"{row['hits']} 次",
+            tone=source_tone.get(row["kind"], "default"),
+            meta=row.get("sample_prompt") or "",
+            action_label="去作战室",
+        )
+        for row in trust_map["sources"]
+    ]
+    geo_competitors = [
+        WorkbenchItem(
+            id=f"comp-{row['name']}",
+            title=row["name"],
+            subtitle="选题里已记" if row["registered"] else "抽查里出现",
+            href="/geo",
+            status=f"{row['hits']} 次",
+            tone="red" if row["registered"] else "amber",
+            meta=row.get("sample_prompt") or "",
+            action_label="去作战室",
+        )
+        for row in trust_map["competitors"]
+    ]
+
     weekly_onsite: list[WorkbenchItem] = []
     for item in week_out:
         if item.sent_to_customer:
@@ -731,6 +761,11 @@ def workbench(
         weekly_pinned=bool(pin.get("issue_ids")),
         weekly_can_restore=bool(dropped_restore_id(db, user.tenant_id)),
         geo_questions=geo_questions,
+        geo_trust_sources=geo_trust_sources,
+        geo_competitors=geo_competitors,
+        geo_trust_note=" ".join(
+            part for part in (str(trust_map.get("note") or ""), str(trust_map.get("compare_note") or "")) if part
+        ),
         deferred_modules=[
             WorkbenchItem(
                 id="sem",

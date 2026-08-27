@@ -298,6 +298,9 @@ export type Workbench = {
   weekly_pinned: boolean;
   weekly_can_restore?: boolean;
   geo_questions: WorkbenchItem[];
+  geo_trust_sources?: WorkbenchItem[];
+  geo_competitors?: WorkbenchItem[];
+  geo_trust_note?: string;
 };
 
 export type CustomerBriefSection = {
@@ -746,6 +749,60 @@ export type GeoSummary = {
   watch_due?: number;
   watch_count?: number;
   watch_interval_days?: number;
+  trust_map?: GeoTrustMap;
+};
+
+export type GeoTrustSource = {
+  host: string;
+  kind: string;
+  kind_label: string;
+  hits: number;
+  prompt_count: number;
+  sample_url: string;
+  sample_prompt: string;
+};
+
+export type GeoTrustCompetitor = {
+  name: string;
+  hits: number;
+  prompt_count: number;
+  registered: boolean;
+  sample_prompt: string;
+};
+
+export type GeoTrustRound = {
+  label: string;
+  at: string;
+  mentioned: boolean;
+  owned: boolean;
+  hosts: string[];
+  owned_hosts: string[];
+  other_hosts: string[];
+  competitors: string[];
+  sampled: number;
+  mentioned_count: number;
+};
+
+export type GeoTrustPrompt = {
+  prompt_id: string;
+  prompt_text: string;
+  latest?: GeoTrustRound | null;
+  previous?: GeoTrustRound | null;
+  compare: string;
+};
+
+export type GeoTrustMap = {
+  sources: GeoTrustSource[];
+  competitors: GeoTrustCompetitor[];
+  owned_hits: number;
+  other_hits: number;
+  marketplace_hits: number;
+  competitor_site_hits: number;
+  note: string;
+  empty: boolean;
+  prompts?: GeoTrustPrompt[];
+  rounds?: GeoTrustRound[];
+  compare_note?: string;
 };
 
 export type GeoReport = {

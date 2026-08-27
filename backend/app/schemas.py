@@ -134,6 +134,9 @@ class WorkbenchOut(BaseModel):
     weekly_pinned: bool = False
     weekly_can_restore: bool = False
     geo_questions: list[WorkbenchItem] = []
+    geo_trust_sources: list[WorkbenchItem] = []
+    geo_competitors: list[WorkbenchItem] = []
+    geo_trust_note: str = ""
 
 
 class CustomerBriefSection(BaseModel):
@@ -606,6 +609,59 @@ class GeoChecklistItemUpdate(BaseModel):
     notes: str | None = None
 
 
+class GeoTrustSource(BaseModel):
+    host: str
+    kind: str
+    kind_label: str
+    hits: int
+    prompt_count: int = 0
+    sample_url: str = ""
+    sample_prompt: str = ""
+
+
+class GeoTrustCompetitor(BaseModel):
+    name: str
+    hits: int
+    prompt_count: int = 0
+    registered: bool = False
+    sample_prompt: str = ""
+
+
+class GeoTrustRound(BaseModel):
+    label: str
+    at: str = ""
+    mentioned: bool = False
+    owned: bool = False
+    hosts: list[str] = []
+    owned_hosts: list[str] = []
+    other_hosts: list[str] = []
+    competitors: list[str] = []
+    sampled: int = 0
+    mentioned_count: int = 0
+
+
+class GeoTrustPrompt(BaseModel):
+    prompt_id: str
+    prompt_text: str
+    latest: GeoTrustRound | None = None
+    previous: GeoTrustRound | None = None
+    compare: str = ""
+
+
+class GeoTrustMap(BaseModel):
+    sources: list[GeoTrustSource] = []
+    competitors: list[GeoTrustCompetitor] = []
+    owned_hits: int = 0
+    other_hits: int = 0
+    marketplace_hits: int = 0
+    competitor_site_hits: int = 0
+    note: str = ""
+    empty: bool = True
+    prompts: list[GeoTrustPrompt] = []
+    rounds: list[GeoTrustRound] = []
+    compare_note: str = ""
+
+
 class GeoSummary(BaseModel):
     prompts: int
     untested: int
@@ -635,6 +691,7 @@ class GeoSummary(BaseModel):
     watch_due: int = 0
     watch_count: int = 0
     watch_interval_days: int = 7
+    trust_map: GeoTrustMap = Field(default_factory=GeoTrustMap)
 
 
 class GeoSeedOut(BaseModel):

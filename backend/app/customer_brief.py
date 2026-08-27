@@ -27,6 +27,7 @@ from app.geo_loop import (
     ticket_handoff,
     ticket_live_url,
     ticket_offsite_ask,
+    trust_map_for_tenant,
     weekly_paste,
 )
 from app.onsite_loop import issue_customer_note, weekly_pin_state
@@ -331,6 +332,23 @@ def build_customer_brief(user: User, db: Session) -> CustomerBriefOut:
                 pending_paste.append(cite_paste_for_prompt(pack, prompt))
         cite_assets.append("只写已记事实，缺的标 NEED_INPUT。客户自己贴。我们不代改。不保证这次被提到。")
 
+    trust = trust_map_for_tenant(db, user.tenant_id, tenant)
+    if trust["empty"]:
+        trust_items = [trust["note"], "不会编来源，不编竞品。不保证这次被提到。"]
+    else:
+        trust_items = [trust["note"]]
+        for row in trust["sources"][:8]:
+            trust_items.append(f"{row['host']} · {row['kind_label']} · {row['hits']} 次")
+        for row in trust["competitors"][:8]:
+            mark = "已记竞品" if row["registered"] else "抽查出现"
+            trust_items.append(f"{row['name']} · {mark} · {row['hits']} 次")
+        if trust.get("compare_note"):
+            trust_items.append(trust["compare_note"])
+        for row in (trust.get("prompts") or [])[:4]:
+            if row.get("compare"):
+                trust_items.append(f"{row['prompt_text']}：{row['compare']}")
+        trust_items.append("只记抽查里出现的来源和名字。不是我们编的竞品名单。不保证这次被提到。")
+
     headline = _headline(
         site_origin=site_origin,
         pages=len(pages),
@@ -345,6 +363,7 @@ def build_customer_brief(user: User, db: Session) -> CustomerBriefOut:
         CustomerBriefSection(key="findability", title="哪些地方让老外搜不到我", items=findability),
         CustomerBriefSection(key="buyer_kpi", title="AI 可见度作战室：这些问句有没有动", items=buyer_kpi),
         CustomerBriefSection(key="cite_assets", title="请客户自己贴的英文段", items=cite_assets),
+        CustomerBriefSection(key="trust_map", title="AI 引用了谁、提到了谁", items=trust_items),
         CustomerBriefSection(key="this_week", title="这周带给客户改的三处", items=this_week),
         CustomerBriefSection(key="retest", title="客户改完你再看一次", items=retest),
         CustomerBriefSection(key="inquiries", title="这个月有几个老外来问过", body=f"这个月记到 {inquiry_count} 条。", items=inquiry_items),

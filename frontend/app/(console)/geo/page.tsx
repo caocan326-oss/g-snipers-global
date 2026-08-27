@@ -32,6 +32,7 @@ import { SampleRunsCard } from "./_components/SampleRunsCard";
 import { TargetsCard } from "./_components/TargetsCard";
 import { TabNav } from "./_components/TabNav";
 import { TicketsPanel, type TicketForm } from "./_components/TicketsPanel";
+import { TrustMapCard } from "./_components/TrustMapCard";
 import { localeForCode } from "@/lib/countries";
 
 import { geoEvidenceVerdict, type Tab } from "./_helpers";
@@ -548,6 +549,8 @@ export default function GeoPage() {
         note={note}
         error={error}
       />
+
+      <TrustMapCard trustMap={summary?.trust_map} />
 
       <details className="rounded-md border border-dashed border-slate-200 bg-white p-4">
         <summary className="cursor-pointer text-sm font-medium text-slate-700">客户经理工具：数据源状态 / 抽查质量 / 目标词</summary>

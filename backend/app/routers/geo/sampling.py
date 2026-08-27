@@ -13,6 +13,7 @@ from app.geo_loop import (
     kinds_from_sample_rows,
     last_sampled_at_by_prompt,
     loop_ticket_spec,
+    trust_map_for_tenant,
     pick_sample_batches,
     watch_state,
     write_ticket_retest,
@@ -36,6 +37,7 @@ from app.schemas import (
     GeoSampleRunCreate,
     GeoSampleRunOut,
     GeoTicketDraftOut,
+    GeoTrustMap,
     GeoWatchItemOut,
     GeoWatchListOut,
     GeoWatchRunDueOut,
@@ -61,6 +63,12 @@ from .common import (
     _ticket_out,
 )
 from .constants import EXPORT_B2B_PACK_ID, PROTOCOL_VERSION, RECORDED_OBS
+
+
+@router.get("/trust-map", response_model=GeoTrustMap)
+def geo_trust_map(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> GeoTrustMap:
+    tenant = db.get(Tenant, user.tenant_id)
+    return GeoTrustMap(**trust_map_for_tenant(db, user.tenant_id, tenant))
 
 
 @router.get("/sample-runs", response_model=list[GeoSampleRunOut])

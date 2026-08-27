@@ -293,7 +293,12 @@ export default function HomePage() {
         restoreDropped={() => void restoreDroppedWeek()}
       />
 
-      <BuyerQuestionsSection items={data.geo_questions ?? []} />
+      <BuyerQuestionsSection
+        items={data.geo_questions ?? []}
+        sources={data.geo_trust_sources ?? []}
+        competitors={data.geo_competitors ?? []}
+        trustNote={data.geo_trust_note || ""}
+      />
 
       <DiagnosticTargetsSection
         targets={targets}

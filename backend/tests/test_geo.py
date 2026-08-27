@@ -59,6 +59,12 @@ def test_geo_prompt_slots_are_untested_not_zero(client: TestClient, demo_user) -
     assert body["cite_rate"] == "未测"
     assert body["verified_citation_rate"] == "未测"
     assert "percent" not in body
+    assert body["trust_map"]["empty"] is True
+    assert "还没有抽查引用" in body["trust_map"]["note"]
+    empty_map = client.get("/api/geo/trust-map", headers=headers).json()
+    assert empty_map["sources"] == []
+    assert empty_map["competitors"] == []
+    assert "不会编来源" in empty_map["note"]
 
 
 def test_geo_seed_prompt_panel_explains_missing_targets(client: TestClient, demo_user) -> None:
@@ -421,6 +427,27 @@ def test_geo_sample_run_freezes_manual_observations_as_evidence(client: TestClie
     assert summary["evidence_results"] == 1
     assert summary["latest_run_id"] == run["id"]
     assert summary["latest_run_at"]
+    trust = summary["trust_map"]
+    assert trust["empty"] is False
+    hosts = {row["host"] for row in trust["sources"]}
+    assert "example.com" in hosts
+    assert "industry.example.org" in hosts
+    assert "item.jd.com" in hosts
+    assert any(row["kind"] == "owned" for row in trust["sources"] if row["host"] == "example.com")
+    assert any(row["kind"] == "marketplace" for row in trust["sources"] if row["host"] == "item.jd.com")
+    assert any(row["name"] == "Pump Rival" for row in trust["competitors"])
+    mapped = client.get("/api/geo/trust-map", headers=headers).json()
+    assert mapped["owned_hits"] >= 1
+    assert "只记抽查里出现的" in mapped["note"]
+    assert mapped["prompts"]
+    assert "只有一轮" in mapped["prompts"][0]["compare"]
+    workbench = client.get("/api/dashboard/workbench?days=28", headers=headers).json()
+    assert any(item["title"] == "example.com" for item in workbench["geo_trust_sources"])
+    assert any(item["title"] == "Pump Rival" for item in workbench["geo_competitors"])
+    brief = client.get("/api/dashboard/customer-brief", headers=headers).json()
+    trust_section = next(section for section in brief["sections"] if section["key"] == "trust_map")
+    assert any("example.com" in item for item in trust_section["items"])
+    assert any("Pump Rival" in item for item in trust_section["items"])
 
     report = client.get("/api/geo/report", headers=headers).json()["markdown"]
     assert "证据运行" in report
@@ -904,6 +931,89 @@ def test_geo_grounded_batch_requires_a_live_source(client: TestClient, demo_user
     res = client.post("/api/geo/sample-runs/auto-grounded", headers=headers, json={"limit": 1, "trials": 1})
     assert res.status_code == 400, res.text
     assert "DeepSeek" in res.json()["detail"]
+
+
+def test_trust_map_compares_two_rounds(client: TestClient, demo_user, db) -> None:
+    import json
+    from datetime import datetime, timedelta, timezone
+
+    from app.models import GeoSampleResult, GeoSampleRun, Tenant
+
+    tenant = db.get(Tenant, demo_user.tenant_id)
+    tenant.site_origin = "https://example.com"
+    db.commit()
+    headers = auth_header(client)
+    prompt = client.post(
+        "/api/geo/prompts",
+        headers=headers,
+        json={
+            "prompt_text": "Which factory can export industrial fasteners to the US?",
+            "locale": "en-US",
+            "recorded_from": "sales",
+        },
+    ).json()
+    older = datetime.now(timezone.utc) - timedelta(days=8)
+    newer = datetime.now(timezone.utc)
+
+    def add_run(*, evidence_id: str, started_at, mentioned: bool, owned: str, third: list[str], competitor: str) -> None:
+        run = GeoSampleRun(
+            tenant_id=demo_user.tenant_id,
+            config_hash=evidence_id,
+            status="done",
+            started_at=started_at,
+        )
+        db.add(run)
+        db.flush()
+        owned_urls = [owned] if owned else []
+        db.add(
+            GeoSampleResult(
+                tenant_id=demo_user.tenant_id,
+                run_id=run.id,
+                prompt_id=prompt["id"],
+                evidence_id=evidence_id,
+                engine="tavily",
+                web_grounded="true",
+                prompt_text_hash="c" * 64,
+                answer_text_hash=evidence_id.ljust(64, "0"),
+                answer_excerpt="Recorded sample.",
+                mentioned=mentioned,
+                citations_json=json.dumps(owned_urls + third),
+                owned_citations_json=json.dumps(owned_urls),
+                third_party_citations_json=json.dumps(third),
+                competitor_hits=competitor,
+            )
+        )
+
+    add_run(
+        evidence_id="ev_trust_old",
+        started_at=older,
+        mentioned=False,
+        owned="",
+        third=["https://www.thomasnet.com/list"],
+        competitor="Rival A",
+    )
+    add_run(
+        evidence_id="ev_trust_new",
+        started_at=newer,
+        mentioned=True,
+        owned="https://example.com/pumps",
+        third=["https://industry.example.org/list"],
+        competitor="Rival B",
+    )
+    db.commit()
+
+    mapped = client.get("/api/geo/trust-map", headers=headers).json()
+    assert mapped["empty"] is False
+    assert len(mapped["rounds"]) == 2
+    assert "这一轮提到了" in mapped["compare_note"]
+    assert "example.com" in mapped["compare_note"]
+    row = mapped["prompts"][0]
+    assert row["prompt_text"].startswith("Which factory")
+    assert "这一轮提到了" in row["compare"]
+    assert "新提到：Rival B" in row["compare"]
+    brief = client.get("/api/dashboard/customer-brief", headers=headers).json()
+    trust_section = next(section for section in brief["sections"] if section["key"] == "trust_map")
+    assert any("这一轮提到了" in item for item in trust_section["items"])
 
 
 def _add_sample_run(db, tenant_id: str, prompt_id: str, *, evidence_id: str, mentioned: bool, started_at):

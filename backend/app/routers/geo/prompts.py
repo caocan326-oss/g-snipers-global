@@ -19,6 +19,7 @@ from app.geo_loop import (
     competitor_note,
     due_watch_prompts,
     last_sampled_at_by_prompt,
+    trust_map_for_tenant,
     prompt_batch_rows,
     prompt_compare_note_for,
     prompt_sample_verdict,
@@ -176,6 +177,7 @@ def geo_summary(user: User = Depends(get_current_user), db: Session = Depends(ge
         watch_due=len(due_watch_prompts(db, tid)),
         watch_count=prompts,
         watch_interval_days=WATCH_INTERVAL_DAYS,
+        trust_map=trust_map_for_tenant(db, tid, tenant),
     )
 
 

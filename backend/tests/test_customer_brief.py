@@ -105,11 +105,14 @@ def test_customer_brief_empty_tenant_stays_untested(client: TestClient, demo_use
     assert "已被 AI 稳定推荐" not in body["markdown"]
     assert "0%" not in body["markdown"]
     keys = [section["key"] for section in body["sections"]]
-    assert keys == ["findability", "buyer_kpi", "cite_assets", "this_week", "retest", "inquiries"]
+    assert keys == ["findability", "buyer_kpi", "cite_assets", "trust_map", "this_week", "retest", "inquiries"]
     assert "这个月记到" in body["markdown"]
     buyer_kpi = next(section for section in body["sections"] if section["key"] == "buyer_kpi")
     assert any("还没有买家原句" in item for item in buyer_kpi["items"])
     assert any("不会编" in item for item in buyer_kpi["items"])
+    trust_map = next(section for section in body["sections"] if section["key"] == "trust_map")
+    assert any("没有信任源地图" in item for item in trust_map["items"])
+    assert any("不会编来源" in item for item in trust_map["items"])
 
 
 def test_customer_brief_merges_onsite_and_geo(client: TestClient, demo_user, db) -> None:
@@ -189,7 +192,7 @@ def test_seeded_demo_counts_align_across_surfaces(client: TestClient, db) -> Non
     assert summary["geo_prompts"] == geo["prompts"] == 2
     assert summary["geo_untested"] == geo["untested"] == 16
     assert summary["geo_tickets_open"] == 2
-    assert [section["key"] for section in brief["sections"]] == ["findability", "buyer_kpi", "cite_assets", "this_week", "retest", "inquiries"]
+    assert [section["key"] for section in brief["sections"]] == ["findability", "buyer_kpi", "cite_assets", "trust_map", "this_week", "retest", "inquiries"]
     assert any("紧急" in item for item in brief["this_week"])
     assert "这个月记到" in brief["markdown"]
     assert guide["open_high"] == 6

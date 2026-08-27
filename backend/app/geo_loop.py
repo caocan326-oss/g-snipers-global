@@ -13,8 +13,20 @@ from urllib.parse import urlparse
 from sqlalchemy import func
 from sqlalchemy.orm import Session, selectinload
 
+from app.geo_citations import citation_host, classify_citation
 from app.geo_helpers import ENGINE_LABELS
-from app.models import FactPack, GeoPrompt, GeoSampleResult, GeoSampleRun, GeoTicket, SitePage, SourcePlatform, Tenant
+from app.models import (
+    Competitor,
+    FactPack,
+    GeoObservation,
+    GeoPrompt,
+    GeoSampleResult,
+    GeoSampleRun,
+    GeoTicket,
+    SitePage,
+    SourcePlatform,
+    Tenant,
+)
 from app.official_apis import OFFICIAL_APIS, official_api_for
 
 HONEST_ACCEPTANCE = (
@@ -640,6 +652,401 @@ def competitor_note(rows: list[GeoSampleResult]) -> str:
     if not bits:
         return ""
     return "。".join(bits) + "。不是我们编的竞品名单。"
+
+
+SOURCE_KIND_LABELS = {
+    "owned": "客户官网",
+    "marketplace": "购物站",
+    "competitor": "竞品站",
+    "other": "第三方",
+}
+
+
+def _urls_from_text(text: str) -> list[str]:
+    found: list[str] = []
+    for part in re.split(r"[\s,，;；]+", text or ""):
+        value = part.strip().strip(").,]>\"'")
+        if value.startswith("http://") or value.startswith("https://"):
+            found.append(value)
+    return found
+
+
+def _name_parts(text: str) -> list[str]:
+    return [part.strip() for part in re.split(r"[\n,，;；|/]+", text or "") if part.strip()]
+
+
+def _empty_trust_map(note: str) -> dict:
+    return {
+        "sources": [],
+        "competitors": [],
+        "owned_hits": 0,
+        "other_hits": 0,
+        "marketplace_hits": 0,
+        "competitor_site_hits": 0,
+        "note": note,
+        "empty": True,
+        "prompts": [],
+        "rounds": [],
+        "compare_note": "",
+    }
+
+
+def _result_urls(row: GeoSampleResult) -> list[str]:
+    return (
+        _json_list(row.owned_citations_json)
+        + _json_list(row.third_party_citations_json)
+        + _json_list(row.citations_json)
+    )
+
+
+def _classify_host(url: str, root: str, competitor_hosts: dict[str, str]) -> tuple[str, str]:
+    host = citation_host(url)
+    if not host:
+        return "", ""
+    kind = "competitor" if host in competitor_hosts else classify_citation(url, root)
+    return host, kind
+
+
+def _slice_from_rows(
+    rows: list[GeoSampleResult],
+    *,
+    root: str,
+    competitor_hosts: dict[str, str],
+    own_names: set[str],
+    registered_names: dict[str, str],
+    label: str,
+) -> dict:
+    hosts: list[str] = []
+    owned_hosts: list[str] = []
+    other_hosts: list[str] = []
+    names: list[str] = []
+    seen_h: set[str] = set()
+    seen_n: set[str] = set()
+    for row in rows:
+        for url in _result_urls(row):
+            host, kind = _classify_host(url, root, competitor_hosts)
+            if not host or host in seen_h:
+                continue
+            seen_h.add(host)
+            hosts.append(host)
+            if kind == "owned":
+                owned_hosts.append(host)
+            else:
+                other_hosts.append(host)
+        for raw in _name_parts(row.competitor_hits or ""):
+            if raw.lower() in own_names:
+                continue
+            key = raw.lower()
+            if key in seen_n:
+                continue
+            seen_n.add(key)
+            names.append(registered_names.get(key, raw))
+    started = None
+    for row in rows:
+        sampled = getattr(row, "sampled_at", None)
+        if sampled and (started is None or sampled < started):
+            started = sampled
+    return {
+        "label": label,
+        "at": started.isoformat() if started else "",
+        "mentioned": any(row.mentioned for row in rows),
+        "owned": any(_owned(row) for row in rows),
+        "hosts": hosts[:8],
+        "owned_hosts": owned_hosts[:8],
+        "other_hosts": other_hosts[:8],
+        "competitors": names[:8],
+        "sampled": len(rows),
+        "mentioned_count": sum(1 for row in rows if row.mentioned),
+    }
+
+
+def _compare_slices(latest: dict | None, previous: dict | None) -> str:
+    if not latest:
+        return "还没抽查引用。不会编来源。"
+    if not previous:
+        return "只有一轮抽查，还不能对照。不保证这次被提到。"
+    bits: list[str] = []
+    if latest["mentioned"] and not previous["mentioned"]:
+        bits.append("这一轮提到了，上一轮没有。")
+    elif not latest["mentioned"] and previous["mentioned"]:
+        bits.append("这一轮没提到，上一轮提到了。")
+    elif latest["mentioned"] and previous["mentioned"]:
+        bits.append("两轮都提到了。")
+    else:
+        bits.append("两轮都没提到。")
+    latest_h = list(latest.get("hosts") or [])
+    previous_h = list(previous.get("hosts") or [])
+    appeared = [host for host in latest_h if host not in previous_h]
+    missing = [host for host in previous_h if host not in latest_h]
+    if appeared:
+        bits.append("新出现：" + "、".join(appeared[:4]) + "。")
+    if missing:
+        bits.append("这一轮没再出现：" + "、".join(missing[:4]) + "。")
+    if latest_h and not appeared and not missing:
+        bits.append("引用的站没变。")
+    latest_c = list(latest.get("competitors") or [])
+    previous_c = list(previous.get("competitors") or [])
+    new_c = [name for name in latest_c if name not in previous_c]
+    if new_c:
+        bits.append("新提到：" + "、".join(new_c[:3]) + "。")
+    return "".join(bits) + "不保证这次被提到。"
+
+
+def trust_map_for_tenant(db: Session, tenant_id: str, tenant: Tenant | None = None) -> dict:
+    """Who AI cited / named. Empty if there is no recorded sample. Never invents sources."""
+    tenant = tenant or db.get(Tenant, tenant_id)
+    root = (tenant.site_origin if tenant else "") or ""
+    own_names: set[str] = set()
+    if tenant and tenant.name:
+        own_names.add(tenant.name.strip().lower())
+    if root:
+        host = citation_host(root)
+        if host:
+            own_names.add(host)
+            own_names.add(host.split(".")[0])
+
+    registered = db.query(Competitor).filter(Competitor.tenant_id == tenant_id).all()
+    registered_names = {row.name.strip().lower(): row.name for row in registered if (row.name or "").strip()}
+    competitor_hosts = {
+        citation_host(row.website): row.name for row in registered if (row.website or "").strip()
+    }
+
+    prompt_rows = db.query(GeoPrompt).filter(GeoPrompt.tenant_id == tenant_id).all()
+    if not prompt_rows:
+        return _empty_trust_map("没有原句，没有信任源地图。不会编来源，不编竞品。")
+
+    prompts = {row.id: row.prompt_text for row in prompt_rows}
+    sources: dict[str, dict] = {}
+    competitors: dict[str, dict] = {}
+
+    def add_url(url: str, prompt_id: str) -> None:
+        value = (url or "").strip()
+        if not value:
+            return
+        host = citation_host(value)
+        if not host:
+            return
+        kind = "competitor" if host in competitor_hosts else classify_citation(value, root)
+        bucket = sources.setdefault(
+            host,
+            {
+                "host": host,
+                "kind": kind,
+                "kind_label": SOURCE_KIND_LABELS.get(kind, SOURCE_KIND_LABELS["other"]),
+                "hits": 0,
+                "prompt_ids": set(),
+                "sample_url": value,
+                "sample_prompt": prompts.get(prompt_id, ""),
+            },
+        )
+        bucket["hits"] += 1
+        bucket["prompt_ids"].add(prompt_id)
+        rank = {"owned": 3, "competitor": 2, "marketplace": 1, "other": 0}
+        if rank.get(kind, 0) > rank.get(bucket["kind"], 0):
+            bucket["kind"] = kind
+            bucket["kind_label"] = SOURCE_KIND_LABELS.get(kind, SOURCE_KIND_LABELS["other"])
+
+    def add_competitor(name: str, prompt_id: str) -> None:
+        raw = (name or "").strip()
+        if not raw or raw.lower() in own_names:
+            return
+        key = raw.lower()
+        bucket = competitors.setdefault(
+            key,
+            {
+                "name": registered_names.get(key, raw),
+                "hits": 0,
+                "prompt_ids": set(),
+                "registered": key in registered_names,
+                "sample_prompt": prompts.get(prompt_id, ""),
+            },
+        )
+        bucket["hits"] += 1
+        bucket["prompt_ids"].add(prompt_id)
+
+    results = db.query(GeoSampleResult).filter(GeoSampleResult.tenant_id == tenant_id).all()
+    sampled_ids = {row.prompt_id for row in results}
+    observations = db.query(GeoObservation).filter(GeoObservation.tenant_id == tenant_id).all()
+    for obs in observations:
+        if obs.prompt_id in sampled_ids:
+            continue
+        for url in _urls_from_text(obs.citation_urls or ""):
+            add_url(url, obs.prompt_id)
+        for name in _name_parts(obs.competitor_mentions or ""):
+            add_competitor(name, obs.prompt_id)
+    for row in results:
+        for url in _result_urls(row):
+            add_url(url, row.prompt_id)
+        for name in _name_parts(row.competitor_hits or ""):
+            add_competitor(name, row.prompt_id)
+
+    source_rows = []
+    owned_hits = other_hits = marketplace_hits = competitor_site_hits = 0
+    for item in sorted(sources.values(), key=lambda row: (-row["hits"], row["host"])):
+        kind = item["kind"]
+        hits = item["hits"]
+        if kind == "owned":
+            owned_hits += hits
+        elif kind == "marketplace":
+            marketplace_hits += hits
+        elif kind == "competitor":
+            competitor_site_hits += hits
+        else:
+            other_hits += hits
+        source_rows.append(
+            {
+                "host": item["host"],
+                "kind": kind,
+                "kind_label": item["kind_label"],
+                "hits": hits,
+                "prompt_count": len(item["prompt_ids"]),
+                "sample_url": item["sample_url"],
+                "sample_prompt": item["sample_prompt"],
+            }
+        )
+
+    competitor_rows = [
+        {
+            "name": item["name"],
+            "hits": item["hits"],
+            "prompt_count": len(item["prompt_ids"]),
+            "registered": item["registered"],
+            "sample_prompt": item["sample_prompt"],
+        }
+        for item in sorted(competitors.values(), key=lambda row: (-row["hits"], row["name"].lower()))
+    ]
+
+    empty = not source_rows and not competitor_rows
+    if empty:
+        note = "已记问句，还没有抽查引用。不会编来源，不编竞品。"
+    else:
+        bits = []
+        if owned_hits:
+            bits.append(f"客户官网出现 {owned_hits} 次")
+        if other_hits:
+            bits.append(f"第三方 {other_hits} 次")
+        if marketplace_hits:
+            bits.append(f"购物站 {marketplace_hits} 次")
+        if competitor_site_hits:
+            bits.append(f"竞品站 {competitor_site_hits} 次")
+        if competitor_rows:
+            bits.append(f"提到竞品 {len(competitor_rows)} 家")
+        note = "；".join(bits) + "。只记抽查里出现的，不保证这次被提到。"
+
+    latest_by, previous_by = prompt_batch_rows(db, tenant_id)
+    prompt_out: list[dict] = []
+    for prompt in prompt_rows:
+        latest_rows = latest_by.get(prompt.id) or []
+        previous_rows = previous_by.get(prompt.id) or []
+        latest_slice = (
+            _slice_from_rows(
+                latest_rows,
+                root=root,
+                competitor_hosts=competitor_hosts,
+                own_names=own_names,
+                registered_names=registered_names,
+                label="这一轮",
+            )
+            if latest_rows
+            else None
+        )
+        previous_slice = (
+            _slice_from_rows(
+                previous_rows,
+                root=root,
+                competitor_hosts=competitor_hosts,
+                own_names=own_names,
+                registered_names=registered_names,
+                label="上一轮",
+            )
+            if previous_rows
+            else None
+        )
+        if latest_slice is None and not any(
+            (obs.prompt_id == prompt.id and ((obs.citation_urls or "").strip() or (obs.competitor_mentions or "").strip()))
+            for obs in observations
+        ):
+            continue
+        if latest_slice is None:
+            obs_rows = [obs for obs in observations if obs.prompt_id == prompt.id]
+            hosts: list[str] = []
+            names: list[str] = []
+            for obs in obs_rows:
+                for url in _urls_from_text(obs.citation_urls or ""):
+                    host, _kind = _classify_host(url, root, competitor_hosts)
+                    if host and host not in hosts:
+                        hosts.append(host)
+                for raw in _name_parts(obs.competitor_mentions or ""):
+                    if raw.lower() not in own_names and raw not in names:
+                        names.append(raw)
+            latest_slice = {
+                "label": "已记观察",
+                "at": "",
+                "mentioned": any((obs.status or "") in {"mentioned", "cited", "verified"} for obs in obs_rows),
+                "owned": any(classify_citation(url, root) == "owned" for obs in obs_rows for url in _urls_from_text(obs.citation_urls or "")),
+                "hosts": hosts[:8],
+                "owned_hosts": [host for host in hosts if classify_citation(f"https://{host}", root) == "owned"][:8],
+                "other_hosts": [host for host in hosts if classify_citation(f"https://{host}", root) != "owned"][:8],
+                "competitors": names[:8],
+                "sampled": len(obs_rows),
+                "mentioned_count": 1 if any((obs.status or "") in {"mentioned", "cited", "verified"} for obs in obs_rows) else 0,
+            }
+        prompt_out.append(
+            {
+                "prompt_id": prompt.id,
+                "prompt_text": prompt.prompt_text,
+                "latest": latest_slice,
+                "previous": previous_slice,
+                "compare": _compare_slices(latest_slice, previous_slice),
+            }
+        )
+        if len(prompt_out) >= 8:
+            break
+
+    recent = (
+        db.query(GeoSampleRun)
+        .options(selectinload(GeoSampleRun.results))
+        .filter(GeoSampleRun.tenant_id == tenant_id)
+        .order_by(GeoSampleRun.started_at.desc())
+        .limit(12)
+        .all()
+    )
+    latest_batch, previous_batch = pick_sample_batches(recent)
+    rounds: list[dict] = []
+    for batch, label in ((previous_batch, "上一轮"), (latest_batch, "这一轮")):
+        if not batch:
+            continue
+        rows = [row for run in batch for row in list(getattr(run, "results", None) or [])]
+        if not rows:
+            continue
+        slice_row = _slice_from_rows(
+            rows,
+            root=root,
+            competitor_hosts=competitor_hosts,
+            own_names=own_names,
+            registered_names=registered_names,
+            label=label,
+        )
+        started = min((run.started_at for run in batch if run.started_at), default=None)
+        slice_row["at"] = started.isoformat() if started else slice_row["at"]
+        rounds.append(slice_row)
+    latest_round = next((row for row in rounds if row["label"] == "这一轮"), None)
+    previous_round = next((row for row in rounds if row["label"] == "上一轮"), None)
+    compare_note = _compare_slices(latest_round, previous_round) if latest_round else ""
+
+    return {
+        "sources": source_rows[:12],
+        "competitors": competitor_rows[:12],
+        "owned_hits": owned_hits,
+        "other_hits": other_hits,
+        "marketplace_hits": marketplace_hits,
+        "competitor_site_hits": competitor_site_hits,
+        "note": note,
+        "empty": empty,
+        "prompts": prompt_out,
+        "rounds": rounds,
+        "compare_note": compare_note if not empty else "",
+    }
 
 
 def suggest_page(db: Session, tenant_id: str, prompt_text: str) -> SitePage | None:
