@@ -49,6 +49,13 @@ def test_extract_rejects_lock_demo_copy() -> None:
         assert "门锁" in str(exc)
     else:
         raise AssertionError("lock leftover should be rejected")
+    try:
+        extract_fact_fields("智能门锁适合租客安装")
+    except ValueError as exc:
+        assert "门锁" in str(exc)
+        assert "太短" not in str(exc)
+    else:
+        raise AssertionError("short lock leftover should say 门锁, not 太短")
 
 
 def test_from_materials_saves_draft_not_approved(client: TestClient, demo_user, db: Session) -> None:
@@ -108,7 +115,8 @@ def test_from_materials_rejects_short_or_lock(client: TestClient, demo_user) -> 
     lock = client.post(
         "/api/offsite/fact-packs/from-materials",
         headers=headers,
-        json={"source_text": "智能门锁适合租客安装，请看我们的英文指南。"},
+        json={"source_text": "智能门锁适合租客安装"},
     )
     assert lock.status_code == 400
     assert "门锁" in lock.json()["detail"]
+    assert "太短" not in lock.json()["detail"]

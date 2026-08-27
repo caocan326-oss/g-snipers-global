@@ -42,10 +42,10 @@ CITY_MARKERS = ("厦门", "成都", "xiamen", "chengdu")
 
 def extract_fact_fields(source_text: str, *, site_origin: str = "") -> dict[str, object]:
     raw = (source_text or "").strip()
-    if len(raw) < MIN_SOURCE:
-        raise ValueError("资料太短。把客户给的英文说明或说明书原文贴进来。不要编。")
     if is_lock_leftover_text(raw) or is_lock_inquiry_text(raw):
         raise ValueError("这是门锁演示资料，不能记到这个客户。不要编。")
+    if len(raw) < MIN_SOURCE:
+        raise ValueError("资料太短。把客户给的英文说明或说明书原文贴进来。不要编。")
 
     notes: list[str] = []
     omitted: list[str] = []
