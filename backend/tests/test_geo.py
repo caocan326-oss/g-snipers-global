@@ -1128,6 +1128,127 @@ def test_geo_summary_compare_note_and_ticket_retest(client: TestClient, demo_use
     assert geo_item["href"].startswith("/onsite/") or geo_item["href"] in {"/offsite", "/geo"}
 
 
+def test_page_label_strips_xiamen_chengdu() -> None:
+    from app.geo_loop import clean_public_title, page_label
+    from app.models import SitePage
+
+    assert "Xiamen" not in clean_public_title("Snipers - Digital Transformation Services | Shanghai, Xiamen, Chengdu")
+    assert "Chengdu" not in clean_public_title("Snipers | 厦门、成都")
+    page = SitePage(id="p", tenant_id="t", path="/", title="Snipers - Digital Transformation Services | Shanghai, Xiamen, Chengdu")
+    label = page_label(page)
+    assert "Xiamen" not in label and "成都" not in label
+    assert "Snipers - Digital Transformation Services" in label
+
+
+def test_customer_note_omits_channel_when_unverified() -> None:
+    from app.geo_loop import customer_note
+
+    note = customer_note(
+        kind="absent",
+        question="什么获客软件比较好",
+        page_bit="SNIPERS（/）",
+        url="https://www.snipers.com.cn/",
+        channel="",
+    )
+    assert "LinkedIn" not in note
+    assert "站外" not in note
+    assert "什么获客软件比较好" in note
+
+
+def test_ticket_offsite_draft_empty_without_verified_channel() -> None:
+    from app.geo_loop import ticket_offsite_draft, ticket_paste
+    from app.models import GeoPrompt, GeoTicket
+
+    prompt = GeoPrompt(id="p", tenant_id="t", prompt_text="什么获客软件比较好", locale="zh-CN")
+    ticket = GeoTicket(
+        tenant_id="t",
+        prompt_id="p",
+        title="买家问「什么获客软件比较好」时没提到我们",
+        diagnosis="absent",
+        evidence='{"kind": "absent", "page_url": "https://www.snipers.com.cn/", "channel": ""}',
+    )
+    assert ticket_offsite_draft(ticket, prompt) == ""
+    paste = ticket_paste(ticket, prompt)
+    assert "LinkedIn" not in paste
+    assert "Buyers are asking:" not in paste
+
+
+def test_ticket_list_paste_includes_cite_when_fact_pack_ready(client: TestClient, demo_user, db) -> None:
+    from app.models import FactPack, Tenant
+
+    tenant = db.get(Tenant, demo_user.tenant_id)
+    tenant.site_origin = "https://www.snipers.com.cn"
+    tenant.name = "SNIPERS"
+    db.add(
+        FactPack(
+            tenant_id=demo_user.tenant_id,
+            website="https://www.snipers.com.cn",
+            approved_boilerplate_en=(
+                "SNIPERS (赛珀) is a digital transformation service provider. "
+                "G-Snipers is its AI customer-acquisition product covering SEM, SEO, and GEO."
+            ),
+            brand_names="SNIPERS, Snipers, G-Snipers, 赛珀",
+        )
+    )
+    db.commit()
+    headers = auth_header(client)
+    prompt = client.post(
+        "/api/geo/prompts",
+        headers=headers,
+        json={"prompt_text": "什么获客软件比较好", "locale": "zh-CN", "recorded_from": "customer"},
+    ).json()
+    created = client.post(
+        "/api/geo/tickets",
+        headers=headers,
+        json={
+            "prompt_id": prompt["id"],
+            "title": "买家问「什么获客软件比较好」时没提到我们",
+            "diagnosis": "absent",
+            "rationale": "没提到",
+            "acceptance_criteria": "同一问再测",
+        },
+    )
+    assert created.status_code == 201, created.text
+    paste = created.json()["customer_paste"]
+    assert "什么获客软件比较好" in paste
+    assert "G-Snipers is its AI customer-acquisition product" in paste
+    assert "不能出对外草稿" not in paste
+    assert "LinkedIn" not in paste
+    assert not created.json().get("channel")
+    assert not created.json().get("offsite_draft")
+    listed = next(row for row in client.get("/api/geo/tickets", headers=headers).json() if row["id"] == created.json()["id"])
+    assert "G-Snipers is its AI customer-acquisition product" in listed["customer_paste"]
+    assert "Buyers ask:" in listed["customer_paste"]
+    assert not listed.get("channel")
+    assert not listed.get("offsite_draft")
+
+
+def test_ticket_list_paste_blocks_without_fact_pack(client: TestClient, demo_user) -> None:
+    headers = auth_header(client)
+    prompt = client.post(
+        "/api/geo/prompts",
+        headers=headers,
+        json={"prompt_text": "什么获客软件比较好", "locale": "zh-CN", "recorded_from": "customer"},
+    ).json()
+    created = client.post(
+        "/api/geo/tickets",
+        headers=headers,
+        json={
+            "prompt_id": prompt["id"],
+            "title": "买家问「什么获客软件比较好」时没提到我们",
+            "diagnosis": "absent",
+            "rationale": "没提到",
+            "acceptance_criteria": "同一问再测",
+        },
+    )
+    assert created.status_code == 201, created.text
+    paste = created.json()["customer_paste"]
+    assert "不能出对外草稿" in paste
+    assert "LinkedIn" not in paste
+    listed = client.get("/api/geo/tickets", headers=headers).json()[0]
+    assert "不能出对外草稿" in listed["customer_paste"]
+
+
 def test_customer_note_is_short_and_skips_workbench_jargon() -> None:
     from app.geo_loop import CUSTOMER_CLOSE, customer_note, weekly_paste
 
@@ -1291,8 +1412,8 @@ def test_same_question_title_stays_full_and_follows_latest_sample(client: TestCl
     assert "这周请改这几处" in brief["paste_text"]
     assert "工作台打勾" not in brief["paste_text"]
     assert "不保证这次被提到" in brief["paste_text"]
-    assert "Buyers are asking:" in brief["paste_text"]
-    assert "我们不代发" in brief["paste_text"]
+    assert "不代发" in brief["paste_text"]
+    assert "LinkedIn" not in brief["paste_text"]
     retest = next(section for section in brief["sections"] if section["key"] == "retest")
     assert any("客户页没上线" in item for item in retest["items"])
 

@@ -1,3 +1,5 @@
+from datetime import date
+
 from fastapi.testclient import TestClient
 
 from app.models import User
@@ -58,7 +60,7 @@ def test_dashboard_workbench_prioritizes_seo_geo_diagnosis(client: TestClient, d
     signal = client.post(
         f"/api/markets/{market['id']}/demand-signals",
         headers=headers,
-        json={"theme": "smart lock for renters", "locale": "en-US", "intensity": 5},
+        json={"theme": "USB-C charger for export buyers", "locale": "en-US", "intensity": 5},
     ).json()
     page = client.post(
         "/api/onsite/pages",
@@ -80,7 +82,7 @@ def test_dashboard_workbench_prioritizes_seo_geo_diagnosis(client: TestClient, d
             "csv_text": "\n".join(
                 [
                     "Date,Query,Page,Country,Clicks,Impressions,CTR,Position",
-                    "2026-08-15,smart lock,https://example.com/en-us/renters,United States,8,200,4%,9",
+                    f"{date.today().isoformat()},smart lock,https://example.com/en-us/renters,United States,8,200,4%,9",
                 ]
             ),
         },

@@ -1092,7 +1092,7 @@ def suggest_channel(db: Session, tenant_id: str) -> tuple[str, str, str]:
     official = [row for row in rows if row.has_official_api or row.platform_key in OFFICIAL_APIS]
     pool = official or rows
     if not pool:
-        return "站外分发里的一张渠道卡", "", "/offsite"
+        return "", "", ""
 
     def rank(row: SourcePlatform) -> tuple[int, str]:
         try:
@@ -1101,14 +1101,39 @@ def suggest_channel(db: Session, tenant_id: str) -> tuple[str, str, str]:
             order = 99
         return (order, row.name or row.platform_key)
 
-    pick = sorted(pool, key=rank)[0]
+    verified = [row for row in pool if is_http_url((row.profile_url or "").strip())]
+    if not verified:
+        return "", "", ""
+    pick = sorted(verified, key=rank)[0]
     return pick.name or pick.platform_key, pick.platform_key or "", "/offsite"
+
+
+_PLACE_LEAKS = (
+    "Shanghai, Xiamen, Chengdu",
+    "Xiamen, Chengdu",
+    "厦门、成都",
+    "厦门成都",
+    "厦门",
+    "成都",
+    "Xiamen",
+    "Chengdu",
+)
+
+
+def clean_public_title(title: str) -> str:
+    text = title or ""
+    for mark in _PLACE_LEAKS:
+        text = text.replace(mark, "")
+    text = re.sub(r"\s*[|｜]\s*", " | ", text)
+    text = re.sub(r"\s{2,}", " ", text)
+    text = re.sub(r"[\s|｜,.-]+$", "", text)
+    return text.strip()
 
 
 def page_label(page: SitePage | None) -> str:
     if page is None:
         return "还没有对应页，先补一页"
-    title = page.title or page.meta_title or "未命名页面"
+    title = clean_public_title(page.title or page.meta_title or "未命名页面") or "官网页面"
     path = page.path or "/"
     return f"{title}（{path}）"
 
@@ -1173,16 +1198,10 @@ def ticket_channel_key(ticket: GeoTicket) -> str:
     key = str(ev.get("channel_key") or "").strip()
     if key in OFFICIAL_APIS:
         return key
-    blob = " ".join(
-        part
-        for part in (
-            str(ev.get("channel") or ""),
-            key,
-            ticket.rationale or "",
-            ticket.recommended_action or "",
-        )
-        if part
-    ).lower()
+    name = str(ev.get("channel") or "").strip()
+    if not name:
+        return ""
+    blob = f"{name} {key}".lower()
     for api_key, spec in OFFICIAL_APIS.items():
         if api_key.replace("_", " ") in blob or spec.label.lower() in blob:
             return api_key
@@ -1218,6 +1237,8 @@ def offsite_post_draft(*, question: str, page_url: str) -> str:
 
 def ticket_offsite_draft(ticket: GeoTicket, prompt: GeoPrompt | None = None) -> str:
     ev = parse_ticket_evidence(ticket)
+    if not str(ev.get("channel") or "").strip():
+        return ""
     prompt = prompt if prompt is not None else getattr(ticket, "prompt", None)
     question = " ".join(((prompt.prompt_text if prompt else "") or "").split())
     if not question:

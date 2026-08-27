@@ -10,6 +10,7 @@ from app.geo_citations import is_owned_url, marketplace_urls, split_citations
 from app.geo_helpers import DIAGNOSES, ENGINE_LABELS, ENGINES, engine_region
 from app.geo_loop import (
     HANDOFF_LABELS,
+    cite_pack_for_prompt,
     cite_paste_for_prompt,
     cite_published_url,
     cite_stage,
@@ -446,10 +447,18 @@ def _prompt_out(
     )
 
 
-def _ticket_out(row: GeoTicket, sample_note: str = "") -> GeoTicketOut:
+def _ticket_out(row: GeoTicket, sample_note: str = "", db: Session | None = None, tenant: Tenant | None = None) -> GeoTicketOut:
     ev = parse_ticket_evidence(row)
     page_label = str(ev.get("page_label") or "").strip()
     page_url = str(ev.get("page_url") or "").strip()
+    prompt = getattr(row, "prompt", None)
+    if prompt is None and db is not None and row.prompt_id:
+        prompt = db.get(GeoPrompt, row.prompt_id)
+    paste = ticket_paste(row, prompt)
+    if db is not None and prompt is not None:
+        cite = cite_paste_for_prompt(cite_pack_for_prompt(db, tenant, prompt), prompt)
+        if cite and cite not in paste:
+            paste = f"{paste}\n\n{cite}" if paste else cite
     return GeoTicketOut(
         id=row.id,
         prompt_id=row.prompt_id,
@@ -460,15 +469,15 @@ def _ticket_out(row: GeoTicket, sample_note: str = "") -> GeoTicketOut:
         acceptance_criteria=row.acceptance_criteria,
         priority=row.priority or "P2",
         owner_hint=row.owner_hint or "内容运营 / 客户经理",
-        recommended_action=row.recommended_action or "补对应页或发出一张站外卡。我们不代改线上、不代发。",
-        customer_note=ticket_customer_note(row, getattr(row, "prompt", None)),
-        customer_paste=ticket_paste(row, getattr(row, "prompt", None)),
+        recommended_action=row.recommended_action or "补对应页。我们不代改线上、不代发。",
+        customer_note=ticket_customer_note(row, prompt),
+        customer_paste=paste,
         page_label=page_label,
         page_url=page_url,
         channel=ticket_channel_name(row),
         channel_key=ticket_channel_key(row),
         compose_url=ticket_compose_url(row),
-        offsite_draft=ticket_offsite_draft(row, getattr(row, "prompt", None)),
+        offsite_draft=ticket_offsite_draft(row, prompt),
         offsite_url=ticket_offsite_url(row),
         retest_method=row.retest_method or "对同一买家问题再抽查一次，只记有没有变化，不要求这次必须提到。",
         retest_result=row.retest_result or "",

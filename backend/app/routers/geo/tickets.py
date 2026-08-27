@@ -35,6 +35,10 @@ from . import router
 from .common import _ticket_out
 
 
+def _out(row: GeoTicket, user: User, db: Session, sample_note: str = "") -> GeoTicketOut:
+    return _ticket_out(row, sample_note=sample_note, db=db, tenant=db.get(Tenant, user.tenant_id))
+
+
 @router.get("/tickets", response_model=list[GeoTicketOut])
 def list_tickets(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> list[GeoTicketOut]:
     tenant = db.get(Tenant, user.tenant_id)
@@ -51,8 +55,10 @@ def list_tickets(user: User = Depends(get_current_user), db: Session = Depends(g
         .all()
     )
     return [
-        _ticket_out(
+        _out(
             r,
+            user,
+            db,
             sample_note=prompt_sample_tally(by_prompt.get(r.prompt_id, []), r.prompt),
         )
         for r in rows
@@ -88,7 +94,8 @@ def create_ticket(
         prompt.diagnosis = body.diagnosis
     db.commit()
     db.refresh(row)
-    return _ticket_out(row)
+    row.prompt = prompt
+    return _out(row, user, db)
 
 
 @router.post("/tickets/{ticket_id}/handoff", response_model=GeoTicketOut)
@@ -117,7 +124,7 @@ def mark_ticket_handoff(
     row.last_checked_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(row)
-    return _ticket_out(row)
+    return _out(row, user, db)
 
 
 @router.post("/tickets/{ticket_id}/offsite", response_model=GeoTicketOut)
@@ -142,7 +149,7 @@ def mark_ticket_offsite(
     row.last_checked_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(row)
-    return _ticket_out(row)
+    return _out(row, user, db)
 
 
 @router.post("/tickets/{ticket_id}/verify", response_model=GeoTicketOut)
@@ -172,7 +179,7 @@ def verify_ticket(
     row.last_checked_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(row)
-    return _ticket_out(row)
+    return _out(row, user, db)
 
 
 @router.post("/tickets/{ticket_id}/reopen", response_model=GeoTicketOut)
@@ -193,7 +200,7 @@ def reopen_ticket(
         row.verified_note = body.note
     db.commit()
     db.refresh(row)
-    return _ticket_out(row)
+    return _out(row, user, db)
 
 
 @router.post("/tickets/{ticket_id}/ai", response_model=AiAssistOut)

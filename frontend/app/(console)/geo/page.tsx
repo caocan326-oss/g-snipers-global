@@ -439,9 +439,30 @@ export default function GeoPage() {
         method: "POST",
         body: JSON.stringify({ handoff, note: confirmNote, result_url: resultUrl }),
       });
+      if (handoff === "sent") {
+        setNote("已记下发给客户。不是官网已改，也不是我们代改。");
+      }
       loadTickets();
     } catch (e) {
       setError(e instanceof Error ? e.message : "进度没记上");
+    }
+  }
+
+  async function verifyTicket(id: string) {
+    setError("");
+    setNote("");
+    setBusyAction(`verify-${id}`);
+    try {
+      await api(`/api/geo/tickets/${id}/verify`, {
+        method: "POST",
+        body: JSON.stringify({ confirmed: true, note: confirmNote || null }),
+      });
+      setNote("已记下复测并关掉这项。工作台关掉不是官网已改。");
+      loadTickets();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "还不能关：要先登记上线并同一问再测");
+    } finally {
+      setBusyAction("");
     }
   }
 
@@ -599,6 +620,7 @@ export default function GeoPage() {
           setHandoff={setHandoff}
           saveOffsite={saveOffsite}
           retestSameQuestions={retestSameQuestions}
+          verifyTicket={verifyTicket}
           canRetestSame={Boolean(runs[0]?.results?.length)}
           busyAction={busyAction}
         />

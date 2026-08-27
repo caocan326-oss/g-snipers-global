@@ -664,4 +664,10 @@ def draft_tickets_from_evidence(
         if created
         else "没有新增待处理项；可能暂无抽查，或相关项已存在。"
     )
-    return GeoTicketDraftOut(created=created, skipped=skipped, note=note, tickets=[_ticket_out(t) for t in made])
+    tenant = db.get(Tenant, user.tenant_id)
+    return GeoTicketDraftOut(
+        created=created,
+        skipped=skipped,
+        note=note,
+        tickets=[_ticket_out(t, db=db, tenant=tenant) for t in made],
+    )

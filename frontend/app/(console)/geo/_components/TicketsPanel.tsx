@@ -40,6 +40,7 @@ export function TicketsPanel({
   setHandoff,
   saveOffsite,
   retestSameQuestions,
+  verifyTicket,
   canRetestSame,
   busyAction,
 }: {
@@ -51,6 +52,7 @@ export function TicketsPanel({
   setHandoff: (id: string, handoff: "drafted" | "sent" | "live", resultUrl?: string) => void;
   saveOffsite: (id: string, postUrl: string) => void;
   retestSameQuestions: () => void;
+  verifyTicket: (id: string) => void;
   canRetestSame: boolean;
   busyAction: string;
 }) {
@@ -74,6 +76,11 @@ export function TicketsPanel({
         const postUrl = (postUrls[t.id] ?? t.offsite_url ?? "").trim();
         const canMarkLive = /^https?:\/\//i.test(liveUrl);
         const canSavePost = /^https?:\/\//i.test(postUrl);
+        const isLive = t.handoff === "live" && /^https?:\/\//i.test((t.result_url || "").trim());
+        const hasRetest = Boolean((t.retest_result || "").trim());
+        const canClose = isLive && hasRetest && t.status !== "done" && t.status !== "closed";
+        const showOffsite = Boolean((t.channel || "").trim() && (t.offsite_draft || "").trim());
+        const paste = t.customer_paste || t.customer_note || t.recommended_action || "";
         const prompt = prompts.find((p) => p.id === t.prompt_id);
         return (
           <Card key={t.id}>
@@ -118,11 +125,11 @@ export function TicketsPanel({
                 )}
               </div>
 
-              {t.offsite_draft ? (
+              {showOffsite ? (
                 <div className="rounded-md border border-slate-200 bg-white px-3 py-2">
                   <p className="text-xs font-medium text-slate-500">站外这一条</p>
                   <p className="mt-1 text-sm text-slate-800">
-                    渠道：{t.channel || "站外分发里的一张渠道卡"}
+                    渠道：{t.channel}
                   </p>
                   <p className="mt-1 text-xs text-slate-500">请客户自己打开官方页发出。我们不代发、不代登、不群发。</p>
                   <pre className="mt-2 whitespace-pre-wrap rounded-md bg-slate-50 px-3 py-2 text-sm leading-6 text-slate-800">
@@ -173,14 +180,14 @@ export function TicketsPanel({
                 </div>
               ) : null}
 
-              {(t.customer_note || t.recommended_action) && (
+              {paste ? (
                 <div className="rounded-md border border-amber-200 bg-amber-50/70 px-3 py-2">
                   <p className="text-xs font-medium text-slate-500">给客户的短稿</p>
                   <pre className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-800">
-                    {t.customer_note || t.recommended_action}
+                    {paste}
                   </pre>
                 </div>
-              )}
+              ) : null}
 
               {t.retest_result ? (
                 <p className="text-sm text-slate-700">
@@ -192,7 +199,7 @@ export function TicketsPanel({
               <div className="space-y-2">
                 <p className="text-xs font-medium text-slate-500">改完填上线地址</p>
                 <Input
-                  placeholder="例如 https://www.ugreen.com/products/usa-65585"
+                  placeholder="客户改完后的页地址，http 开头"
                   value={liveUrls[t.id] ?? t.result_url ?? ""}
                   onChange={(e) => setLiveUrls((current) => ({ ...current, [t.id]: e.target.value }))}
                 />
@@ -212,8 +219,11 @@ export function TicketsPanel({
                   size="sm"
                   variant="outline"
                   onClick={async () => {
-                    const ok = await copyText(t.customer_paste || t.customer_note || t.recommended_action || "");
+                    const ok = await copyText(paste);
                     setCopied(ok ? t.id : "");
+                    if (ok && t.handoff !== "sent" && t.handoff !== "live" && t.status !== "done" && t.status !== "closed") {
+                      setHandoff(t.id, "sent");
+                    }
                   }}
                 >
                   {copied === t.id ? "已复制" : "复制短稿"}
@@ -229,13 +239,24 @@ export function TicketsPanel({
                   size="sm"
                   variant="outline"
                   onClick={() => retestSameQuestions()}
-                  disabled={!canRetestSame || !canMarkLive || busyAction === "retest-same"}
+                  disabled={!canRetestSame || !isLive || busyAction === "retest-same"}
                 >
                   {busyAction === "retest-same" ? "再测中…" : "同一问再测"}
                 </Button>
+                {t.status === "done" || t.status === "closed" ? null : (
+                  <Button
+                    size="sm"
+                    disabled={!canClose || busyAction === `verify-${t.id}`}
+                    onClick={() => verifyTicket(t.id)}
+                  >
+                    {busyAction === `verify-${t.id}` ? "记下…" : "记下复测，关掉这项"}
+                  </Button>
+                )}
               </div>
               <p className="text-[11px] text-slate-400">
-                先复制短稿 → 客户改页 → 把上线链接填回来 → 再测同一问。没有复测不能关。再测只告诉你变没变。
+                {isLive && !hasRetest
+                  ? "已登记上线。先同一问再测，记下过/不过，才能关。工作台打勾不是官网已改。"
+                  : "先复制短稿 → 客户改页 → 把上线链接填回来 → 再测同一问。没有复测不能关。再测只告诉你变没变。"}
               </p>
             </CardContent>
           </Card>

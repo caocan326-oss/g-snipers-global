@@ -380,10 +380,9 @@ def test_customer_brief_keeps_geo_ticket_in_this_week_when_onsite_is_full(client
     assert "1." in body["paste_text"]
     assert "工作台打勾" not in body["paste_text"]
     assert "发给客户的短稿" in body["markdown"]
-    assert "Buyers are asking:" in body["paste_text"]
     assert "https://www.ugreen.com/products/usa-65585" in body["paste_text"]
-    assert "我们不代发" in body["paste_text"]
-    assert any("Buyers are asking:" in item for item in body["this_week"])
+    assert "不代发" in body["paste_text"]
+    assert "LinkedIn" not in body["paste_text"]
 
 
 def test_customer_brief_hides_internal_issue_codes(client: TestClient, demo_user, db) -> None:
