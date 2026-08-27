@@ -539,24 +539,64 @@ def test_geo_war_room_has_trend_and_cite_pack(client: TestClient, demo_user, db)
     assert "没提到" in row["trend_note"] and "提到了" in row["trend_note"]
     assert "other.example" in " ".join(row["cited_others"])
     assert "Other Factory" in row["competitor_note"]
-    assert "Which factory can export industrial fasteners to the US?" in row["page_draft"]
-    assert "[NEED_INPUT" in row["page_draft"]
-    assert "Do not invent specs" in row["page_draft"]
-    assert row["faq_draft"].startswith("Q:")
-    assert "# SNIPERS" in row["llms_txt"] or "# SNIPERS" in row["llms_txt"].upper() or "SNIPERS" in row["llms_txt"]
-    assert "we do not edit the live site" in row["page_draft"].lower()
+    assert row["page_draft"] == "没有 Fact Pack（已批英文说明 + 官网）不能出对外草稿。不要编规格。"
+    assert row["faq_draft"] == ""
+    assert row["llms_txt"] == ""
+    assert "NEED_INPUT" not in row["page_draft"]
+    assert "Do not invent specs" not in row["page_draft"]
 
     brief = client.get("/api/dashboard/customer-brief", headers=headers).json()
     kpi = next(section for section in brief["sections"] if section["key"] == "buyer_kpi")
     assert "2 轮" in "".join(kpi["items"])
+    assets = next(section for section in brief["sections"] if section["key"] == "cite_assets")
+    assert any("不能出对外草稿" in item for item in assets["items"])
     workbench = client.get("/api/dashboard/workbench?days=28", headers=headers).json()
     assert "2 轮" in (workbench["geo_questions"][0].get("trend") or "")
     assert row["watch_due"] is False
     assert "常驻监控中" in row["watch_note"]
     assert row["cite_stage"] == "draft"
     assert "还没把这段发给客户" in row["cite_stage_label"]
-    assert "NEED_INPUT" in row["cite_paste"]
+    assert row["cite_paste"] == row["page_draft"]
+    assert any(item["id"] == "cite-fact-pack" for item in workbench["next_actions"])
+
+
+def test_cite_pack_english_when_fact_pack_ready(client: TestClient, demo_user, db) -> None:
+    from app.models import FactPack
+
+    tenant = db.get(Tenant, demo_user.tenant_id)
+    tenant.site_origin = "https://www.snipers.com.cn"
+    tenant.name = "SNIPERS"
+    db.add(
+        FactPack(
+            tenant_id=demo_user.tenant_id,
+            website="https://www.snipers.com.cn",
+            approved_boilerplate_en="SNIPERS supplies industrial fasteners for export buyers.",
+            product_categories_en="industrial fasteners",
+        )
+    )
+    db.commit()
+    headers = auth_header(client)
+    created = client.post(
+        "/api/geo/prompts",
+        headers=headers,
+        json={
+            "prompt_text": "Which factory can export industrial fasteners to the US?",
+            "locale": "en-US",
+            "recorded_from": "sales",
+        },
+    )
+    assert created.status_code == 201, created.text
+    row = created.json()
+    assert "Which factory can export industrial fasteners to the US?" in row["page_draft"]
+    assert "SNIPERS supplies industrial fasteners" in row["page_draft"]
+    assert "NEED_INPUT" not in row["page_draft"]
+    assert "不能出对外草稿" not in row["page_draft"]
+    assert row["faq_draft"].startswith("Q:")
+    assert "www.snipers.com.cn" in row["llms_txt"]
+    assert "we do not edit the live site" in row["page_draft"].lower()
     assert "我们不代改" in row["cite_paste"]
+    workbench = client.get("/api/dashboard/workbench?days=28", headers=headers).json()
+    assert any(item["id"] == "cite-send" for item in workbench["next_actions"])
 
 
 def test_cite_pack_loop_send_publish_retest(client: TestClient, demo_user, db, monkeypatch) -> None:
@@ -582,7 +622,7 @@ def test_cite_pack_loop_send_publish_retest(client: TestClient, demo_user, db, m
     assert created.status_code == 201, created.text
     prompt_id = created.json()["id"]
     assert created.json()["cite_stage"] == "draft"
-    assert "Do not invent specs" in created.json()["page_draft"]
+    assert "不能出对外草稿" in created.json()["page_draft"]
 
     sent = client.post(f"/api/geo/prompts/{prompt_id}/cite-stage", headers=headers, json={"stage": "sent"})
     assert sent.status_code == 200, sent.text

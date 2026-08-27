@@ -163,7 +163,7 @@ def test_demand_signal_feeds_geo_prompt(client: TestClient, demo_user) -> None:
     assert all(o["status"] == "untested" for o in prompt.json()["observations"])
 
 
-def test_geo_ticket_verify_requires_confirm_and_can_reopen(client: TestClient, demo_user) -> None:
+def test_geo_ticket_verify_requires_confirm_and_can_reopen(client: TestClient, demo_user, db) -> None:
     headers = auth_header(client)
     prompt = client.post(
         "/api/geo/prompts",
@@ -242,6 +242,21 @@ def test_geo_ticket_verify_requires_confirm_and_can_reopen(client: TestClient, d
         json={"handoff": "live"},
     )
     assert live_again.json()["status"] == "verify"
+
+    no_retest = client.post(
+        f"/api/geo/tickets/{ticket_id}/verify",
+        headers=headers,
+        json={"confirmed": True, "note": "还没复测就想关"},
+    )
+    assert no_retest.status_code == 400
+    assert "复测" in no_retest.json()["detail"]
+
+    from app.models import GeoTicket
+
+    ticket_row = db.get(GeoTicket, ticket_id)
+    assert ticket_row is not None
+    ticket_row.retest_result = "上次没有提到，这次仍没有提到。两次都没有给出官网。"
+    db.commit()
 
     verified = client.post(
         f"/api/geo/tickets/{ticket_id}/verify",

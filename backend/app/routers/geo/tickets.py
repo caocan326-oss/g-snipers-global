@@ -161,6 +161,11 @@ def verify_ticket(
             status_code=400,
             detail="还没到验收：先记下客户页或帖的地址，再测同一问。工作台打勾不算官网已改。",
         )
+    if not (row.retest_result or "").strip():
+        raise HTTPException(
+            status_code=400,
+            detail="同一问还没复测，不能关。工作台打勾不是官网已改。",
+        )
     row.status = "done"
     row.verified_note = body.note or "客户经理已按验收标准人工复核。"
     row.closed_at = datetime.now(timezone.utc)

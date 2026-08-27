@@ -235,7 +235,7 @@ export function TicketsPanel({
                 </Button>
               </div>
               <p className="text-[11px] text-slate-400">
-                先复制短稿 → 客户改页 → 把上线链接填回来 → 再测同一问。再测只告诉你变没变。
+                先复制短稿 → 客户改页 → 把上线链接填回来 → 再测同一问。没有复测不能关。再测只告诉你变没变。
               </p>
             </CardContent>
           </Card>

@@ -162,7 +162,11 @@ export function SamplePromptsPanel({
                       {busyAction === `cite-retest-${p.id}` ? "复测中…" : "同一问再测"}
                     </Button>
                   </div>
-                  <p className="mt-2 text-[11px] text-slate-500">只写已记事实，缺的标 NEED_INPUT。客户自己贴。工作台打勾不算官网已改。不保证这次被提到。我们不代改。</p>
+                  <p className="mt-2 text-[11px] text-slate-500">
+                    {(p.page_draft || "").includes("不能出对外草稿")
+                      ? "没有 Fact Pack（已批英文说明 + 官网）不能出对外草稿。不要编规格。"
+                      : "只写已记事实，缺的标 NEED_INPUT。客户自己贴。工作台打勾不算官网已改。不保证这次被提到。我们不代改。"}
+                  </p>
                 </details>
               ) : null}
               <p className="mt-1 text-[11px] text-slate-400">

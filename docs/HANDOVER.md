@@ -3,6 +3,7 @@
 路径（问「交接文档在哪里」就答这个）：**`docs/HANDOVER.md`**
 
 运维数字（IP、证书、容器）以 **`docs/PRODUCTION.md`** 为准。  
+对外定位以 **`docs/POSITIONING.md`** 为准：每周获客操作系统，不是监测仪。不按 16 周表施工。  
 机器、仓库、发版步骤有变：先改 `PRODUCTION.md`，再改这份清单。
 
 约定：家里和公司**不会同时改**。换机器前必须把这边 push 完。
@@ -707,6 +708,10 @@ T5 过的时候，客户说明多了一条「买家问智能锁许可」。SNIPE
 
 现改：打开总览 / GEO 时，门锁/演示引用材料一并清掉。只写了 `snipers.com.cn` 的真材料不动。清完的 llms.txt 写成空草稿，不编 SNIPERS 页。按选题生成会跳过门锁选题。不代改。不编问句。
 
+### 4.40 对外定位脊柱（不看 16 周）
+
+收了 `docs/POSITIONING.md`。不按那份 16 周表施工。本阶段只认三道门：没有 Fact Pack（已批英文说明 + 官网）不出对外草稿；GEO 工单没有同一问复测不能关；本周三处只从紧急/优先未关闭项来，钉住是例外。不代改、不编问句、不保证这次被提到。
+
 ---
 
 ## 5. 收工 / 换到另一台电脑之前
@@ -747,8 +752,8 @@ git log -1 --oneline
 | 已 push origin / upstream | 是。 |
 | 已发版生产 | **是。** `sync-from-local.ps1 -Rebuild`。三处 `ad36846`。迁移 `025` 已跑。`DEMO_LOGIN_ENABLED` 仍关。 |
 | 接口实测 | 硬刷新 GEO：llms.txt 不应再是智能门锁。地图仍空。不要编问句、不要测绿联。 |
-| 未完成 | 没有原句则 GEO 空着。不要编问句。 |
-| 下一台先做 | 海外版家里先 `git pull origin main`。不代改、不编问句、不抽第三轮绿联。 |
+| 未完成 | 脊柱三门已写进代码（未提交）。没有原句则 GEO 空着。 |
+| 下一台先做 | 海外版家里先 `git pull origin main`。对照 `docs/POSITIONING.md`。不代改、不编问句、不抽第三轮绿联。 |
 
 `www` 灰云、A 仍 `39.97.52.149`。`relay.weiyids.com` 橙云，不要 CNAME 回 `workers.dev`。不要开 Google Ads。不要在服务器 `git pull`。
 

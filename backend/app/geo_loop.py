@@ -493,15 +493,32 @@ def trend_note(points: list[dict]) -> str:
     return f"{len(points)} 轮：{marks}。不保证下一轮会提到。"
 
 
+FACT_PACK_BLOCK = "没有 Fact Pack（已批英文说明 + 官网）不能出对外草稿。不要编规格。"
+
+
+def load_fact_pack(db: Session, tenant: Tenant | None) -> FactPack | None:
+    if tenant is None:
+        return None
+    return (
+        db.query(FactPack)
+        .filter(FactPack.tenant_id == tenant.id)
+        .order_by(FactPack.updated_at.desc())
+        .first()
+    )
+
+
+def fact_pack_ready(fact: FactPack | None, tenant: Tenant | None = None) -> bool:
+    if fact is None:
+        return False
+    boiler = (fact.approved_boilerplate_en or "").strip()
+    website = (fact.website or (tenant.site_origin if tenant else "") or "").strip()
+    return bool(boiler) and bool(website)
+
+
 def page_draft_for_prompt(db: Session, tenant: Tenant | None, prompt: GeoPrompt) -> str:
-    fact = None
-    if tenant is not None:
-        fact = (
-            db.query(FactPack)
-            .filter(FactPack.tenant_id == tenant.id)
-            .order_by(FactPack.updated_at.desc())
-            .first()
-        )
+    fact = load_fact_pack(db, tenant)
+    if not fact_pack_ready(fact, tenant):
+        return FACT_PACK_BLOCK
     brand = (tenant.name if tenant else "") or "this company"
     website = ((tenant.site_origin if tenant else "") or "").rstrip("/")
     cats = boiler = specs = certs = ""
@@ -537,22 +554,18 @@ def page_draft_for_prompt(db: Session, tenant: Tenant | None, prompt: GeoPrompt)
 
 
 def cite_pack_for_prompt(db: Session, tenant: Tenant | None, prompt: GeoPrompt) -> dict[str, str]:
+    fact = load_fact_pack(db, tenant)
+    if not fact_pack_ready(fact, tenant):
+        return {"page_draft": FACT_PACK_BLOCK, "faq_draft": "", "llms_txt": ""}
     page_draft = page_draft_for_prompt(db, tenant, prompt)
     brand = (tenant.name if tenant else "") or "this company"
     website = ((tenant.site_origin if tenant else "") or "").rstrip("/")
     boiler = ""
-    if tenant is not None:
-        fact = (
-            db.query(FactPack)
-            .filter(FactPack.tenant_id == tenant.id)
-            .order_by(FactPack.updated_at.desc())
-            .first()
-        )
-        if fact is not None:
-            names = [part.strip() for part in (fact.brand_names or "").split(",") if part.strip()]
-            brand = names[0] if names else (fact.legal_name or brand)
-            website = (fact.website or website).rstrip("/")
-            boiler = (fact.approved_boilerplate_en or "").strip()
+    if fact is not None:
+        names = [part.strip() for part in (fact.brand_names or "").split(",") if part.strip()]
+        brand = names[0] if names else (fact.legal_name or brand)
+        website = (fact.website or website).rstrip("/")
+        boiler = (fact.approved_boilerplate_en or "").strip()
     question = (prompt.prompt_text or "").strip()
     answer = boiler or "[NEED_INPUT: approved English answer. Do not invent specs.]"
     faq_draft = "\n".join(
@@ -602,11 +615,13 @@ def cite_published_url(prompt: GeoPrompt) -> str:
 
 
 def cite_paste_for_prompt(pack: dict[str, str], prompt: GeoPrompt | None = None) -> str:
+    page = (pack.get("page_draft") or "").strip()
+    if page == FACT_PACK_BLOCK:
+        return FACT_PACK_BLOCK
     question = ((prompt.prompt_text if prompt is not None else "") or "").strip()
     parts = [CITE_LOOP_CLOSE]
     if question:
         parts.append(f'Buyers ask: "{question}"')
-    page = (pack.get("page_draft") or "").strip()
     faq = (pack.get("faq_draft") or "").strip()
     llms = (pack.get("llms_txt") or "").strip()
     if page:

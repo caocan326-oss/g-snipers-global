@@ -159,3 +159,14 @@ def test_weekly_onsite_picks_keeps_pinned_when_newer_critical_arrives() -> None:
     assert [row.id for row in picks] == ["old", "mid", "extra"]
     auto = weekly_onsite_picks([*pinned, newer])
     assert auto[0].id == "new"
+
+
+def test_weekly_onsite_picks_low_only_empty_unless_pinned() -> None:
+    issues = [
+        OnsiteIssue(id="l1", tenant_id="t1", page_id="p1", category="image", title="图片没有文字说明", severity="low", status="open"),
+        OnsiteIssue(id="l2", tenant_id="t1", page_id="p2", category="image", title="图片没有文字说明", severity="low", status="open"),
+        OnsiteIssue(id="l3", tenant_id="t1", page_id="p3", category="image", title="图片没有文字说明", severity="low", status="open"),
+    ]
+    assert weekly_onsite_picks(issues) == []
+    pinned = weekly_onsite_picks(issues, pinned_ids=["l2"])
+    assert [row.id for row in pinned] == ["l2"]

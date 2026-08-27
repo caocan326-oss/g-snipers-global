@@ -197,14 +197,14 @@ def weekly_onsite_picks(
     pinned_ids: list[str] | None = None,
     limit: int = WEEKLY_ONSITE_LIMIT,
 ) -> list[OnsiteIssue]:
-    """At most three pages. Prefer critical/high. One issue per page. Pins stay put."""
+    """At most three pages. Only critical/high, unless pinned. One issue per page. Pins stay put."""
     active = [
         issue
         for issue in issues
         if (issue.status or "") not in _CLOSED and not is_template_limited(issue)
     ]
     urgent = [issue for issue in active if (issue.severity or "low") in {"critical", "high"}]
-    pool = urgent or active
+    pool = urgent
     by_id = {issue.id: issue for issue in active}
 
     def sort_key(issue: OnsiteIssue) -> tuple[int, int, str, str]:

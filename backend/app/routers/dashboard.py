@@ -37,9 +37,12 @@ from app.routers.onsite.constants import OPENISH
 from app.routers.onsite.common import decorate_weekly_issues, load_weekly_onsite_issues
 from app.onsite_loop import dropped_restore_id, weekly_pin_state
 from app.geo_loop import (
+    FACT_PACK_BLOCK,
     cite_stage,
     cite_stage_label,
+    fact_pack_ready,
     last_sampled_at_by_prompt,
+    load_fact_pack,
     prompt_batch_rows,
     prompt_compare_note_for,
     prompt_trend_points,
@@ -612,13 +615,14 @@ def workbench(
             )
         )
     elif cite_draft:
+        pack_ok = fact_pack_ready(load_fact_pack(db, tenant), tenant)
         next_actions.append(
             WorkbenchItem(
-                id="cite-send",
-                title="把英文段发给客户",
-                subtitle="草稿只写已记事实，缺的标 NEED_INPUT。客户自己贴。我们不代改。",
+                id="cite-send" if pack_ok else "cite-fact-pack",
+                title="把英文段发给客户" if pack_ok else "先补 Fact Pack 再出草稿",
+                subtitle="草稿只写已记事实。客户自己贴。我们不代改。" if pack_ok else FACT_PACK_BLOCK,
                 href="/geo",
-                status="草稿待发",
+                status="草稿待发" if pack_ok else "缺 Fact Pack",
                 tone="amber",
                 action_label="去作战室",
             )

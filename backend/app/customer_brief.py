@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.models import GeoPrompt, GeoTicket, Inquiry, OnsiteIssue, SeoPerformanceRow, SerpRun, SitePage, Tenant, User
 from app.geo_loop import (
+    FACT_PACK_BLOCK,
     cite_pack_for_prompt,
     cite_paste_for_prompt,
     cite_published_url,
@@ -315,13 +316,13 @@ def build_customer_brief(user: User, db: Session) -> CustomerBriefOut:
             )
         if due:
             buyer_kpi.append(f"{due} 句到期该复测。常驻监控只抽已记原句，不编问句。")
-        buyer_kpi.append("抽查是联网搜索源，不是 ChatGPT 本人。不保证这次被提到。测完给可粘贴的英文段和 FAQ，我们不代改。")
+        buyer_kpi.append("抽查是联网搜索源，不是 ChatGPT 本人。不保证这次被提到。没有 Fact Pack 不出对外草稿。我们不代改。")
 
     if not buyer_prompts:
         cite_assets = ["没有原句，没有可引用资产。不会编英文段。客户自己贴。我们不代改。"]
     else:
-        tenant = db.get(Tenant, user.tenant_id)
         cite_assets = []
+        pack_blocked = False
         for prompt in buyer_prompts:
             pack = cite_pack_for_prompt(db, tenant, prompt)
             stage = cite_stage(prompt)
@@ -329,8 +330,16 @@ def build_customer_brief(user: User, db: Session) -> CustomerBriefOut:
             extra = f" {url}" if url else ""
             cite_assets.append(f"{prompt.prompt_text}：{cite_stage_label(stage)}{extra}")
             if stage in {"draft", "sent"}:
-                pending_paste.append(cite_paste_for_prompt(pack, prompt))
-        cite_assets.append("只写已记事实，缺的标 NEED_INPUT。客户自己贴。我们不代改。不保证这次被提到。")
+                paste = cite_paste_for_prompt(pack, prompt)
+                if paste == FACT_PACK_BLOCK:
+                    pack_blocked = True
+                else:
+                    pending_paste.append(paste)
+        if pack_blocked:
+            pending_paste.insert(0, FACT_PACK_BLOCK)
+            cite_assets.append(FACT_PACK_BLOCK)
+        else:
+            cite_assets.append("只写已记事实，缺的标 NEED_INPUT。客户自己贴。我们不代改。不保证这次被提到。")
 
     trust = trust_map_for_tenant(db, user.tenant_id, tenant)
     if trust["empty"]:
