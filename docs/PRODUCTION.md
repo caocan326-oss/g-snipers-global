@@ -258,6 +258,7 @@ powershell -File deploy/sync-from-local.ps1
 | 2026-08-24 | 产品/运维 | 公司发到 `1e91706`（`sync-from-local.ps1 -Rebuild`）。站外可复制给客户、可看接口报文、可记自备接口。不代发、不存钥匙。 |
 | 2026-08-24 | 产品/运维 | 公司发到 `011c912`（`sync-from-local.ps1 -Rebuild`）。站外可核对公开主页：打不打得开、有没有官网链。不注册、不代登。 |
 | 2026-08-27 | 产品/运维 | 公司发到 `bbcbed9`（`sync-from-local.ps1 -Rebuild`）。GEO 短稿带 Fact Pack 英文 FAQ；没有可核渠道不写 LinkedIn；待处理可登记上线、同一问再测、复测后关掉。不代改、不代发。 |
+| 2026-08-27 | 产品/运维 | 公司发到 `b2c9bc1`（`sync-from-local.ps1 -Rebuild`）。总览第一步补 Fact Pack；打开工作台清门锁演示询盘。不编规格、不代改。 |
 
 ---
 
