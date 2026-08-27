@@ -873,6 +873,20 @@ export default function OnsiteBoardPage() {
     }
   }
 
+  async function weeklyRecheck(issue: OnsiteIssue) {
+    setError("");
+    setBusyId(issue.id);
+    try {
+      const body = await api<{ note?: string }>(`/api/onsite/issues/${issue.id}/weekly-recheck`, { method: "POST" });
+      setNote(body.note || "已打开该页核对。");
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "没核对成");
+    } finally {
+      setBusyId("");
+    }
+  }
+
   async function markSent(issue: OnsiteIssue) {
     setError("");
     setBusyId(issue.id);
@@ -1018,6 +1032,7 @@ export default function OnsiteBoardPage() {
         clearSent={(issue) => void clearSent(issue)}
         pinWeek={() => void pinWeek()}
         unpinWeek={() => void unpinWeek()}
+        recheckIssue={(issue) => void weeklyRecheck(issue)}
         busyId={busyId}
         openIssue={(id) => {
           setFilter("all");

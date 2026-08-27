@@ -1393,3 +1393,58 @@ def test_weekly_pin_keeps_pages_and_sent_is_not_live(client: TestClient, demo_us
     assert unpinned.status_code == 200, unpinned.text
     assert unpinned.json()["weekly_pinned"] is False
     assert unpinned.json()["this_week"][0]["page_path"] == "/new-critical"
+
+
+def test_weekly_recheck_fail_stays_pass_drops(client: TestClient, demo_user, db: Session, monkeypatch) -> None:
+    tenant = db.get(Tenant, demo_user.tenant_id)
+    assert tenant is not None
+    tenant.site_origin = "https://www.snipers.com.cn"
+    first = SitePage(tenant_id=demo_user.tenant_id, path="/a", locale="zh-CN", title="A", crawl_status="ok")
+    second = SitePage(tenant_id=demo_user.tenant_id, path="/b", locale="zh-CN", title="B", crawl_status="ok")
+    third = SitePage(tenant_id=demo_user.tenant_id, path="/c", locale="zh-CN", title="C", crawl_status="ok")
+    outsider = SitePage(tenant_id=demo_user.tenant_id, path="/out", locale="zh-CN", title="Out", crawl_status="ok")
+    db.add_all([first, second, third, outsider])
+    db.flush()
+    week_rows = [
+        OnsiteIssue(tenant_id=demo_user.tenant_id, page_id=first.id, category="tdk", title="首页标题过长", severity="high", status="open", risk="high"),
+        OnsiteIssue(tenant_id=demo_user.tenant_id, page_id=second.id, category="content", title="正文太少，买家看不够", severity="high", status="open", risk="high"),
+        OnsiteIssue(tenant_id=demo_user.tenant_id, page_id=third.id, category="heading", title="页面缺少主标题", severity="high", status="open", risk="high"),
+    ]
+    other = OnsiteIssue(tenant_id=demo_user.tenant_id, page_id=outsider.id, category="image", title="图片没有文字说明", severity="low", status="open", risk="low")
+    db.add_all([*week_rows, other])
+    db.commit()
+
+    headers = auth_header(client)
+    target_id = client.post("/api/onsite/weekly/pin", headers=headers).json()["this_week"][0]["id"]
+
+    class Snap:
+        usable = True
+
+    monkeypatch.setattr(
+        "app.routers.onsite.issue_actions._fetch_one_registered",
+        lambda db, user, page, origin: (Snap(), 0, 0),
+    )
+    failed = client.post(f"/api/onsite/issues/{target_id}/weekly-recheck", headers=headers)
+    assert failed.status_code == 200, failed.text
+    assert failed.json()["note"].startswith("不过")
+    assert "还没过" in failed.json()["note"]
+    assert "不代改" in failed.json()["note"]
+    stayed = next(item for item in failed.json()["this_week"] if item["id"] == target_id)
+    assert stayed["retest_result"].startswith("打开过该页")
+
+    denied = client.post(f"/api/onsite/issues/{other.id}/weekly-recheck", headers=headers)
+    assert denied.status_code == 400
+    assert "只核这周这三处" in denied.json()["detail"]
+
+    def _pass(db_session, user, page, origin):
+        issue = db_session.get(OnsiteIssue, target_id)
+        assert issue is not None
+        issue.status = "verified"
+        return Snap(), 0, 1
+
+    monkeypatch.setattr("app.routers.onsite.issue_actions._fetch_one_registered", _pass)
+    passed = client.post(f"/api/onsite/issues/{target_id}/weekly-recheck", headers=headers)
+    assert passed.status_code == 200, passed.text
+    assert passed.json()["note"].startswith("过。")
+    assert "不是我们改的" in passed.json()["note"]
+    assert all(item["id"] != target_id for item in passed.json()["this_week"])

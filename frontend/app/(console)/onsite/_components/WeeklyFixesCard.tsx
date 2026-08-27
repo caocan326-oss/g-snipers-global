@@ -18,6 +18,7 @@ export function WeeklyFixesCard({
   clearSent,
   pinWeek,
   unpinWeek,
+  recheckIssue,
   busyId,
 }: {
   issues: OnsiteIssue[];
@@ -30,6 +31,7 @@ export function WeeklyFixesCard({
   clearSent: (issue: OnsiteIssue) => void;
   pinWeek: () => void;
   unpinWeek: () => void;
+  recheckIssue: (issue: OnsiteIssue) => void;
   busyId: string;
 }) {
   return (
@@ -39,7 +41,7 @@ export function WeeklyFixesCard({
           <div>
             <h2 className="text-lg font-semibold text-slate-950">这周给客户改三处</h2>
             <p className="mt-1 text-sm leading-6 text-slate-500">
-              从紧急/优先里每页只挑一条，最多三页。钉住后新抓到的紧急页不会顶掉。受模板限制的不进这三处，会换下一页。已发给客户不是官网已改。我们不代改官网。
+              从紧急/优先里每页只挑一条，最多三页。钉住后新抓到的紧急页不会顶掉。客户说改完了就点「打开核对」，只看现网，我们不代改。已发给客户不是官网已改。
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -74,6 +76,7 @@ export function WeeklyFixesCard({
                 <pre className="whitespace-pre-wrap text-sm leading-6 text-slate-800">
                   {issue.customer_note || "还没有给客户的短稿。"}
                 </pre>
+                {issue.retest_result ? <p className="text-xs leading-5 text-slate-600">{issue.retest_result}</p> : null}
                 <div className="flex flex-wrap gap-2">
                   <Button size="sm" variant="outline" onClick={() => copyOne(issue)}>
                     复制短稿
@@ -90,6 +93,9 @@ export function WeeklyFixesCard({
                       已发给客户
                     </Button>
                   )}
+                  <Button size="sm" variant="outline" onClick={() => recheckIssue(issue)} disabled={busyId === issue.id}>
+                    打开核对
+                  </Button>
                   <Button size="sm" variant="outline" onClick={() => markTemplateLimit(issue)} disabled={busyId === issue.id}>
                     记受模板限制
                   </Button>

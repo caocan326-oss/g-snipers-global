@@ -357,6 +357,41 @@ def clear_sent_to_customer(
     return _weekly_out(db, user, "已取消「已发给客户」。")
 
 
+@router.post("/issues/{issue_id}/weekly-recheck", response_model=WeeklyOnsiteOut)
+def weekly_recheck_issue(
+    issue_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> WeeklyOnsiteOut:
+    row = _owned_issue(db, user, issue_id)
+    week_ids = [item.id for item in load_weekly_onsite_issues(db, user.tenant_id)]
+    if row.id not in week_ids:
+        raise HTTPException(status_code=400, detail="只核这周这三处。先打开站内「这周给客户改三处」。")
+    page = db.get(SitePage, row.page_id)
+    if page is None or page.tenant_id != user.tenant_id:
+        raise HTTPException(status_code=404, detail="页面不存在")
+    origin = _require_origin(_tenant(db, user))
+    try:
+        snap, _created, _verified = _fetch_one_registered(db, user, page, origin)
+    except OriginError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    db.flush()
+    db.refresh(row)
+    row.last_checked_at = datetime.now(timezone.utc)
+    if row.status == "verified":
+        row.retest_result = "打开过该页。这一条现在对得上。不是我们改的。"
+        refresh_weekly_pin_after_drop(db, user.tenant_id, row.id)
+        note = "过。打开过该页，这一条对得上。不是我们改的。我们不代改。"
+    elif not getattr(snap, "usable", False):
+        row.retest_result = "打开过该页，但这次没抓全。不能写成已经改完。我们不代改。"
+        note = "不过。打开过该页，但这次没抓全。不能写成已经改完。我们不代改。"
+    else:
+        row.retest_result = "打开过该页。这条还没过。不是我们改的。我们不代改。"
+        note = "不过。打开过该页，这条还没过。不是我们改的。我们不代改。"
+    db.commit()
+    return _weekly_out(db, user, note)
+
+
 @router.post("/issues/{issue_id}/clear-template-limit", response_model=OnsiteIssueOut)
 def clear_template_limit(
     issue_id: str,
