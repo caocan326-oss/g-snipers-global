@@ -1496,8 +1496,11 @@ def test_weekly_recheck_fail_stays_pass_drops(client: TestClient, demo_user, db:
     brief = client.get("/api/dashboard/customer-brief", headers=headers).json()
     verdict_items = next(section["items"] for section in brief["sections"] if section["key"] == "verdicts")
     assert any("核对过" in item and "对得上" in item for item in verdict_items)
+    this_week = next(section["items"] for section in brief["sections"] if section["key"] == "this_week")
+    assert any("这一页现在对得上" in item for item in this_week)
     assert "This week's pass / fail" in (brief.get("english_markdown") or "")
     assert "checked: matches now" in (brief.get("english_markdown") or "")
+    assert "这一页现在对得上" in (brief.get("paste_text") or "")
 
     failed_v = client.post(
         f"/api/onsite/issues/{target_id}/weekly-recheck-verdict",
@@ -1513,6 +1516,9 @@ def test_weekly_recheck_fail_stays_pass_drops(client: TestClient, demo_user, db:
     card = next(item for item in workbench["weekly_onsite"] if item["id"] == target_id)
     assert card["status"] == "核对不过"
     assert any(item["id"] == "weekly-verdict" for item in workbench["next_actions"])
+    brief_fail = client.get("/api/dashboard/customer-brief", headers=headers).json()
+    assert "这周还有没过的，请再改" in (brief_fail.get("paste_text") or "")
+    assert "核对不过。问题还在。请再改" in (brief_fail.get("paste_text") or "")
 
 
 def test_weekly_restore_puts_auto_closed_page_back(client: TestClient, demo_user, db: Session) -> None:

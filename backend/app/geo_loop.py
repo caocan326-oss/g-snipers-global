@@ -1407,11 +1407,13 @@ def ticket_paste(ticket: GeoTicket, prompt: GeoPrompt | None = None, db: Session
 
 
 def weekly_paste(tenant_name: str, items: list[str]) -> str:
+    from app.onsite_loop import weekly_customer_heading
+
     name = (tenant_name or "客户").strip() or "客户"
     if not items:
         return f"{name} 这周还没有要改的三处。\n\n{CUSTOMER_CLOSE}"
     numbered = "\n\n".join(f"{index}. {item}" for index, item in enumerate(items, 1))
-    return f"{name} 这周请改这几处：\n\n{numbered}\n\n{CUSTOMER_CLOSE}"
+    return f"{weekly_customer_heading(tenant_name, items)}\n\n{numbered}\n\n{CUSTOMER_CLOSE}"
 
 
 def status_for_handoff(handoff: str) -> str:

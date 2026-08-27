@@ -48,6 +48,54 @@ def test_issue_customer_note_has_page_url_ask_and_retest() -> None:
     assert paste == note
 
 
+def test_issue_customer_note_follows_weekly_verdict() -> None:
+    page = SitePage(
+        id="p3",
+        tenant_id="t1",
+        path="/snipers/article/articlelist/cat_id/3.html",
+        locale="zh-CN",
+        title="知识百科",
+        crawl_status="ok",
+    )
+    passed = OnsiteIssue(
+        id="i3",
+        tenant_id="t1",
+        page_id=page.id,
+        category="schema",
+        title="页面说明和正文对不上",
+        severity="high",
+        risk="high",
+        status="open",
+        retest_result="打开过该页。这一条现在对得上。不是我们改的。还在这三处。我们不代改。",
+    )
+    note = issue_customer_note(passed, page, "https://www.snipers.com.cn")
+    assert "这一页现在对得上：知识百科（/snipers/article/articlelist/cat_id/3.html）" in note
+    assert "请改这一页" not in note
+    assert "核对过。不是我们改的。我们不代改。" in note
+
+    failed = OnsiteIssue(
+        id="i4",
+        tenant_id="t1",
+        page_id=page.id,
+        category="schema",
+        title="页面说明和正文对不上",
+        severity="high",
+        risk="high",
+        status="open",
+        proposed_change="把页面说明和正文对齐。",
+        retest_result="打开过该页。问题还在。还在这三处。我们不代改。",
+    )
+    fail_note = issue_customer_note(failed, page, "https://www.snipers.com.cn")
+    assert "请改这一页" in fail_note
+    assert "核对不过。问题还在。请再改。我们不代改。" in fail_note
+    from app.onsite_loop import weekly_customer_heading, weekly_onsite_paste
+
+    assert weekly_customer_heading("SNIPERS", [note, fail_note]).startswith("SNIPERS 这周还有没过的，请再改")
+    mixed = weekly_onsite_paste("SNIPERS", [note, fail_note])
+    assert "这周还有没过的，请再改" in mixed
+    assert "这一页现在对得上" in mixed
+
+
 def test_issue_customer_note_falls_back_to_category_action() -> None:
     page = SitePage(
         id="p2",

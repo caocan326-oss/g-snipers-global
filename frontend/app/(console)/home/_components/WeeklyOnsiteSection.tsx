@@ -1,10 +1,12 @@
 import Link from "next/link";
+import { useState } from "react";
 import { ArrowRight } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import type { WorkbenchItem } from "@/lib/api";
+import { copyText } from "@/lib/utils";
 
 function liveUrl(origin: string, path: string) {
   if (/^https?:\/\//i.test(path)) return path;
@@ -32,6 +34,18 @@ export function WeeklyOnsiteSection({
   recordVerdict: (item: WorkbenchItem, passed: boolean) => void;
   restoreDropped: () => void;
 }) {
+  const [copiedId, setCopiedId] = useState("");
+
+  async function copyNote(item: WorkbenchItem) {
+    const text = (item.meta || "").trim();
+    if (!text) return;
+    const ok = await copyText(text);
+    if (ok) {
+      setCopiedId(item.id);
+      window.setTimeout(() => setCopiedId((cur) => (cur === item.id ? "" : cur)), 2000);
+    }
+  }
+
   return (
     <Card className="rounded-md border-amber-200">
       <CardContent className="space-y-3 p-5">
@@ -90,6 +104,14 @@ export function WeeklyOnsiteSection({
                     </Button>
                     <Button size="sm" variant="outline" onClick={() => recordVerdict(item, false)} disabled={busyId === item.id}>
                       记不过
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => void copyNote(item)}
+                      disabled={!item.meta.trim()}
+                    >
+                      {copiedId === item.id ? "已复制" : "复制给客户"}
                     </Button>
                     <Link href="/onsite">
                       <Button size="sm" variant="ghost">

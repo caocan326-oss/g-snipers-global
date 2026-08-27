@@ -85,6 +85,20 @@ def _ask_line(issue: OnsiteIssue) -> str:
     return (_guidance(issue.category).get("action") or "按页面问题补齐内容，人工确认后再上线。").strip()
 
 
+def weekly_customer_heading(tenant_name: str, notes: list[str]) -> str:
+    name = (tenant_name or "客户").strip() or "客户"
+    usable = [note.strip() for note in notes if (note or "").strip()]
+    if not usable:
+        return f"{name} 这周还没有要改的三处。"
+    fail_n = sum(1 for note in usable if "核对不过" in note or "问题还在" in note)
+    pass_n = sum(1 for note in usable if "现在对得上" in note)
+    if fail_n:
+        return f"{name} 这周还有没过的，请再改："
+    if pass_n == len(usable):
+        return f"{name} 这周这几处现在对得上。不是我们改的："
+    return f"{name} 这周请改这几处："
+
+
 def issue_customer_note(
     issue: OnsiteIssue,
     page: SitePage | None = None,
@@ -94,6 +108,15 @@ def issue_customer_note(
     label = page_label(page)
     url = page_url(page, site_origin)
     title = plain_issue_title(issue.title or "")
+    kind = weekly_recheck_kind(issue.retest_result or "")
+    if kind == "pass":
+        lines = [f"这一页现在对得上：{label}"]
+        if url:
+            lines.append(url)
+        if title:
+            lines.append(f"当时的问题：{title}")
+        lines.append("核对过。不是我们改的。我们不代改。")
+        return "\n".join(lines)
     ask = _ask_line(issue)
     lines = [f"请改这一页：{label}"]
     if url:
@@ -107,7 +130,10 @@ def issue_customer_note(
         or "改完后重新打开该页核对。"
     )
     lines.append(retest)
-    lines.append(ONSITE_CUSTOMER_CLOSE)
+    if kind == "fail":
+        lines.append("核对不过。问题还在。请再改。我们不代改。")
+    else:
+        lines.append(ONSITE_CUSTOMER_CLOSE)
     return "\n".join(lines)
 
 
@@ -257,12 +283,12 @@ def weekly_onsite_picks(
 
 
 def weekly_onsite_paste(tenant_name: str, notes: list[str]) -> str:
-    name = (tenant_name or "客户").strip() or "客户"
     usable = [note.strip() for note in notes if note.strip()]
     if not usable:
+        name = (tenant_name or "客户").strip() or "客户"
         return f"{name} 这周还没有要改的站内三处。\n\n{ONSITE_CUSTOMER_CLOSE}"
     numbered = "\n\n".join(f"{index}. {note}" for index, note in enumerate(usable, 1))
-    return f"{name} 这周请改这几处：\n\n{numbered}\n\n{ONSITE_CUSTOMER_CLOSE}"
+    return f"{weekly_customer_heading(tenant_name, usable)}\n\n{numbered}\n\n{ONSITE_CUSTOMER_CLOSE}"
 
 
 def looks_like_http_url(url: str) -> bool:
