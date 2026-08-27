@@ -262,6 +262,7 @@ powershell -File deploy/sync-from-local.ps1
 | 2026-08-27 | 产品/运维 | 公司发到 `526ed99`（`sync-from-local.ps1 -Rebuild`）。总览只看这周项。生产走查七条都过。不编问句、不代改。 |
 | 2026-08-27 | 产品/运维 | 公司发到 `c84d173`（`sync-from-local.ps1 -Rebuild`）。客户资料收成 Fact Pack 草稿，批准前不出对外稿。不编规格、不打开官网。 |
 | 2026-08-27 | 产品/运维 | 公司发到 `1c2ab88`（`sync-from-local.ps1 -Rebuild`）。从资料收草稿时先认门锁再认太短。 |
+| 2026-08-27 | 产品/运维 | 家里发到 `82dd632`（`sync-from-local.ps1 -Rebuild`）。活客户诊断目标清掉门锁竞品。演示租户可留。 |
 
 ---
 
