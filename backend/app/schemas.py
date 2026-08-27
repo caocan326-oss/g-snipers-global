@@ -70,6 +70,7 @@ class WorkbenchItem(BaseModel):
     trend: str = ""
     action_label: str = "查看"
     sent: bool = False
+    claimed: bool = False
 
 
 class WorkbenchChain(BaseModel):

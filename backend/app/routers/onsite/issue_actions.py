@@ -19,6 +19,7 @@ from app.onsite_loop import (
     is_template_limited,
     save_weekly_pin,
     weekly_pin_state,
+    weekly_recheck_kind,
 )
 from app.risk import RISKS, SEVERITIES, default_severity, needs_confirm, require_confirm, severity_to_risk
 from app.schemas import (
@@ -399,6 +400,52 @@ def clear_sent_to_customer(
     return _weekly_out(db, user, "已取消「已发给客户」。")
 
 
+@router.post("/issues/{issue_id}/weekly-claimed", response_model=WeeklyOnsiteOut)
+def mark_weekly_claimed(
+    issue_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> WeeklyOnsiteOut:
+    row = _owned_issue(db, user, issue_id)
+    week = load_weekly_onsite_issues(db, user.tenant_id)
+    week_ids = [item.id for item in week]
+    if row.id not in week_ids:
+        raise HTTPException(status_code=400, detail="只记这周这三处。先打开总览「这周给客户改三处」。")
+    pin = weekly_pin_state(db, user.tenant_id)
+    if row.id not in (pin.get("sent_ids") or []):
+        raise HTTPException(status_code=400, detail="先记下已发。客户说改完了不是官网已改。")
+    kind = weekly_recheck_kind(row.retest_result or "")
+    if kind == "pass":
+        raise HTTPException(status_code=400, detail="这一条已经核对过。不用再记客户说改完了。")
+    if kind not in {"fail", "viewed"}:
+        raise HTTPException(status_code=400, detail="先打开核对再记过或记不过。客户说改完了还要再打开核对。")
+    issue_ids = pin.get("issue_ids") or week_ids
+    claimed_ids = list(dict.fromkeys([*(pin.get("claimed_ids") or []), row.id]))
+    save_weekly_pin(db, user.tenant_id, issue_ids=issue_ids, sent_ids=pin.get("sent_ids") or [], claimed_ids=claimed_ids)
+    db.commit()
+    return _weekly_out(db, user, "已记下客户说改完了。还要打开核对。不是官网已改。我们不代改。")
+
+
+@router.post("/issues/{issue_id}/clear-weekly-claimed", response_model=WeeklyOnsiteOut)
+def clear_weekly_claimed(
+    issue_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> WeeklyOnsiteOut:
+    row = _owned_issue(db, user, issue_id)
+    pin = weekly_pin_state(db, user.tenant_id)
+    claimed_ids = [item for item in (pin.get("claimed_ids") or []) if item != row.id]
+    save_weekly_pin(
+        db,
+        user.tenant_id,
+        issue_ids=pin.get("issue_ids") or [],
+        sent_ids=pin.get("sent_ids") or [],
+        claimed_ids=claimed_ids,
+    )
+    db.commit()
+    return _weekly_out(db, user, "已取消「客户说改完了」。")
+
+
 @router.post("/issues/{issue_id}/weekly-recheck", response_model=WeeklyOnsiteOut)
 def weekly_recheck_issue(
     issue_id: str,
@@ -456,6 +503,15 @@ def weekly_recheck_verdict(
     else:
         row.retest_result = WEEKLY_RECHECK_FAIL
         note = "已记下核对不过。问题还在。还在这三处。我们不代改。"
+    pin = weekly_pin_state(db, user.tenant_id)
+    claimed_ids = [item for item in (pin.get("claimed_ids") or []) if item != row.id]
+    save_weekly_pin(
+        db,
+        user.tenant_id,
+        issue_ids=pin.get("issue_ids") or week_ids,
+        sent_ids=pin.get("sent_ids") or [],
+        claimed_ids=claimed_ids,
+    )
     db.commit()
     return _weekly_out(db, user, note)
 

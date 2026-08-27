@@ -234,6 +234,7 @@ export type WorkbenchItem = {
   trend?: string;
   action_label: string;
   sent?: boolean;
+  claimed?: boolean;
 };
 
 export type WorkbenchChain = {

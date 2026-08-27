@@ -599,6 +599,7 @@ def workbench(
                 meta=(item.customer_note or item.retest_result or "").strip(),
                 action_label="去站内",
                 sent=bool(item.sent_to_customer),
+                claimed=item.id in (pin.get("claimed_ids") or []),
             )
         )
 
@@ -658,7 +659,12 @@ def workbench(
             viewed_n = sum(1 for item in pending if item.status == "打开过，还没过")
             fail_n = sum(1 for item in pending if item.status == "核对不过")
             fail_unsent = sum(1 for item in pending if item.status == "核对不过" and not item.sent)
-            if fail_unsent:
+            claimed_n = sum(1 for item in pending if item.claimed)
+            if claimed_n:
+                title = "客户说改完了，去打开核对"
+                subtitle = f"{claimed_n} 处客户说改完了。打开核对再记过或记不过。客户说了不算官网已改。我们不代改。"
+                status = "该打开核对"
+            elif fail_unsent:
                 title = "把没过的再发给客户"
                 subtitle = f"{fail_unsent} 处核对不过。复制短稿发给客户，再点记下已发。不是官网已改。我们不代改。"
                 status = "还没发"

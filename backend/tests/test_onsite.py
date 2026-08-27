@@ -1528,6 +1528,22 @@ def test_weekly_recheck_fail_stays_pass_drops(client: TestClient, demo_user, db:
     waiting = next(item for item in after_sent["next_actions"] if item["id"] == "weekly-verdict")
     assert waiting["title"] == "本周三处还有没过的"
     assert "已记下发给客户" in waiting["subtitle"]
+    other_id = next(item["id"] for item in after_sent["weekly_onsite"] if item["id"] != target_id)
+    denied_claim = client.post(f"/api/onsite/issues/{other_id}/weekly-claimed", headers=headers)
+    assert denied_claim.status_code == 400
+    assert "先记下已发" in denied_claim.json()["detail"]
+    claimed = client.post(f"/api/onsite/issues/{target_id}/weekly-claimed", headers=headers)
+    assert claimed.status_code == 200, claimed.text
+    assert claimed.json()["note"].startswith("已记下客户说改完了")
+    assert "不是官网已改" in claimed.json()["note"]
+    after_claim = client.get("/api/dashboard/workbench?days=28", headers=headers).json()
+    claim_card = next(item for item in after_claim["weekly_onsite"] if item["id"] == target_id)
+    assert claim_card["status"] == "核对不过"
+    assert claim_card.get("sent") is True
+    assert claim_card.get("claimed") is True
+    ready = next(item for item in after_claim["next_actions"] if item["id"] == "weekly-verdict")
+    assert ready["title"] == "客户说改完了，去打开核对"
+    assert "客户说了不算官网已改" in ready["subtitle"]
     brief_fail = client.get("/api/dashboard/customer-brief", headers=headers).json()
     assert "这周还有没过的，请再改" in (brief_fail.get("paste_text") or "")
     assert "核对不过。问题还在。请再改" in (brief_fail.get("paste_text") or "")

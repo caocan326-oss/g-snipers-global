@@ -26,6 +26,8 @@ export function WeeklyOnsiteSection({
   restoreDropped,
   markSent,
   clearSent,
+  markClaimed,
+  clearClaimed,
 }: {
   items: WorkbenchItem[];
   pinned: boolean;
@@ -37,6 +39,8 @@ export function WeeklyOnsiteSection({
   restoreDropped: () => void;
   markSent: (item: WorkbenchItem) => void;
   clearSent: (item: WorkbenchItem) => void;
+  markClaimed: (item: WorkbenchItem) => void;
+  clearClaimed: (item: WorkbenchItem) => void;
 }) {
   const [copiedId, setCopiedId] = useState("");
 
@@ -57,7 +61,7 @@ export function WeeklyOnsiteSection({
           <div>
             <h2 className="text-lg font-semibold text-slate-950">这周给客户改三处</h2>
             <p className="mt-1 text-sm leading-6 text-slate-500">
-              这三处是这周给客户看的改法。客户改不改官网不挡我们交付。「打开核对」只打开现网并记下看过。看完再点「记过」或「记不过」。复制短稿后再点记下已发。已发给客户不是官网已改。不会自己勾完。我们不代改。
+              这三处是这周给客户看的改法。客户改不改官网不挡我们交付。「打开核对」只打开现网并记下看过。看完再点「记过」或「记不过」。复制短稿后再点记下已发。客户说改完了还要再打开核对。已发给客户不是官网已改。不会自己勾完。我们不代改。
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -90,6 +94,7 @@ export function WeeklyOnsiteSection({
                     <Badge>{index + 1}</Badge>
                     {item.status ? <Badge tone={item.tone}>{item.status}</Badge> : null}
                     {item.sent ? <Badge tone="blue">已发给客户</Badge> : null}
+                    {item.claimed ? <Badge tone="amber">客户说改完了</Badge> : null}
                   </div>
                   <h3 className="text-sm font-medium text-slate-950">{item.title}</h3>
                   {url ? (
@@ -127,6 +132,17 @@ export function WeeklyOnsiteSection({
                         记下已发
                       </Button>
                     )}
+                    {item.sent && item.status !== "核对过" ? (
+                      item.claimed ? (
+                        <Button size="sm" variant="outline" onClick={() => clearClaimed(item)} disabled={busyId === item.id}>
+                          取消客户说改完
+                        </Button>
+                      ) : (
+                        <Button size="sm" variant="outline" onClick={() => markClaimed(item)} disabled={busyId === item.id}>
+                          客户说改完了
+                        </Button>
+                      )
+                    ) : null}
                     <Link href="/onsite">
                       <Button size="sm" variant="ghost">
                         去站内

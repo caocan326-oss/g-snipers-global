@@ -262,6 +262,34 @@ export default function HomePage() {
     }
   }
 
+  async function weeklyMarkClaimed(item: WorkbenchItem) {
+    setError("");
+    setWeeklyBusyId(item.id);
+    try {
+      const body = await api<{ note?: string }>(`/api/onsite/issues/${item.id}/weekly-claimed`, { method: "POST" });
+      setNote(body.note || "已记下客户说改完了。还要打开核对。不是官网已改。我们不代改。");
+      await reloadWorkbench();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "没记下");
+    } finally {
+      setWeeklyBusyId("");
+    }
+  }
+
+  async function weeklyClearClaimed(item: WorkbenchItem) {
+    setError("");
+    setWeeklyBusyId(item.id);
+    try {
+      const body = await api<{ note?: string }>(`/api/onsite/issues/${item.id}/clear-weekly-claimed`, { method: "POST" });
+      setNote(body.note || "已取消「客户说改完了」。");
+      await reloadWorkbench();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "没取消");
+    } finally {
+      setWeeklyBusyId("");
+    }
+  }
+
   async function weeklyClearSent(item: WorkbenchItem) {
     setError("");
     setWeeklyBusyId(item.id);
@@ -350,6 +378,8 @@ export default function HomePage() {
         restoreDropped={() => void restoreDroppedWeek()}
         markSent={(item) => void weeklyMarkSent(item)}
         clearSent={(item) => void weeklyClearSent(item)}
+        markClaimed={(item) => void weeklyMarkClaimed(item)}
+        clearClaimed={(item) => void weeklyClearClaimed(item)}
       />
 
       <BuyerQuestionsSection

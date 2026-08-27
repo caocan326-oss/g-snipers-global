@@ -150,7 +150,7 @@ def is_template_limited(issue: OnsiteIssue) -> bool:
 
 
 def weekly_pin_state(db: Session, tenant_id: str) -> dict:
-    empty = {"issue_ids": [], "sent_ids": [], "last_dropped_id": "", "last_dropped_sent": False}
+    empty = {"issue_ids": [], "sent_ids": [], "claimed_ids": [], "last_dropped_id": "", "last_dropped_sent": False}
     row = (
         db.query(IntegrationSetting)
         .filter(IntegrationSetting.tenant_id == tenant_id, IntegrationSetting.key == WEEKLY_PIN_KEY)
@@ -164,9 +164,11 @@ def weekly_pin_state(db: Session, tenant_id: str) -> dict:
         return empty
     issue_ids = [str(item) for item in (raw.get("issue_ids") or []) if str(item).strip()]
     sent_ids = [str(item) for item in (raw.get("sent_ids") or []) if str(item).strip()]
+    claimed_ids = [str(item) for item in (raw.get("claimed_ids") or []) if str(item).strip()]
     return {
         "issue_ids": issue_ids[:WEEKLY_ONSITE_LIMIT],
         "sent_ids": sent_ids,
+        "claimed_ids": claimed_ids,
         "last_dropped_id": str(raw.get("last_dropped_id") or "").strip(),
         "last_dropped_sent": bool(raw.get("last_dropped_sent")),
     }
@@ -178,17 +180,24 @@ def save_weekly_pin(
     *,
     issue_ids: list[str],
     sent_ids: list[str] | None = None,
+    claimed_ids: list[str] | None = None,
     last_dropped_id: str | None = None,
     last_dropped_sent: bool | None = None,
 ) -> dict:
     prev = weekly_pin_state(db, tenant_id)
     clean_ids = [item for item in issue_ids if item][:WEEKLY_ONSITE_LIMIT]
     keep_sent = [item for item in (sent_ids if sent_ids is not None else prev["sent_ids"]) if item in clean_ids]
+    keep_claimed = [
+        item
+        for item in (claimed_ids if claimed_ids is not None else prev.get("claimed_ids") or [])
+        if item in clean_ids and item in keep_sent
+    ]
     dropped = prev.get("last_dropped_id") or "" if last_dropped_id is None else last_dropped_id
     dropped_sent = prev.get("last_dropped_sent") if last_dropped_sent is None else last_dropped_sent
     payload = {
         "issue_ids": clean_ids,
         "sent_ids": keep_sent,
+        "claimed_ids": keep_claimed,
         "last_dropped_id": dropped or "",
         "last_dropped_sent": bool(dropped_sent),
     }
