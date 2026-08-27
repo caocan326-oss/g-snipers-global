@@ -966,6 +966,10 @@ class OnsiteStatusIn(BaseModel):
     note: str | None = None
 
 
+class WeeklyRecheckVerdictIn(BaseModel):
+    passed: bool
+
+
 class OnsiteBoardOut(BaseModel):
     pages: int
     analyzed_pages: int

@@ -19,6 +19,7 @@ export function WeeklyFixesCard({
   pinWeek,
   unpinWeek,
   recheckIssue,
+  recordVerdict,
   restoreDropped,
   canRestore,
   busyId,
@@ -34,6 +35,7 @@ export function WeeklyFixesCard({
   pinWeek: () => void;
   unpinWeek: () => void;
   recheckIssue: (issue: OnsiteIssue) => void;
+  recordVerdict: (issue: OnsiteIssue, passed: boolean) => void;
   restoreDropped: () => void;
   canRestore: boolean;
   busyId: string;
@@ -45,7 +47,7 @@ export function WeeklyFixesCard({
           <div>
             <h2 className="text-lg font-semibold text-slate-950">这周给客户改三处</h2>
             <p className="mt-1 text-sm leading-6 text-slate-500">
-              从紧急/优先里每页只挑一条，最多三页。钉住后新抓到的紧急页不会顶掉。「打开核对」只打开现网并记下看过，不会自己勾完、也不会拿掉。已发给客户不是官网已改。我们不代改。
+              从紧急/优先里每页只挑一条，最多三页。钉住后新抓到的紧急页不会顶掉。「打开核对」只打开现网并记下看过。看完再点「记过」或「记不过」。不会自己勾完、也不会拿掉。已发给客户不是官网已改。我们不代改。
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -104,6 +106,12 @@ export function WeeklyFixesCard({
                   )}
                   <Button size="sm" variant="outline" onClick={() => recheckIssue(issue)} disabled={busyId === issue.id}>
                     打开核对
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => recordVerdict(issue, true)} disabled={busyId === issue.id}>
+                    记过
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => recordVerdict(issue, false)} disabled={busyId === issue.id}>
+                    记不过
                   </Button>
                   <Button size="sm" variant="outline" onClick={() => markTemplateLimit(issue)} disabled={busyId === issue.id}>
                     记受模板限制

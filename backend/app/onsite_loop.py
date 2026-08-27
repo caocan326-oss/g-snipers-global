@@ -12,6 +12,9 @@ from sqlalchemy.orm import Session
 from app.models import IntegrationSetting, OnsiteIssue, SitePage
 
 ONSITE_CUSTOMER_CLOSE = "我们不代改官网。改完告诉我，我再打开该页核对。"
+WEEKLY_RECHECK_OPENED = "打开过该页"
+WEEKLY_RECHECK_PASS = "打开过该页。这一条现在对得上。不是我们改的。还在这三处。我们不代改。"
+WEEKLY_RECHECK_FAIL = "打开过该页。问题还在。还在这三处。我们不代改。"
 TEMPLATE_LIMIT_MARK = "受模板限制"
 TEMPLATE_LIMIT_REASON = "受模板限制。后台改不了，要等有主题文件权限的人改。不是客户没理。我们不代改。"
 WEEKLY_PIN_KEY = "onsite_weekly_pin"
@@ -42,6 +45,17 @@ def plain_issue_title(title: str) -> str:
     if re.search(r"schema|json-ld", mapped, re.I):
         return "页面缺少给搜索看的说明"
     return mapped
+
+
+def weekly_recheck_kind(result: str) -> str:
+    text = (result or "").strip()
+    if "这一条现在对得上" in text:
+        return "pass"
+    if "问题还在" in text:
+        return "fail"
+    if text.startswith(WEEKLY_RECHECK_OPENED):
+        return "viewed"
+    return ""
 
 
 def page_label(page: SitePage | None) -> str:

@@ -31,7 +31,7 @@ from app.geo_loop import (
     trust_map_for_tenant,
     weekly_paste,
 )
-from app.onsite_loop import issue_customer_note, weekly_pin_state
+from app.onsite_loop import issue_customer_note, weekly_pin_state, weekly_recheck_kind
 from app.routers.geo.prompts import geo_summary
 from app.routers.onsite.common import (
     _active_issue,
@@ -192,6 +192,13 @@ def _issue_en_line(issue: OnsiteIssue) -> str:
     title = _plain_title(issue.title)
     limited = (issue.blocked_reason or "").startswith("受模板限制")
     extra = " (template-limited; we do not edit the theme)" if limited else ""
+    kind = weekly_recheck_kind(issue.retest_result or "")
+    if kind == "pass":
+        extra = f"{extra} — checked: matches now. We did not edit the site."
+    elif kind == "fail":
+        extra = f"{extra} — checked: still not fixed. We do not edit the site."
+    elif kind == "viewed":
+        extra = f"{extra} — page opened; no pass/fail yet."
     return f"Page {path}: {title}{extra}"
 
 
@@ -453,6 +460,13 @@ def build_customer_brief(user: User, db: Session) -> CustomerBriefOut:
         this_week.append("对照已有记录，整理给客户的说明，并安排下一轮复查。")
 
     retest: list[str] = []
+    for issue in priority_issues:
+        kind = weekly_recheck_kind(issue.retest_result or "")
+        path = (issue.page.path if issue.page else "") or "站内页"
+        if kind == "pass":
+            retest.append(f"{path}：核对过。这一条现在对得上。不是我们改的。我们不代改。")
+        elif kind == "fail":
+            retest.append(f"{path}：核对不过。问题还在。我们不代改。")
     geo_waiting = [ticket for ticket in tickets if ticket_handoff(ticket) in {"drafted", "sent"}]
     geo_live = [ticket for ticket in tickets if ticket_handoff(ticket) == "live"]
     if geo_waiting:

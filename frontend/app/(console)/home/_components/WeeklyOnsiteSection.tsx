@@ -20,6 +20,7 @@ export function WeeklyOnsiteSection({
   busyId,
   canRestore,
   recheckIssue,
+  recordVerdict,
   restoreDropped,
 }: {
   items: WorkbenchItem[];
@@ -28,6 +29,7 @@ export function WeeklyOnsiteSection({
   busyId: string;
   canRestore: boolean;
   recheckIssue: (item: WorkbenchItem) => void;
+  recordVerdict: (item: WorkbenchItem, passed: boolean) => void;
   restoreDropped: () => void;
 }) {
   return (
@@ -37,7 +39,7 @@ export function WeeklyOnsiteSection({
           <div>
             <h2 className="text-lg font-semibold text-slate-950">这周给客户改三处</h2>
             <p className="mt-1 text-sm leading-6 text-slate-500">
-              这三处是这周给客户看的改法。客户改不改官网不挡我们交付。「打开核对」只打开现网并记下看过，不会自己勾完。钉住、发给客户在站内。我们不代改。
+              这三处是这周给客户看的改法。客户改不改官网不挡我们交付。「打开核对」只打开现网并记下看过。看完再点「记过」或「记不过」。不会自己勾完。钉住、发给客户在站内。我们不代改。
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -82,6 +84,12 @@ export function WeeklyOnsiteSection({
                   <div className="flex flex-wrap gap-2">
                     <Button size="sm" variant="outline" onClick={() => recheckIssue(item)} disabled={busyId === item.id}>
                       打开核对
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => recordVerdict(item, true)} disabled={busyId === item.id}>
+                      记过
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => recordVerdict(item, false)} disabled={busyId === item.id}>
+                      记不过
                     </Button>
                     <Link href="/onsite">
                       <Button size="sm" variant="ghost">

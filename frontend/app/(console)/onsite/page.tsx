@@ -890,6 +890,23 @@ export default function OnsiteBoardPage() {
     }
   }
 
+  async function weeklyVerdict(issue: OnsiteIssue, passed: boolean) {
+    setError("");
+    setBusyId(issue.id);
+    try {
+      const body = await api<{ note?: string }>(`/api/onsite/issues/${issue.id}/weekly-recheck-verdict`, {
+        method: "POST",
+        body: JSON.stringify({ passed }),
+      });
+      setNote(body.note || (passed ? "已记下核对过。" : "已记下核对不过。"));
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "没记下");
+    } finally {
+      setBusyId("");
+    }
+  }
+
   async function restoreDropped() {
     setError("");
     setBusyId("weekly-restore");
@@ -1050,6 +1067,7 @@ export default function OnsiteBoardPage() {
         pinWeek={() => void pinWeek()}
         unpinWeek={() => void unpinWeek()}
         recheckIssue={(issue) => void weeklyRecheck(issue)}
+        recordVerdict={(issue, passed) => void weeklyVerdict(issue, passed)}
         restoreDropped={() => void restoreDropped()}
         canRestore={Boolean(board.can_restore)}
         busyId={busyId}

@@ -11,6 +11,9 @@ from app.models import OnsiteIssue, SitePage, User
 from app.onsite_fetch import OriginError, normalize_origin
 from app.onsite_loop import (
     TEMPLATE_LIMIT_REASON,
+    WEEKLY_RECHECK_FAIL,
+    WEEKLY_RECHECK_OPENED,
+    WEEKLY_RECHECK_PASS,
     clear_weekly_pin,
     dropped_restore_id,
     is_template_limited,
@@ -28,6 +31,7 @@ from app.schemas import (
     OnsiteIssueOut,
     OnsiteStatusIn,
     WeeklyOnsiteOut,
+    WeeklyRecheckVerdictIn,
 )
 
 import app.routers.onsite as _onsite_pkg
@@ -426,6 +430,32 @@ def weekly_recheck_issue(
     else:
         row.retest_result = "打开过该页。只记看过，不是工作台勾完。还在这三处。我们不代改。"
         note = "已打开该页。只记看过，不是工作台勾完。还在这三处。我们不代改。"
+    db.commit()
+    return _weekly_out(db, user, note)
+
+
+@router.post("/issues/{issue_id}/weekly-recheck-verdict", response_model=WeeklyOnsiteOut)
+def weekly_recheck_verdict(
+    issue_id: str,
+    body: WeeklyRecheckVerdictIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> WeeklyOnsiteOut:
+    row = _owned_issue(db, user, issue_id)
+    week_ids = [item.id for item in load_weekly_onsite_issues(db, user.tenant_id)]
+    if row.id not in week_ids:
+        raise HTTPException(status_code=400, detail="只核这周这三处。先打开站内「这周给客户改三处」。")
+    if not (row.retest_result or "").startswith(WEEKLY_RECHECK_OPENED):
+        raise HTTPException(status_code=400, detail="先打开核对这一页。只记看过还不算过。")
+    if row.status == "verified":
+        row.status = "open"
+        row.closed_at = None
+    if body.passed:
+        row.retest_result = WEEKLY_RECHECK_PASS
+        note = "已记下核对过。这一条现在对得上。不是我们改的。还在这三处。我们不代改。"
+    else:
+        row.retest_result = WEEKLY_RECHECK_FAIL
+        note = "已记下核对不过。问题还在。还在这三处。我们不代改。"
     db.commit()
     return _weekly_out(db, user, note)
 

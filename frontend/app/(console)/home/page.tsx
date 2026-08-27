@@ -231,6 +231,23 @@ export default function HomePage() {
     }
   }
 
+  async function weeklyVerdict(item: WorkbenchItem, passed: boolean) {
+    setError("");
+    setWeeklyBusyId(item.id);
+    try {
+      const body = await api<{ note?: string }>(`/api/onsite/issues/${item.id}/weekly-recheck-verdict`, {
+        method: "POST",
+        body: JSON.stringify({ passed }),
+      });
+      setNote(body.note || (passed ? "已记下核对过。" : "已记下核对不过。"));
+      await reloadWorkbench();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "没记下");
+    } finally {
+      setWeeklyBusyId("");
+    }
+  }
+
   async function restoreDroppedWeek() {
     setError("");
     setWeeklyBusyId("weekly-restore");
@@ -301,6 +318,7 @@ export default function HomePage() {
         busyId={weeklyBusyId}
         canRestore={Boolean(data.weekly_can_restore)}
         recheckIssue={(item) => void weeklyRecheck(item)}
+        recordVerdict={(item, passed) => void weeklyVerdict(item, passed)}
         restoreDropped={() => void restoreDroppedWeek()}
       />
 

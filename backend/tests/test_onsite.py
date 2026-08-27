@@ -1458,6 +1458,56 @@ def test_weekly_recheck_fail_stays_pass_drops(client: TestClient, demo_user, db:
     assert stayed["retest_result"].startswith("打开过该页")
     assert "不是工作台勾完" in stayed["retest_result"]
 
+    too_soon = client.post(
+        f"/api/onsite/issues/{other.id}/weekly-recheck-verdict",
+        headers=headers,
+        json={"passed": True},
+    )
+    assert too_soon.status_code == 400
+    assert "只核这周这三处" in too_soon.json()["detail"]
+
+    before_open = client.post(
+        f"/api/onsite/issues/{week_rows[1].id}/weekly-recheck-verdict",
+        headers=headers,
+        json={"passed": True},
+    )
+    assert before_open.status_code == 400
+    assert "先打开核对这一页" in before_open.json()["detail"]
+
+    passed = client.post(
+        f"/api/onsite/issues/{target_id}/weekly-recheck-verdict",
+        headers=headers,
+        json={"passed": True},
+    )
+    assert passed.status_code == 200, passed.text
+    assert passed.json()["note"].startswith("已记下核对过")
+    assert "不是我们改的" in passed.json()["note"]
+    stayed = next(item for item in passed.json()["this_week"] if item["id"] == target_id)
+    assert stayed["status"] != "verified"
+    assert "这一条现在对得上" in stayed["retest_result"]
+    assert "还在这三处" in stayed["retest_result"]
+    workbench = client.get("/api/dashboard/workbench?days=28", headers=headers).json()
+    card = next(item for item in workbench["weekly_onsite"] if item["id"] == target_id)
+    assert card["status"] == "核对过"
+    brief = client.get("/api/dashboard/customer-brief", headers=headers).json()
+    retest_items = next(section["items"] for section in brief["sections"] if section["key"] == "retest")
+    assert any("核对过" in item and "对得上" in item for item in retest_items)
+    assert "checked: matches now" in (brief.get("english_markdown") or "")
+
+    failed_v = client.post(
+        f"/api/onsite/issues/{target_id}/weekly-recheck-verdict",
+        headers=headers,
+        json={"passed": False},
+    )
+    assert failed_v.status_code == 200, failed_v.text
+    assert failed_v.json()["note"].startswith("已记下核对不过")
+    stayed = next(item for item in failed_v.json()["this_week"] if item["id"] == target_id)
+    assert stayed["status"] != "verified"
+    assert "问题还在" in stayed["retest_result"]
+    workbench = client.get("/api/dashboard/workbench?days=28", headers=headers).json()
+    card = next(item for item in workbench["weekly_onsite"] if item["id"] == target_id)
+    assert card["status"] == "核对不过"
+
 
 def test_weekly_restore_puts_auto_closed_page_back(client: TestClient, demo_user, db: Session) -> None:
     tenant = db.get(Tenant, demo_user.tenant_id)

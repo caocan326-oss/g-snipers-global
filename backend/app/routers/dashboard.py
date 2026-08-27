@@ -35,7 +35,7 @@ from app.llm import status_label
 from app.onsite_analyzer import rank_distribution
 from app.routers.onsite.constants import OPENISH
 from app.routers.onsite.common import decorate_weekly_issues, load_weekly_onsite_issues
-from app.onsite_loop import dropped_restore_id, weekly_pin_state
+from app.onsite_loop import dropped_restore_id, weekly_pin_state, weekly_recheck_kind
 from app.geo_loop import (
     FACT_PACK_BLOCK,
     cite_stage,
@@ -577,9 +577,14 @@ def workbench(
 
     weekly_onsite: list[WorkbenchItem] = []
     for item in week_out:
-        if item.sent_to_customer:
+        kind = weekly_recheck_kind(item.retest_result or "")
+        if kind == "pass":
+            status, tone = "核对过", "green"
+        elif kind == "fail":
+            status, tone = "核对不过", "red"
+        elif item.sent_to_customer:
             status, tone = "已发给客户", "blue"
-        elif (item.retest_result or "").startswith("打开过该页"):
+        elif kind == "viewed":
             status, tone = "打开过，还没过", "amber"
         else:
             status, tone = "待发给客户", "default"
