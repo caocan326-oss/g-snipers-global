@@ -1515,7 +1515,19 @@ def test_weekly_recheck_fail_stays_pass_drops(client: TestClient, demo_user, db:
     workbench = client.get("/api/dashboard/workbench?days=28", headers=headers).json()
     card = next(item for item in workbench["weekly_onsite"] if item["id"] == target_id)
     assert card["status"] == "核对不过"
-    assert any(item["id"] == "weekly-verdict" for item in workbench["next_actions"])
+    assert card.get("sent") is False
+    verdict = next(item for item in workbench["next_actions"] if item["id"] == "weekly-verdict")
+    assert verdict["title"] == "把没过的再发给客户"
+    assert "复制短稿发给客户" in verdict["subtitle"]
+    marked = client.post(f"/api/onsite/issues/{target_id}/sent-to-customer", headers=headers)
+    assert marked.status_code == 200, marked.text
+    after_sent = client.get("/api/dashboard/workbench?days=28", headers=headers).json()
+    sent_card = next(item for item in after_sent["weekly_onsite"] if item["id"] == target_id)
+    assert sent_card["status"] == "核对不过"
+    assert sent_card.get("sent") is True
+    waiting = next(item for item in after_sent["next_actions"] if item["id"] == "weekly-verdict")
+    assert waiting["title"] == "本周三处还有没过的"
+    assert "已记下发给客户" in waiting["subtitle"]
     brief_fail = client.get("/api/dashboard/customer-brief", headers=headers).json()
     assert "这周还有没过的，请再改" in (brief_fail.get("paste_text") or "")
     assert "核对不过。问题还在。请再改" in (brief_fail.get("paste_text") or "")

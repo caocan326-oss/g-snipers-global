@@ -24,6 +24,8 @@ export function WeeklyOnsiteSection({
   recheckIssue,
   recordVerdict,
   restoreDropped,
+  markSent,
+  clearSent,
 }: {
   items: WorkbenchItem[];
   pinned: boolean;
@@ -33,6 +35,8 @@ export function WeeklyOnsiteSection({
   recheckIssue: (item: WorkbenchItem) => void;
   recordVerdict: (item: WorkbenchItem, passed: boolean) => void;
   restoreDropped: () => void;
+  markSent: (item: WorkbenchItem) => void;
+  clearSent: (item: WorkbenchItem) => void;
 }) {
   const [copiedId, setCopiedId] = useState("");
 
@@ -53,7 +57,7 @@ export function WeeklyOnsiteSection({
           <div>
             <h2 className="text-lg font-semibold text-slate-950">这周给客户改三处</h2>
             <p className="mt-1 text-sm leading-6 text-slate-500">
-              这三处是这周给客户看的改法。客户改不改官网不挡我们交付。「打开核对」只打开现网并记下看过。看完再点「记过」或「记不过」。不会自己勾完。钉住、发给客户在站内。我们不代改。
+              这三处是这周给客户看的改法。客户改不改官网不挡我们交付。「打开核对」只打开现网并记下看过。看完再点「记过」或「记不过」。复制短稿后再点记下已发。已发给客户不是官网已改。不会自己勾完。我们不代改。
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -85,6 +89,7 @@ export function WeeklyOnsiteSection({
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge>{index + 1}</Badge>
                     {item.status ? <Badge tone={item.tone}>{item.status}</Badge> : null}
+                    {item.sent ? <Badge tone="blue">已发给客户</Badge> : null}
                   </div>
                   <h3 className="text-sm font-medium text-slate-950">{item.title}</h3>
                   {url ? (
@@ -113,6 +118,15 @@ export function WeeklyOnsiteSection({
                     >
                       {copiedId === item.id ? "已复制" : "复制给客户"}
                     </Button>
+                    {item.sent ? (
+                      <Button size="sm" variant="outline" onClick={() => clearSent(item)} disabled={busyId === item.id}>
+                        取消已发
+                      </Button>
+                    ) : (
+                      <Button size="sm" variant="outline" onClick={() => markSent(item)} disabled={busyId === item.id}>
+                        记下已发
+                      </Button>
+                    )}
                     <Link href="/onsite">
                       <Button size="sm" variant="ghost">
                         去站内

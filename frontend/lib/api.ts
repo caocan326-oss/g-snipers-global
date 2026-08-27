@@ -233,6 +233,7 @@ export type WorkbenchItem = {
   meta: string;
   trend?: string;
   action_label: string;
+  sent?: boolean;
 };
 
 export type WorkbenchChain = {

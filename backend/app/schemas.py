@@ -69,6 +69,7 @@ class WorkbenchItem(BaseModel):
     meta: str = ""
     trend: str = ""
     action_label: str = "查看"
+    sent: bool = False
 
 
 class WorkbenchChain(BaseModel):

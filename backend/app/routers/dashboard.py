@@ -598,6 +598,7 @@ def workbench(
                 tone=tone,
                 meta=(item.customer_note or item.retest_result or "").strip(),
                 action_label="去站内",
+                sent=bool(item.sent_to_customer),
             )
         )
 
@@ -656,18 +657,27 @@ def workbench(
         if pending:
             viewed_n = sum(1 for item in pending if item.status == "打开过，还没过")
             fail_n = sum(1 for item in pending if item.status == "核对不过")
-            bits = []
-            if viewed_n:
-                bits.append(f"{viewed_n} 处打开过还没记下过/不过")
-            if fail_n:
-                bits.append(f"{fail_n} 处核对不过")
+            fail_unsent = sum(1 for item in pending if item.status == "核对不过" and not item.sent)
+            if fail_unsent:
+                title = "把没过的再发给客户"
+                subtitle = f"{fail_unsent} 处核对不过。复制短稿发给客户，再点记下已发。不是官网已改。我们不代改。"
+                status = "还没发"
+            elif fail_n:
+                title = "本周三处还有没过的"
+                subtitle = f"{fail_n} 处核对不过，已记下发给客户。等他们改完再打开核对。不是官网已改。我们不代改。"
+                status = "等客户改"
+            else:
+                title = "本周三处还有没过的"
+                bits = [f"{viewed_n} 处打开过还没记下过/不过"] if viewed_n else []
+                subtitle = "；".join(bits) + "。先打开核对再记过或记不过。不会自己勾完。我们不代改。"
+                status = "还没过"
             next_actions.append(
                 WorkbenchItem(
                     id="weekly-verdict",
-                    title="本周三处还有没过的",
-                    subtitle="；".join(bits) + "。先打开核对再记过或记不过。不会自己勾完。我们不代改。",
+                    title=title,
+                    subtitle=subtitle,
                     href="/home",
-                    status="还没过",
+                    status=status,
                     tone="red" if fail_n else "amber",
                     action_label="去总览",
                 )

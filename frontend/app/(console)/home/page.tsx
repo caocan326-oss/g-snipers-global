@@ -248,6 +248,34 @@ export default function HomePage() {
     }
   }
 
+  async function weeklyMarkSent(item: WorkbenchItem) {
+    setError("");
+    setWeeklyBusyId(item.id);
+    try {
+      const body = await api<{ note?: string }>(`/api/onsite/issues/${item.id}/sent-to-customer`, { method: "POST" });
+      setNote(body.note || "已记下发给客户。不是官网已改，也不是我们代改。");
+      await reloadWorkbench();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "没记下");
+    } finally {
+      setWeeklyBusyId("");
+    }
+  }
+
+  async function weeklyClearSent(item: WorkbenchItem) {
+    setError("");
+    setWeeklyBusyId(item.id);
+    try {
+      const body = await api<{ note?: string }>(`/api/onsite/issues/${item.id}/clear-sent-to-customer`, { method: "POST" });
+      setNote(body.note || "已取消「已发给客户」。");
+      await reloadWorkbench();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "没取消");
+    } finally {
+      setWeeklyBusyId("");
+    }
+  }
+
   async function restoreDroppedWeek() {
     setError("");
     setWeeklyBusyId("weekly-restore");
@@ -320,6 +348,8 @@ export default function HomePage() {
         recheckIssue={(item) => void weeklyRecheck(item)}
         recordVerdict={(item, passed) => void weeklyVerdict(item, passed)}
         restoreDropped={() => void restoreDroppedWeek()}
+        markSent={(item) => void weeklyMarkSent(item)}
+        clearSent={(item) => void weeklyClearSent(item)}
       />
 
       <BuyerQuestionsSection
