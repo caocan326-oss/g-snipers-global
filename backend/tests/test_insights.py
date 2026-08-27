@@ -172,7 +172,7 @@ def test_project_targets_accepts_country_chip_payload(client: TestClient, demo_u
                 },
             ],
             "competitors": [
-                {"name": "August Home", "website": "https://august.com", "country_code": "US"},
+                {"name": "Ahrefs", "website": "https://ahrefs.com", "country_code": "US"},
             ],
         },
     )
@@ -183,7 +183,7 @@ def test_project_targets_accepts_country_chip_payload(client: TestClient, demo_u
     jp = next(row for row in body["markets"] if row["country_code"] == "JP")
     assert any(row["theme"] == "smart lock for renters" and row["locale"] == "en-US" for row in us["demand_signals"])
     assert any(row["theme"] == "賃貸" and row["locale"] == "ja-JP" for row in jp["demand_signals"])
-    assert any(row["name"] == "August Home" for row in us["competitors"])
+    assert any(row["name"] == "Ahrefs" for row in us["competitors"])
 
 
 def test_insight_feeds_three_chains(client: TestClient, demo_user) -> None:

@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.models import (
     BacklinkGap,
+    Competitor,
     DemandSignal,
     DistributionJob,
     GeoAsset,
@@ -79,6 +80,16 @@ def name_from_origin(origin: str | None) -> str:
 def is_lock_leftover_text(text: str) -> bool:
     blob = (text or "").lower()
     return bool(blob) and any(marker.lower() in blob for marker in LOCK_PROMPT_MARKERS)
+
+
+def is_lock_competitor(name: str, website: str = "") -> bool:
+    """Seed leftover lock brands. Demo tenant may keep them; live customers must not."""
+    blob = " ".join((name or "", website or "")).strip().lower()
+    if not blob:
+        return False
+    if blob in LOCK_GAP_COMPETITORS:
+        return True
+    return any(marker in blob for marker in LOCK_GAP_COMPETITORS)
 
 
 def is_lock_inquiry_text(*parts: str) -> bool:
@@ -228,5 +239,13 @@ def adopt_live_site(db: Session, tenant: Tenant) -> str:
         assets_cleared += 1
     if assets_cleared:
         notes.append(f"已清空 {assets_cleared} 份门锁/演示引用材料")
+
+    rivals = 0
+    for row in db.query(Competitor).filter(Competitor.tenant_id == tenant.id).all():
+        if is_lock_competitor(row.name or "", row.website or ""):
+            db.delete(row)
+            rivals += 1
+    if rivals:
+        notes.append(f"已去掉 {rivals} 个门锁演示竞品")
 
     return "；".join(notes)

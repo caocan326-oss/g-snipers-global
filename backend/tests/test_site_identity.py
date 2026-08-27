@@ -3,12 +3,13 @@ from sqlalchemy.orm import Session
 
 from sqlalchemy import select
 
-from app.models import GeoAsset, GeoPrompt, GeoTicket, Inquiry, Tenant
+from app.models import Competitor, GeoAsset, GeoPrompt, GeoTicket, Inquiry, Market, Tenant
 from app.seed import seed
 from app.site_identity import (
     adopt_live_site,
     is_buyer_question,
     is_lock_asset_text,
+    is_lock_competitor,
     is_lock_inquiry_text,
     is_lock_leftover_text,
 )
@@ -29,6 +30,11 @@ def test_lock_leftover_matches_chinese_lock_not_bare_license() -> None:
     assert is_lock_inquiry_text("采购", "智能门锁询价")
     assert not is_lock_inquiry_text("buyer@factory.com", "询盘紧固件出口许可")
     assert not is_lock_inquiry_text("采购", "批量安装")
+    assert is_lock_competitor("August Home", "https://august.com")
+    assert is_lock_competitor("Level Lock")
+    assert is_lock_competitor("Qrio")
+    assert not is_lock_competitor("Ahrefs")
+    assert not is_lock_competitor("Semrush")
 
 
 def test_snipers_drops_lock_prompts_and_keeps_own_cite(demo_user, db: Session) -> None:
@@ -191,3 +197,80 @@ def test_seed_does_not_reinject_lock_onto_named_snipers(db: Session) -> None:
     assert not any("智能锁" in title for title in titles)
     contacts = [row.contact for row in db.query(Inquiry).filter(Inquiry.tenant_id == tenant.id).all()]
     assert not any("alex@example.com" in contact or "加州物业" in contact for contact in contacts)
+    rivals = [row.name for row in db.query(Competitor).filter(Competitor.tenant_id == tenant.id).all()]
+    assert not any(is_lock_competitor(name) for name in rivals)
+
+
+def test_snipers_drops_lock_competitors_on_open(demo_user, db: Session) -> None:
+    tenant = db.get(Tenant, demo_user.tenant_id)
+    assert tenant is not None
+    tenant.site_origin = "https://www.snipers.com.cn"
+    tenant.name = "SNIPERS"
+    market = Market(
+        tenant_id=tenant.id,
+        name="美国",
+        region="北美",
+        country_code="US",
+        primary_locale="en-US",
+        status="priority",
+    )
+    db.add(market)
+    db.flush()
+    db.add_all(
+        [
+            Competitor(tenant_id=tenant.id, market_id=market.id, name="August Home", website="https://august.com"),
+            Competitor(tenant_id=tenant.id, market_id=market.id, name="Level Lock"),
+            Competitor(tenant_id=tenant.id, market_id=market.id, name="Qrio"),
+            Competitor(tenant_id=tenant.id, market_id=market.id, name="Ahrefs", website="https://ahrefs.com"),
+        ]
+    )
+    db.commit()
+
+    note = adopt_live_site(db, tenant)
+    db.commit()
+    names = [row.name for row in db.query(Competitor).filter(Competitor.tenant_id == tenant.id).all()]
+    assert names == ["Ahrefs"]
+    assert "门锁演示竞品" in note
+
+
+def test_snipers_project_targets_omit_lock_rivals(client: TestClient, demo_user, db: Session) -> None:
+    tenant = db.get(Tenant, demo_user.tenant_id)
+    assert tenant is not None
+    tenant.site_origin = "https://www.snipers.com.cn"
+    tenant.name = "SNIPERS"
+    market = Market(
+        tenant_id=tenant.id,
+        name="美国",
+        region="北美",
+        country_code="US",
+        primary_locale="en-US",
+        status="priority",
+    )
+    db.add(market)
+    db.flush()
+    db.add(Competitor(tenant_id=tenant.id, market_id=market.id, name="August Home", website="https://august.com"))
+    db.commit()
+
+    headers = auth_header(client)
+    listed = client.get("/api/project-targets", headers=headers)
+    assert listed.status_code == 200, listed.text
+    names = [row["name"] for market in listed.json()["markets"] for row in market["competitors"]]
+    assert "August Home" not in names
+
+    saved = client.put(
+        "/api/project-targets",
+        headers=headers,
+        json={
+            "site_origin": "https://www.snipers.com.cn",
+            "tenant_name": "SNIPERS",
+            "markets": [{"name": "美国", "region": "北美", "country_code": "US", "primary_locale": "en-US", "status": "priority"}],
+            "competitors": [
+                {"name": "August Home", "website": "https://august.com", "country_code": "US"},
+                {"name": "Ahrefs", "website": "https://ahrefs.com", "country_code": "US"},
+            ],
+        },
+    )
+    assert saved.status_code == 200, saved.text
+    again = [row["name"] for market in saved.json()["markets"] for row in market["competitors"]]
+    assert "August Home" not in again
+    assert "Ahrefs" in again

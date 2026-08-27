@@ -9,7 +9,7 @@ from app.database import get_db
 from app.geo_helpers import ENGINES
 from app.onsite_fetch import normalize_origin, OriginError
 from app.site_context import SiteSwitchError, prepare_site_switch
-from app.site_identity import DEMO_TENANT_NAME
+from app.site_identity import DEMO_TENANT_NAME, adopt_live_site, is_lock_competitor
 from app.models import (
     BacklinkGap,
     Competitor,
@@ -223,6 +223,9 @@ def get_project_targets(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> ProjectTargetsOut:
+    tenant = db.get(Tenant, user.tenant_id)
+    if tenant is not None and adopt_live_site(db, tenant):
+        db.commit()
     return _project_targets_out(db, user)
 
 
@@ -371,9 +374,12 @@ def save_project_targets(
         for row in db.query(Competitor).filter(Competitor.tenant_id == user.tenant_id).all()
     }
 
+    drop_lock_rivals = bool(tenant and tenant.name != DEMO_TENANT_NAME)
     for item in body.competitors:
         name = _clean_text(item.name)
         if not name:
+            continue
+        if drop_lock_rivals and is_lock_competitor(name, item.website or ""):
             continue
         market = _resolve_target_market(
             db,
@@ -472,6 +478,9 @@ def add_competitor(
     db: Session = Depends(get_db),
 ) -> Competitor:
     market = _owned_market(db, user, market_id)
+    tenant = db.get(Tenant, user.tenant_id)
+    if tenant is not None and tenant.name != DEMO_TENANT_NAME and is_lock_competitor(body.name, body.website or ""):
+        raise HTTPException(status_code=400, detail="这是门锁演示竞品，不能记到这个客户。不要编。")
     row = Competitor(tenant_id=user.tenant_id, market_id=market.id, **body.model_dump())
     db.add(row)
     db.commit()
