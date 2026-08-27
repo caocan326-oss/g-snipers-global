@@ -260,6 +260,7 @@ powershell -File deploy/sync-from-local.ps1
 | 2026-08-27 | 产品/运维 | 公司发到 `bbcbed9`（`sync-from-local.ps1 -Rebuild`）。GEO 短稿带 Fact Pack 英文 FAQ；没有可核渠道不写 LinkedIn；待处理可登记上线、同一问再测、复测后关掉。不代改、不代发。 |
 | 2026-08-27 | 产品/运维 | 公司发到 `b2c9bc1`（`sync-from-local.ps1 -Rebuild`）。总览第一步补 Fact Pack；打开工作台清门锁演示询盘。不编规格、不代改。 |
 | 2026-08-27 | 产品/运维 | 公司发到 `526ed99`（`sync-from-local.ps1 -Rebuild`）。总览只看这周项。生产走查七条都过。不编问句、不代改。 |
+| 2026-08-27 | 产品/运维 | 公司 Rebuild 现网测：客户资料收成 Fact Pack 草稿，批准前不出对外稿。不编规格、不打开官网。 |
 
 ---
 

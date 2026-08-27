@@ -38,6 +38,10 @@ export function ContentTab({
   factForm,
   setFactForm,
   saveFactPack,
+  materials,
+  setMaterials,
+  fromMaterials,
+  materialsBusy,
   assetForm,
   setAssetForm,
   generateAsset,
@@ -53,6 +57,10 @@ export function ContentTab({
   factForm: FactForm;
   setFactForm: (form: FactForm) => void;
   saveFactPack: (e: FormEvent) => void;
+  materials: string;
+  setMaterials: (text: string) => void;
+  fromMaterials: () => void;
+  materialsBusy: boolean;
   assetForm: AssetForm;
   setAssetForm: (form: AssetForm) => void;
   generateAsset: () => void;
@@ -90,7 +98,7 @@ export function ContentTab({
                   </Button>
                 </div>
               </div>
-            )) : <p className="text-sm text-slate-500">还没有客户事实资料。先让客户确认公司、品牌、品类、认证和禁用宣传语，再生成对外内容。</p>}
+            )) : <p className="text-sm text-slate-500">还没有客户事实资料。把客户给的英文说明贴到右边，收成草稿后再批准。没有的不要编。</p>}
           </CardContent>
         </Card>
 
@@ -132,7 +140,19 @@ export function ContentTab({
         <Card className="rounded-md">
           <CardHeader><CardTitle>新增客户事实资料</CardTitle></CardHeader>
           <CardContent>
-            <p className="mb-3 text-xs leading-5 text-slate-500">只写已批或官网正文里有的事实。落地页虚数、logo、没写在正文里的认证不要填。</p>
+            <p className="mb-3 text-xs leading-5 text-slate-500">只写已批或资料原文里有的事实。不打开官网。落地页虚数、闽 ICP、没写在资料里的认证不要填。</p>
+            <div className="mb-4 space-y-2">
+              <textarea
+                className="min-h-28 w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
+                placeholder="把客户给的英文说明、说明书原文贴进来。没有英文就空着等客户给，不要编规格。"
+                value={materials}
+                onChange={(e) => setMaterials(e.target.value)}
+              />
+              <Button type="button" variant="outline" className="w-full" onClick={fromMaterials} disabled={materialsBusy}>
+                {materialsBusy ? "正在收…" : "从资料收成草稿"}
+              </Button>
+              <p className="text-xs leading-5 text-slate-500">收成的是草稿，还不能出对外页稿。经理核对后再批准。中文资料不能当成已批英文。</p>
+            </div>
             <form className="space-y-3" onSubmit={saveFactPack}>
               <Input placeholder="事实包名称" value={factForm.name} onChange={(e) => setFactForm({ ...factForm, name: e.target.value })} />
               <Input placeholder="公司英文全称" value={factForm.legal_name} onChange={(e) => setFactForm({ ...factForm, legal_name: e.target.value })} />

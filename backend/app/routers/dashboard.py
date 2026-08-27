@@ -40,6 +40,7 @@ from app.geo_loop import (
     FACT_PACK_BLOCK,
     cite_stage,
     cite_stage_label,
+    fact_pack_phase,
     fact_pack_ready,
     last_sampled_at_by_prompt,
     load_fact_pack,
@@ -182,7 +183,9 @@ def _summary_for(user: User, db: Session) -> DashboardSummary:
         or 0
     )
     distribution_jobs = db.query(func.count(DistributionJob.id)).filter(DistributionJob.tenant_id == tid).scalar() or 0
-    pack_ready = fact_pack_ready(load_fact_pack(db, tenant), tenant)
+    pack = load_fact_pack(db, tenant)
+    pack_ready = fact_pack_ready(pack, tenant)
+    pack_phase = fact_pack_phase(pack, tenant)
     return DashboardSummary(
         tenant_name=tenant.name if tenant else "",
         markets_count=markets,
@@ -196,6 +199,7 @@ def _summary_for(user: User, db: Session) -> DashboardSummary:
         inquiries_month=inquiries_month,
         inquiries_month_unlinked=inquiries_month_unlinked,
         fact_pack_ready=pack_ready,
+        fact_pack_status=pack_phase,
         geo_prompts=geo_prompts,
         geo_untested=geo_untested,
         geo_recorded=geo_recorded,
@@ -595,17 +599,30 @@ def workbench(
     pack_ok = summary.fact_pack_ready
     next_actions: list[WorkbenchItem] = []
     if not pack_ok:
-        next_actions.append(
-            WorkbenchItem(
-                id="fact-pack",
-                title="先补 Fact Pack",
-                subtitle=FACT_PACK_BLOCK,
-                href="/offsite?tab=content",
-                status="缺 Fact Pack",
-                tone="amber",
-                action_label="去补材料",
+        if summary.fact_pack_status == "draft":
+            next_actions.append(
+                WorkbenchItem(
+                    id="fact-pack-approve",
+                    title="核对并批准 Fact Pack",
+                    subtitle="草稿还不能出对外页稿。只批资料里有的英文。没有的认证不要补。",
+                    href="/offsite?tab=content",
+                    status="草稿待批",
+                    tone="amber",
+                    action_label="去批准",
+                )
             )
-        )
+        else:
+            next_actions.append(
+                WorkbenchItem(
+                    id="fact-pack",
+                    title="先补 Fact Pack",
+                    subtitle=FACT_PACK_BLOCK,
+                    href="/offsite?tab=content",
+                    status="缺 Fact Pack",
+                    tone="amber",
+                    action_label="去补材料",
+                )
+            )
     if summary.geo_watch_due:
         next_actions.append(
             WorkbenchItem(

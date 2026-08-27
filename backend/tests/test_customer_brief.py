@@ -576,6 +576,7 @@ def test_cite_pack_english_when_fact_pack_ready(client: TestClient, demo_user, d
             website="https://www.snipers.com.cn",
             approved_boilerplate_en="SNIPERS supplies industrial fasteners for export buyers.",
             product_categories_en="industrial fasteners",
+            status="approved",
         )
     )
     db.commit()

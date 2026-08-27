@@ -1188,6 +1188,7 @@ def test_ticket_list_paste_includes_cite_when_fact_pack_ready(client: TestClient
                 "G-Snipers is its AI customer-acquisition product covering SEM, SEO, and GEO."
             ),
             brand_names="SNIPERS, Snipers, G-Snipers, 赛珀",
+            status="approved",
         )
     )
     db.commit()

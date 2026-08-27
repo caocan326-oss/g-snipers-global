@@ -5,8 +5,9 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.auth import get_current_user
 from app.database import get_db
-from app.models import ContentAsset, FactPack, SourcePlatform, User
 from app.official_apis import official_api_for, offsite_customer_ask
+from app.fact_pack_from_materials import extract_fact_fields
+from app.models import ContentAsset, FactPack, SourcePlatform, Tenant, User
 from app.schemas import (
     ContentAssetApproveIn,
     ContentAssetCreate,
@@ -15,6 +16,8 @@ from app.schemas import (
     ContentAssetReviewOut,
     ContentAssetUpdate,
     FactPackCreate,
+    FactPackFromMaterialsIn,
+    FactPackFromMaterialsOut,
     FactPackOut,
     FactPackUpdate,
     OffsiteCustomerPasteOut,
@@ -44,6 +47,40 @@ def create_fact_pack(
     db.commit()
     db.refresh(row)
     return _fact_pack_out(row)
+
+
+@router.post("/fact-packs/from-materials", response_model=FactPackFromMaterialsOut, status_code=201)
+def fact_pack_from_materials(
+    body: FactPackFromMaterialsIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> FactPackFromMaterialsOut:
+    tenant = db.get(Tenant, user.tenant_id)
+    try:
+        extracted = extract_fact_fields(body.source_text, site_origin=tenant.site_origin if tenant else "")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    row = FactPack(
+        tenant_id=user.tenant_id,
+        name=(body.name or "").strip() or "Default Fact Pack",
+        legal_name=str(extracted["legal_name"]),
+        brand_names=str(extracted["brand_names"]),
+        website=str(extracted["website"]),
+        product_categories_en=str(extracted["product_categories_en"]),
+        certifications=str(extracted["certifications"]),
+        key_specs=str(extracted["key_specs"]),
+        contact_public=str(extracted["contact_public"]),
+        approved_boilerplate_en=str(extracted["approved_boilerplate_en"]),
+        status="draft",
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return FactPackFromMaterialsOut(
+        fact_pack=_fact_pack_out(row),
+        notes=list(extracted["notes"]),
+        omitted=list(extracted["omitted"]),
+    )
 
 
 @router.patch("/fact-packs/{fact_pack_id}", response_model=FactPackOut)

@@ -36,6 +36,7 @@ class DashboardSummary(BaseModel):
     inquiries_month: int = 0
     inquiries_month_unlinked: int = 0
     fact_pack_ready: bool = False
+    fact_pack_status: str = ""
     geo_prompts: int
     geo_untested: int
     geo_recorded: int
@@ -1792,6 +1793,17 @@ class FactPackOut(FactPackCreate):
     approved_at: datetime | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
+
+
+class FactPackFromMaterialsIn(BaseModel):
+    source_text: str
+    name: str = "Default Fact Pack"
+
+
+class FactPackFromMaterialsOut(BaseModel):
+    fact_pack: FactPackOut
+    notes: list[str] = []
+    omitted: list[str] = []
 
 
 class ContentAssetCreate(BaseModel):

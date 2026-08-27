@@ -200,6 +200,7 @@ export type DashboardSummary = {
   inquiries_month?: number;
   inquiries_month_unlinked?: number;
   fact_pack_ready?: boolean;
+  fact_pack_status?: string;
   geo_prompts: number;
   geo_untested: number;
   geo_recorded: number;
@@ -1364,6 +1365,12 @@ export type FactPack = {
   approved_at: string | null;
   created_at: string | null;
   updated_at: string | null;
+};
+
+export type FactPackFromMaterials = {
+  fact_pack: FactPack;
+  notes: string[];
+  omitted: string[];
 };
 
 export type ContentAsset = {

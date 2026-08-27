@@ -105,9 +105,20 @@ def test_workbench_fact_pack_is_first_until_ready(client: TestClient, demo_user,
         )
     )
     db.commit()
+    draft = client.get("/api/dashboard/workbench?days=28", headers=headers).json()
+    assert draft["summary"]["fact_pack_ready"] is False
+    assert draft["summary"]["fact_pack_status"] == "draft"
+    assert draft["next_actions"][0]["id"] == "fact-pack-approve"
+
+    pack = db.query(FactPack).filter(FactPack.tenant_id == demo_user.tenant_id).one()
+    pack.status = "approved"
+    pack.legal_name = "SNIPERS Fastener Co., Ltd."
+    pack.brand_names = "SNIPERS"
+    db.commit()
     ready = client.get("/api/dashboard/workbench?days=28", headers=headers).json()
     assert ready["summary"]["fact_pack_ready"] is True
-    assert all(item["id"] != "fact-pack" for item in ready["next_actions"])
+    assert ready["summary"]["fact_pack_status"] == "ready"
+    assert all(item["id"] not in {"fact-pack", "fact-pack-approve"} for item in ready["next_actions"])
 
 
 def test_fact_pack_content_asset_approval_and_distribution_gate(client: TestClient, demo_user) -> None:

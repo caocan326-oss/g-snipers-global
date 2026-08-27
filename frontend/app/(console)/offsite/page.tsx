@@ -11,6 +11,7 @@ import {
   type DistJob,
   type DistProvider,
   type FactPack,
+  type FactPackFromMaterials,
   type OffsiteOpportunityGeneration,
   type PlacementCheck,
   type PlatformAccount,
@@ -131,6 +132,8 @@ export default function OffsitePage() {
     contact_public: "",
     approved_boilerplate_en: "",
   });
+  const [materials, setMaterials] = useState("");
+  const [materialsBusy, setMaterialsBusy] = useState(false);
   const [assetForm, setAssetForm] = useState({
     fact_pack_id: "",
     asset_type: "company_blurb",
@@ -379,6 +382,40 @@ export default function OffsitePage() {
       setError(e instanceof Error ? e.message : "载入渠道失败");
     } finally {
       setSeedBusy(false);
+    }
+  }
+
+  async function fromMaterials() {
+    setError("");
+    setNote("");
+    setMaterialsBusy(true);
+    try {
+      const res = await api<FactPackFromMaterials>("/api/offsite/fact-packs/from-materials", {
+        method: "POST",
+        body: JSON.stringify({ source_text: materials, name: factForm.name || "Default Fact Pack" }),
+      });
+      const pack = res.fact_pack;
+      setFactForm({
+        name: pack.name,
+        legal_name: pack.legal_name,
+        brand_names: pack.brand_names,
+        website: pack.website,
+        product_categories_en: pack.product_categories_en,
+        certifications: pack.certifications,
+        key_specs: pack.key_specs,
+        banned_claims: pack.banned_claims,
+        contact_public: pack.contact_public,
+        approved_boilerplate_en: pack.approved_boilerplate_en,
+      });
+      setAssetForm((current) => ({ ...current, fact_pack_id: pack.id }));
+      const skip = res.omitted.length ? `没写：${res.omitted.join("、")}。` : "";
+      const extra = res.notes.join(" ");
+      setNote(`已收成草稿，还不是已批。${extra} ${skip}核对后再点批准。不要编规格。`.replace(/\s+/g, " ").trim());
+      loadContent();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "没收成");
+    } finally {
+      setMaterialsBusy(false);
     }
   }
 
@@ -750,6 +787,10 @@ export default function OffsitePage() {
           factForm={factForm}
           setFactForm={setFactForm}
           saveFactPack={saveFactPack}
+          materials={materials}
+          setMaterials={setMaterials}
+          fromMaterials={fromMaterials}
+          materialsBusy={materialsBusy}
           assetForm={assetForm}
           setAssetForm={setAssetForm}
           generateAsset={generateAsset}

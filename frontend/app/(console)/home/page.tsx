@@ -110,7 +110,9 @@ export default function HomePage() {
     {
       label: "下一步",
       text: data.summary.fact_pack_ready === false
-        ? "没有 Fact Pack（已批英文说明 + 官网）不能出对外草稿。不要编规格。周报仍可以出。"
+        ? (data.summary.fact_pack_status === "draft"
+          ? "Fact Pack 还是草稿。核对客户已批英文后再批准，才能出对外页草稿。不要编规格。"
+          : "没有 Fact Pack（已批英文说明 + 官网）不能出对外草稿。不要编规格。周报仍可以出。")
         : (data.summary.geo_watch_due ?? 0) > 0
           ? `有 ${data.summary.geo_watch_due} 句已记问句到期该复测。没有原句不会编。`
           : (data.weekly_onsite ?? []).length

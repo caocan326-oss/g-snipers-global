@@ -499,6 +499,14 @@ FACT_PACK_BLOCK = "没有 Fact Pack（已批英文说明 + 官网）不能出对
 def load_fact_pack(db: Session, tenant: Tenant | None) -> FactPack | None:
     if tenant is None:
         return None
+    approved = (
+        db.query(FactPack)
+        .filter(FactPack.tenant_id == tenant.id, FactPack.status == "approved")
+        .order_by(FactPack.updated_at.desc())
+        .first()
+    )
+    if approved is not None:
+        return approved
     return (
         db.query(FactPack)
         .filter(FactPack.tenant_id == tenant.id)
@@ -508,11 +516,29 @@ def load_fact_pack(db: Session, tenant: Tenant | None) -> FactPack | None:
 
 
 def fact_pack_ready(fact: FactPack | None, tenant: Tenant | None = None) -> bool:
-    if fact is None:
+    if fact is None or (fact.status or "") != "approved":
         return False
     boiler = (fact.approved_boilerplate_en or "").strip()
     website = (fact.website or (tenant.site_origin if tenant else "") or "").strip()
     return bool(boiler) and bool(website)
+
+
+def fact_pack_phase(fact: FactPack | None, tenant: Tenant | None = None) -> str:
+    """missing | draft | ready. Draft cannot unlock outbound page copy."""
+    if fact_pack_ready(fact, tenant):
+        return "ready"
+    if fact is None:
+        return "missing"
+    filled = any(
+        (part or "").strip()
+        for part in (
+            fact.approved_boilerplate_en,
+            fact.website,
+            fact.legal_name,
+            fact.brand_names,
+        )
+    )
+    return "draft" if filled else "missing"
 
 
 def page_draft_for_prompt(db: Session, tenant: Tenant | None, prompt: GeoPrompt) -> str:
