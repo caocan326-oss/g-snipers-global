@@ -106,13 +106,13 @@ export function WeeklyOnsiteSection({
                   )}
                   {item.meta ? <p className="text-xs leading-5 text-slate-600">{item.meta}</p> : null}
                   <div className="flex flex-wrap gap-2">
-                    <Button size="sm" variant="outline" onClick={() => recheckIssue(item)} disabled={busyId === item.id}>
+                    <Button size="sm" variant="outline" onClick={() => recheckIssue(item)} disabled={busyId === `recheck:${item.id}`}>
                       打开核对
                     </Button>
-                    <Button size="sm" variant="outline" onClick={() => recordVerdict(item, true)} disabled={busyId === item.id}>
+                    <Button size="sm" variant="outline" onClick={() => recordVerdict(item, true)} disabled={busyId === `verdict:${item.id}`}>
                       记过
                     </Button>
-                    <Button size="sm" variant="outline" onClick={() => recordVerdict(item, false)} disabled={busyId === item.id}>
+                    <Button size="sm" variant="outline" onClick={() => recordVerdict(item, false)} disabled={busyId === `verdict:${item.id}`}>
                       记不过
                     </Button>
                     <Button
@@ -124,21 +124,21 @@ export function WeeklyOnsiteSection({
                       {copiedId === item.id ? "已复制" : "复制给客户"}
                     </Button>
                     {item.sent ? (
-                      <Button size="sm" variant="outline" onClick={() => clearSent(item)} disabled={busyId === item.id}>
+                      <Button size="sm" variant="outline" onClick={() => clearSent(item)} disabled={busyId === `sent:${item.id}`}>
                         取消已发
                       </Button>
                     ) : (
-                      <Button size="sm" variant="outline" onClick={() => markSent(item)} disabled={busyId === item.id}>
+                      <Button size="sm" variant="outline" onClick={() => markSent(item)} disabled={busyId === `sent:${item.id}`}>
                         记下已发
                       </Button>
                     )}
                     {item.sent && item.status !== "核对过" ? (
                       item.claimed ? (
-                        <Button size="sm" variant="outline" onClick={() => clearClaimed(item)} disabled={busyId === item.id}>
+                        <Button size="sm" variant="outline" onClick={() => clearClaimed(item)} disabled={busyId === `claimed:${item.id}`}>
                           取消客户说改完
                         </Button>
                       ) : (
-                        <Button size="sm" variant="outline" onClick={() => markClaimed(item)} disabled={busyId === item.id}>
+                        <Button size="sm" variant="outline" onClick={() => markClaimed(item)} disabled={busyId === `claimed:${item.id}`}>
                           客户说改完了
                         </Button>
                       )

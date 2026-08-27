@@ -215,7 +215,7 @@ export default function HomePage() {
 
   async function weeklyRecheck(item: WorkbenchItem) {
     setError("");
-    setWeeklyBusyId(item.id);
+    setWeeklyBusyId(`recheck:${item.id}`);
     const origin = (data?.site_origin || "").replace(/\/$/, "");
     const path = item.subtitle || "";
     const url = /^https?:\/\//i.test(path) ? path : origin && path ? `${origin}${path.startsWith("/") ? path : `/${path}`}` : "";
@@ -233,7 +233,7 @@ export default function HomePage() {
 
   async function weeklyVerdict(item: WorkbenchItem, passed: boolean) {
     setError("");
-    setWeeklyBusyId(item.id);
+    setWeeklyBusyId(`verdict:${item.id}`);
     try {
       const body = await api<{ note?: string }>(`/api/onsite/issues/${item.id}/weekly-recheck-verdict`, {
         method: "POST",
@@ -250,7 +250,7 @@ export default function HomePage() {
 
   async function weeklyMarkSent(item: WorkbenchItem) {
     setError("");
-    setWeeklyBusyId(item.id);
+    setWeeklyBusyId(`sent:${item.id}`);
     try {
       const body = await api<{ note?: string }>(`/api/onsite/issues/${item.id}/sent-to-customer`, { method: "POST" });
       setNote(body.note || "已记下发给客户。不是官网已改，也不是我们代改。");
@@ -264,7 +264,7 @@ export default function HomePage() {
 
   async function weeklyMarkClaimed(item: WorkbenchItem) {
     setError("");
-    setWeeklyBusyId(item.id);
+    setWeeklyBusyId(`claimed:${item.id}`);
     try {
       const body = await api<{ note?: string }>(`/api/onsite/issues/${item.id}/weekly-claimed`, { method: "POST" });
       setNote(body.note || "已记下客户说改完了。还要打开核对。不是官网已改。我们不代改。");
@@ -278,7 +278,7 @@ export default function HomePage() {
 
   async function weeklyClearClaimed(item: WorkbenchItem) {
     setError("");
-    setWeeklyBusyId(item.id);
+    setWeeklyBusyId(`claimed:${item.id}`);
     try {
       const body = await api<{ note?: string }>(`/api/onsite/issues/${item.id}/clear-weekly-claimed`, { method: "POST" });
       setNote(body.note || "已取消「客户说改完了」。");
@@ -292,7 +292,7 @@ export default function HomePage() {
 
   async function weeklyClearSent(item: WorkbenchItem) {
     setError("");
-    setWeeklyBusyId(item.id);
+    setWeeklyBusyId(`sent:${item.id}`);
     try {
       const body = await api<{ note?: string }>(`/api/onsite/issues/${item.id}/clear-sent-to-customer`, { method: "POST" });
       setNote(body.note || "已取消「已发给客户」。");
