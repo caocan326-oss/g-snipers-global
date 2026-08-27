@@ -32,6 +32,63 @@ def test_workbench_lists_same_openish_issues_as_summary(client: TestClient, demo
     workbench = client.get("/api/dashboard/workbench?days=28", headers=headers).json()
     assert workbench["summary"]["onsite_open_critical"] == 1
     assert any(item["id"] == issue.id for item in workbench["seo_items"])
+    assert workbench["weekly_onsite"][0]["id"] == issue.id
+    assert workbench["weekly_onsite"][0]["status"] == "待发给客户"
+    assert any(item["id"] == "weekly-three" for item in workbench["next_actions"])
+
+
+def test_workbench_weekly_three_follows_pin_and_sent(client: TestClient, demo_user, db) -> None:
+    tenant = db.get(Tenant, demo_user.tenant_id)
+    tenant.site_origin = "https://www.snipers.com.cn"
+    tenant.name = "SNIPERS"
+    pages = [
+        SitePage(tenant_id=demo_user.tenant_id, path="/a", locale="zh-CN", title="A", crawl_status="ok"),
+        SitePage(tenant_id=demo_user.tenant_id, path="/b", locale="zh-CN", title="B", crawl_status="ok"),
+        SitePage(tenant_id=demo_user.tenant_id, path="/c", locale="zh-CN", title="C", crawl_status="ok"),
+    ]
+    db.add_all(pages)
+    db.flush()
+    db.add_all(
+        [
+            OnsiteIssue(
+                tenant_id=demo_user.tenant_id,
+                page_id=page.id,
+                category="tdk",
+                title="首页标题过长",
+                status="open",
+                severity="high",
+                risk="high",
+            )
+            for page in pages
+        ]
+    )
+    db.commit()
+
+    headers = auth_header(client)
+    empty_note = client.get("/api/dashboard/workbench?days=28", headers=headers).json()
+    assert len(empty_note["weekly_onsite"]) == 3
+    assert empty_note["weekly_pinned"] is False
+    assert {item["subtitle"] for item in empty_note["weekly_onsite"]} == {"/a", "/b", "/c"}
+    assert all(item["status"] == "待发给客户" for item in empty_note["weekly_onsite"])
+    assert all(item["href"] == "/onsite" for item in empty_note["weekly_onsite"])
+    assert all(item["meta"] for item in empty_note["weekly_onsite"])
+    action = next(item for item in empty_note["next_actions"] if item["id"] == "weekly-three")
+    assert action["title"] == "这周给客户改三处"
+    assert action["status"] == "待钉住"
+    assert action["href"] == "/onsite"
+
+    pinned = client.post("/api/onsite/weekly/pin", headers=headers).json()
+    first_id = pinned["this_week"][0]["id"]
+    sent = client.post(f"/api/onsite/issues/{first_id}/sent-to-customer", headers=headers)
+    assert sent.status_code == 200, sent.text
+
+    after = client.get("/api/dashboard/workbench?days=28", headers=headers).json()
+    assert after["weekly_pinned"] is True
+    assert after["weekly_onsite"][0]["id"] == first_id
+    assert after["weekly_onsite"][0]["status"] == "已发给客户"
+    assert after["weekly_onsite"][0]["tone"] == "blue"
+    pinned_action = next(item for item in after["next_actions"] if item["id"] == "weekly-three")
+    assert pinned_action["status"] == "已钉住"
 
 
 def test_customer_brief_empty_tenant_stays_untested(client: TestClient, demo_user) -> None:

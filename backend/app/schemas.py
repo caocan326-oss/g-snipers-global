@@ -128,6 +128,8 @@ class WorkbenchOut(BaseModel):
     recent_signals: list[WorkbenchItem] = []
     chains: list[WorkbenchChain] = []
     deferred_modules: list[WorkbenchItem] = []
+    weekly_onsite: list[WorkbenchItem] = []
+    weekly_pinned: bool = False
 
 
 class CustomerBriefSection(BaseModel):

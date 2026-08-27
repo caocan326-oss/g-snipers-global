@@ -34,6 +34,8 @@ from app.models import (
 from app.llm import status_label
 from app.onsite_analyzer import rank_distribution
 from app.routers.onsite.constants import OPENISH
+from app.routers.onsite.common import decorate_weekly_issues, load_weekly_onsite_issues
+from app.onsite_loop import weekly_pin_state
 from app.customer_brief import build_customer_brief
 from app.report_export import pdf_response
 from app.site_identity import adopt_live_site
@@ -442,7 +444,43 @@ def workbench(
         or 0
     )
 
+    week_rows = load_weekly_onsite_issues(db, user.tenant_id)
+    week_out = decorate_weekly_issues(db, user.tenant_id, week_rows)
+    pin = weekly_pin_state(db, user.tenant_id)
+    weekly_onsite: list[WorkbenchItem] = []
+    for item in week_out:
+        if item.sent_to_customer:
+            status, tone = "已发给客户", "blue"
+        elif (item.retest_result or "").startswith("打开过该页"):
+            status, tone = "打开过，还没过", "amber"
+        else:
+            status, tone = "待发给客户", "default"
+        weekly_onsite.append(
+            WorkbenchItem(
+                id=item.id,
+                title=item.title,
+                subtitle=item.page_path or "站内页面",
+                href="/onsite",
+                status=status,
+                tone=tone,
+                meta=(item.customer_note or item.retest_result or "").strip(),
+                action_label="去站内",
+            )
+        )
+
     next_actions: list[WorkbenchItem] = []
+    if weekly_onsite:
+        next_actions.append(
+            WorkbenchItem(
+                id="weekly-three",
+                title="这周给客户改三处",
+                subtitle="；".join(item.subtitle for item in weekly_onsite),
+                href="/onsite",
+                status="已钉住" if pin.get("issue_ids") else "待钉住",
+                tone="amber",
+                action_label="去站内",
+            )
+        )
     if not site_origin:
         next_actions.append(
             WorkbenchItem(
@@ -572,11 +610,13 @@ def workbench(
         site_origin=site_origin or "",
         diagnostic_status=_diagnostic_status(summary, site_origin or ""),
         seo_performance=seo_performance,
-        next_actions=next_actions[:4],
+        next_actions=next_actions[:5],
         seo_items=seo_items,
         geo_items=geo_items,
         recent_signals=recent_signals,
         chains=chains,
+        weekly_onsite=weekly_onsite,
+        weekly_pinned=bool(pin.get("issue_ids")),
         deferred_modules=[
             WorkbenchItem(
                 id="sem",

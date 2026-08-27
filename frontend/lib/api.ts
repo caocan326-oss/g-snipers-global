@@ -292,6 +292,8 @@ export type Workbench = {
   recent_signals: WorkbenchItem[];
   chains: WorkbenchChain[];
   deferred_modules: WorkbenchItem[];
+  weekly_onsite: WorkbenchItem[];
+  weekly_pinned: boolean;
 };
 
 export type CustomerBriefSection = {

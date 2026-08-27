@@ -24,6 +24,7 @@ import { QuickLinksSection } from "./_components/QuickLinksSection";
 import { ReportReadinessSection } from "./_components/ReportReadinessSection";
 import { SeoPerformanceSection } from "./_components/SeoPerformanceSection";
 import { SiteArchivesSection } from "./_components/SiteArchivesSection";
+import { WeeklyOnsiteSection } from "./_components/WeeklyOnsiteSection";
 import { WorkbenchSummaryHeader } from "./_components/WorkbenchSummaryHeader";
 
 export default function HomePage() {
@@ -100,8 +101,12 @@ export default function HomePage() {
     },
     {
       label: "下一步",
-      text: reviewTotal > 0 ? `处理清单里还有 ${reviewTotal} 条未关闭事项，先处理紧急网站改法、AI 搜索和站外曝光。` : "本周期暂无阻塞动作，可以进入客户说明或复查。",
-      tone: workTone,
+      text: (data.weekly_onsite ?? []).length
+        ? `这周给客户看 ${data.weekly_onsite.length} 处改法。客户改不改官网不挡我们交付。`
+        : reviewTotal > 0
+          ? `处理清单里还有 ${reviewTotal} 条未关闭事项，先处理紧急网站改法、AI 搜索和站外曝光。`
+          : "本周期暂无阻塞动作，可以进入客户说明或复查。",
+      tone: (data.weekly_onsite ?? []).length || reviewTotal > 0 ? "amber" : "green",
     },
   ];
 
@@ -240,6 +245,8 @@ export default function HomePage() {
   return (
     <div className="space-y-6">
       <WorkbenchSummaryHeader data={data} targets={targets} executiveSummary={executiveSummary} />
+
+      <WeeklyOnsiteSection items={data.weekly_onsite ?? []} pinned={Boolean(data.weekly_pinned)} />
 
       <DiagnosticTargetsSection
         targets={targets}
