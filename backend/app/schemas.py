@@ -412,6 +412,13 @@ class InquiryCreate(BaseModel):
     related_seo_page_id: str | None = None
     related_work_order_id: str | None = None
     related_market_id: str | None = None
+    related_prompt_id: str | None = None
+    notes: str | None = None
+
+
+class InquiryPatch(BaseModel):
+    quality: str | None = None
+    related_prompt_id: str | None = None
     notes: str | None = None
 
 
@@ -860,6 +867,8 @@ class InquiryOut(BaseModel):
     related_seo_page_id: str | None
     related_work_order_id: str | None
     related_market_id: str | None
+    related_prompt_id: str | None = None
+    related_prompt_text: str = ""
     notes: str | None
     created_at: datetime | None = None
 

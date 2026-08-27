@@ -194,6 +194,7 @@ class Inquiry(Base):
     related_seo_page_id: Mapped[str | None] = mapped_column(ForeignKey("seo_pages.id"))
     related_work_order_id: Mapped[str | None] = mapped_column(ForeignKey("work_orders.id"))
     related_market_id: Mapped[str | None] = mapped_column(ForeignKey("markets.id"))
+    related_prompt_id: Mapped[str | None] = mapped_column(ForeignKey("geo_prompts.id"), index=True)
     notes: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

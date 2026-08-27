@@ -658,6 +658,8 @@ export type Inquiry = {
   related_seo_page_id: string | null;
   related_work_order_id: string | null;
   related_market_id: string | null;
+  related_prompt_id?: string | null;
+  related_prompt_text?: string;
   notes: string | null;
   created_at: string | null;
 };

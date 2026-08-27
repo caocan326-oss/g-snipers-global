@@ -217,6 +217,7 @@ def _build_english_report(
     buyer_prompts: list[GeoPrompt],
     closed: list[GeoTicket],
     inquiry_count: int,
+    inquiry_linked: list[str] | None = None,
 ) -> tuple[str, str, str, str]:
     name = (tenant_name or "Customer").strip() or "Customer"
     title = f"Weekly report — {name}"
@@ -242,7 +243,16 @@ def _build_english_report(
                 line = f"{line} Recorded note: {note}"
             closed_lines.append(line)
         closed_lines.append("Pasting a page is not the same as being mentioned.")
-    inquiry_line = f"{inquiry_count} recorded this month. The software does not scrape inboxes. The account manager logs them."
+    linked = [text for text in (inquiry_linked or []) if text]
+    inquiry_lines = [
+        f"{inquiry_count} recorded this month. The software does not scrape inboxes. The account manager logs them."
+    ]
+    if inquiry_count and linked:
+        inquiry_lines.append(f"{len(linked)} linked to a recorded question. Linking is not proof of an AI mention.")
+        for text in linked:
+            inquiry_lines.append(f"“{text}” — inquiry logged")
+    elif inquiry_count:
+        inquiry_lines.append("None linked to a recorded question. Linking is not proof of an AI mention.")
     boundary = [
         "We do not edit the website.",
         "We do not post on your behalf.",
@@ -271,7 +281,7 @@ def _build_english_report(
         "",
         "## Inquiries this month",
         "",
-        f"- {inquiry_line}",
+        *[f"- {item}" for item in inquiry_lines],
         "",
         "## Boundary",
         "",
@@ -290,6 +300,7 @@ def _build_english_report(
         *[f"- {item}" for item in closed_lines],
         "",
         f"Inquiries this month: {inquiry_count}",
+        *[f"- {item}" for item in inquiry_lines[1:]],
         "",
         " ".join(boundary),
     ]
@@ -352,12 +363,25 @@ def build_customer_brief(user: User, db: Session) -> CustomerBriefOut:
         .scalar()
         or 0
     )
-    inquiry_count = (
-        db.query(func.count(Inquiry.id))
+    month_inquiries = (
+        db.query(Inquiry)
         .filter(Inquiry.tenant_id == user.tenant_id, Inquiry.created_at >= _month_start(generated))
-        .scalar()
-        or 0
+        .order_by(Inquiry.created_at.desc())
+        .all()
     )
+    inquiry_count = len(month_inquiries)
+    inquiry_prompt_ids = [row.related_prompt_id for row in month_inquiries if row.related_prompt_id]
+    inquiry_prompts = (
+        {
+            row.id: row.prompt_text
+            for row in db.query(GeoPrompt)
+            .filter(GeoPrompt.tenant_id == user.tenant_id, GeoPrompt.id.in_(inquiry_prompt_ids))
+            .all()
+        }
+        if inquiry_prompt_ids
+        else {}
+    )
+    inquiry_linked = [inquiry_prompts[pid] for pid in inquiry_prompt_ids if pid in inquiry_prompts]
 
     geo_core, geo_find = _geo_plain(geo)
 
@@ -465,6 +489,12 @@ def build_customer_brief(user: User, db: Session) -> CustomerBriefOut:
         f"这个月记到 {inquiry_count} 条。",
         "软件不会自动抓邮箱。客户来问之后，由客户经理登记。",
     ]
+    if inquiry_count and inquiry_linked:
+        inquiry_items.append(f"其中 {len(inquiry_linked)} 条挂了已记问句。挂上不是证明 AI 提到了我们。")
+        for text in inquiry_linked:
+            inquiry_items.append(f"「{text}」")
+    elif inquiry_count:
+        inquiry_items.append("还没挂问句。挂上不是证明 AI 提到了我们。")
 
     buyer_prompts = (
         db.query(GeoPrompt)
@@ -602,6 +632,7 @@ def build_customer_brief(user: User, db: Session) -> CustomerBriefOut:
         buyer_prompts=buyer_prompts,
         closed=closed,
         inquiry_count=inquiry_count,
+        inquiry_linked=inquiry_linked,
     )
 
     return CustomerBriefOut(
