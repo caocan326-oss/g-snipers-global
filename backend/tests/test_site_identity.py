@@ -5,7 +5,7 @@ from sqlalchemy import select
 
 from app.models import GeoAsset, GeoPrompt, GeoTicket, Tenant
 from app.seed import seed
-from app.site_identity import adopt_live_site, is_buyer_question, is_lock_leftover_text
+from app.site_identity import adopt_live_site, is_buyer_question, is_lock_asset_text, is_lock_leftover_text
 from tests.conftest import auth_header
 
 
@@ -49,6 +49,45 @@ def test_snipers_drops_lock_prompts_and_keeps_own_cite(demo_user, db: Session) -
     db.refresh(asset)
     assert "snipers.com.cn" in (asset.body or "")
     assert "门锁" in note
+
+
+def test_snipers_clears_lock_llms_and_keeps_own_cite(demo_user, db: Session) -> None:
+    tenant = db.get(Tenant, demo_user.tenant_id)
+    assert tenant is not None
+    tenant.site_origin = "https://www.snipers.com.cn"
+    tenant.name = "SNIPERS"
+    llms = db.query(GeoAsset).filter(GeoAsset.tenant_id == tenant.id, GeoAsset.kind == "llms_txt").first()
+    if llms is None:
+        llms = GeoAsset(tenant_id=tenant.id, kind="llms_txt", title="llms.txt 草稿", status="draft")
+        db.add(llms)
+    llms.body = "\n".join(
+        [
+            "# 演示客户 · 智能门锁出海",
+            "- [Smart lock installation for renters](/en-US/smart-lock)",
+            "- [賃貸でスマートロック](/ja-JP/chintai)",
+            "- [Smart lock DSGVO](/de-DE/dsgvo)",
+        ]
+    )
+    cite = db.query(GeoAsset).filter(GeoAsset.tenant_id == tenant.id, GeoAsset.kind == "cite_checklist").first()
+    if cite is None:
+        cite = GeoAsset(tenant_id=tenant.id, kind="cite_checklist", title="可供引用的材料", status="draft")
+        db.add(cite)
+    cite.body = "Official page: https://www.snipers.com.cn/"
+    db.commit()
+
+    assert is_lock_asset_text(llms.body, keep_snipers_cite=True)
+    assert not is_lock_asset_text(cite.body, keep_snipers_cite=True)
+
+    note = adopt_live_site(db, tenant)
+    db.commit()
+    db.refresh(llms)
+    db.refresh(cite)
+    assert "智能门锁" not in (llms.body or "")
+    assert "smart lock" not in (llms.body or "").lower()
+    assert "スマートロック" not in (llms.body or "")
+    assert "门锁演示稿已清掉" in (llms.body or "")
+    assert "snipers.com.cn" in (cite.body or "")
+    assert "引用材料" in note
 
 
 def test_customer_brief_on_snipers_omits_lock_geo(client: TestClient, demo_user, db: Session) -> None:

@@ -75,6 +75,27 @@ def is_lock_leftover_text(text: str) -> bool:
     return bool(blob) and any(marker.lower() in blob for marker in LOCK_PROMPT_MARKERS)
 
 
+def is_lock_asset_text(text: str, *, keep_snipers_cite: bool = False) -> bool:
+    """Lock-demo cite/llms copy. SNIPERS own cite that only mentions snipers.com.cn is kept."""
+    blob = (text or "").lower()
+    if not blob:
+        return False
+    markers = LOCK_ASSET_MARKERS
+    if keep_snipers_cite:
+        markers = tuple(item for item in markers if item != "snipers.com.cn")
+    return any(marker.lower() in blob for marker in markers)
+
+
+def honest_empty_llms(tenant_name: str) -> str:
+    name = (tenant_name or "").strip() or "客户"
+    return (
+        f"# {name}\n\n"
+        "> 这是给客户经理改稿的 llms.txt 草稿，不是已发布文件，也不能证明任何模型引用了本站。\n\n"
+        "## Pages\n"
+        "- （门锁演示稿已清掉。没有已记页面可写。不要编。）\n"
+    )
+
+
 def is_buyer_question(text: str) -> bool:
     """A recorded buyer sentence, not a 1–3 word keyword and not a lock leftover."""
     raw = (text or "").strip()
@@ -163,19 +184,23 @@ def adopt_live_site(db: Session, tenant: Tenant) -> str:
     if gaps:
         notes.append(f"已去掉 {gaps} 条门锁/演示站外示例")
 
-    if not is_snipers_host(tenant.site_origin):
-        assets_cleared = 0
-        for asset in db.query(GeoAsset).filter(GeoAsset.tenant_id == tenant.id).all():
-            blob = f"{asset.title}\n{asset.body}".lower()
-            if any(marker.lower() in blob for marker in LOCK_ASSET_MARKERS):
-                asset.body = ""
-                if asset.kind == "cite_checklist":
-                    asset.title = "可供引用的材料"
-                elif asset.kind == "llms_txt":
-                    asset.title = "llms.txt 草稿"
-                asset.status = "draft"
-                assets_cleared += 1
-        if assets_cleared:
-            notes.append(f"已清空 {assets_cleared} 份门锁/演示引用材料")
+    assets_cleared = 0
+    on_snipers = is_snipers_host(tenant.site_origin)
+    for asset in db.query(GeoAsset).filter(GeoAsset.tenant_id == tenant.id).all():
+        blob = f"{asset.title}\n{asset.body}"
+        if not is_lock_asset_text(blob, keep_snipers_cite=on_snipers):
+            continue
+        if asset.kind == "cite_checklist":
+            asset.title = "可供引用的材料"
+            asset.body = ""
+        elif asset.kind == "llms_txt":
+            asset.title = "llms.txt 草稿"
+            asset.body = honest_empty_llms(tenant.name)
+        else:
+            asset.body = ""
+        asset.status = "draft"
+        assets_cleared += 1
+    if assets_cleared:
+        notes.append(f"已清空 {assets_cleared} 份门锁/演示引用材料")
 
     return "；".join(notes)

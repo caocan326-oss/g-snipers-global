@@ -15,7 +15,7 @@ from app.schemas import (
     GeoChecklistItemOut,
     GeoChecklistItemUpdate,
 )
-from app.site_identity import adopt_live_site
+from app.site_identity import adopt_live_site, is_lock_leftover_text
 
 from . import router
 
@@ -31,7 +31,13 @@ def list_assets(user: User = Depends(get_current_user), db: Session = Depends(ge
 @router.post("/assets/llms.txt/generate", response_model=GeoAssetOut)
 def generate_llms_txt(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> GeoAsset:
     tenant = db.get(Tenant, user.tenant_id)
-    pages = db.query(SeoPage).filter(SeoPage.tenant_id == user.tenant_id).all()
+    if tenant is not None and adopt_live_site(db, tenant):
+        db.commit()
+    pages = [
+        page
+        for page in db.query(SeoPage).filter(SeoPage.tenant_id == user.tenant_id).all()
+        if not is_lock_leftover_text(f"{page.title} {page.target_keyword} {page.path}")
+    ]
     body = build_llms_txt(tenant, pages) if tenant else ""
     asset = db.query(GeoAsset).filter(GeoAsset.tenant_id == user.tenant_id, GeoAsset.kind == "llms_txt").first()
     if asset is None:
