@@ -16,7 +16,7 @@ const nav = [
   { href: "/home", label: "客户总览", note: "能否交付 / 风险 / 下一步", icon: LayoutDashboard },
   { href: "/onsite", label: "网站检查", note: "查看网页 / 给出改法 / 改后复查", icon: SearchCheck },
   { href: "/geo", label: "AI 搜索可见度", note: "有没有被提到 / 有没有给出官网", icon: Globe2 },
-  { href: "/execution", label: "处理清单", note: "负责人 / 完成标准 / 复查", icon: SquareCheckBig },
+  { href: "/execution", label: "问题板", note: "检查记录，不是这周要做完", icon: SquareCheckBig },
   { href: "/offsite", label: "站外分发", note: "一个渠道一张卡片", icon: ListChecks },
 ];
 

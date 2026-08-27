@@ -71,7 +71,7 @@ def test_geo_ai_untested_or_unconfigured_not_invented(client: TestClient, demo_u
     prompt = client.post(
         "/api/geo/prompts",
         headers=headers,
-        json={"prompt_text": "best lock", "locale": "en-US"},
+        json={"prompt_text": "best industrial lock for warehouse doors", "locale": "en-US"},
     ).json()
     res = client.post(f"/api/geo/prompts/{prompt['id']}/ai", headers=headers, json={"step": "analyze"})
     assert res.status_code == 200

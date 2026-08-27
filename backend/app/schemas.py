@@ -60,6 +60,7 @@ class WorkbenchItem(BaseModel):
     status: str = ""
     tone: str = "default"
     meta: str = ""
+    trend: str = ""
     action_label: str = "查看"
 
 
@@ -130,6 +131,7 @@ class WorkbenchOut(BaseModel):
     deferred_modules: list[WorkbenchItem] = []
     weekly_onsite: list[WorkbenchItem] = []
     weekly_pinned: bool = False
+    geo_questions: list[WorkbenchItem] = []
 
 
 class CustomerBriefSection(BaseModel):
@@ -445,6 +447,16 @@ class GeoPromptCreate(BaseModel):
     prompt_pack_id: str = "custom"
     prompt_key: str = ""
     prompt_type: str = "custom"
+    recorded_from: str = ""
+    source_note: str = ""
+
+
+class GeoPromptTrendPoint(BaseModel):
+    at: str = ""
+    mentioned: bool = False
+    owned: bool = False
+    note: str = ""
+    others: list[str] = []
 
 
 class GeoPromptOut(BaseModel):
@@ -469,6 +481,17 @@ class GeoPromptOut(BaseModel):
     ai_status: str = "untested"
     evidence: str = ""
     sample_verdict: str = ""
+    recorded_from: str = ""
+    recorded_from_label: str = "已记原句"
+    source_note: str = ""
+    sample_compare_note: str = ""
+    sample_trend: list[GeoPromptTrendPoint] = []
+    trend_note: str = ""
+    cited_others: list[str] = []
+    competitor_note: str = ""
+    page_draft: str = ""
+    faq_draft: str = ""
+    llms_txt: str = ""
 
 
 class GeoDiagnosisIn(BaseModel):

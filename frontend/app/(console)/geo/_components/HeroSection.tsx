@@ -49,14 +49,14 @@ export function HeroSection({
       <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge tone="brand">AI 搜索可见度</Badge>
+            <Badge tone="brand">AI 可见度作战室</Badge>
             <Badge tone={(summary?.latest_sampled || summary?.evidence_results || summary?.recorded) ? "green" : "amber"}>
               {(summary?.latest_sampled || summary?.evidence_results || summary?.recorded) ? "已有抽查" : "还没抽查"}
             </Badge>
           </div>
-          <h1 className="mt-3 text-2xl font-semibold text-slate-950">AI 搜索可见度</h1>
+          <h1 className="mt-3 text-2xl font-semibold text-slate-950">AI 可见度作战室</h1>
           <p className="mt-1 max-w-4xl text-sm leading-6 text-slate-500">
-            看老外那句问有没有提到客户、有没有给出官网；下面待处理项是短稿和再测。默认抽查是 Tavily / 博查，不是 ChatGPT 本人。不编买家问题：只有总览或选题里记下的原句能采用，搜索词不会自己长出问句。
+            同一批真问句看时间序列：提没提到、有没有官网、AI 引用了谁。测完给可粘贴的英文段、FAQ、llms.txt。默认抽查是 Tavily / 博查，不是 ChatGPT 本人。不编问句、不代改、不保证这次被提到。
           </p>
           <div className="mt-2">
             <UsageTodayBar meters={["bocha", "bailian", "tavily", "llm"]} refreshToken={busyAction} />

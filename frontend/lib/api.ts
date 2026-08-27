@@ -224,6 +224,7 @@ export type WorkbenchItem = {
   status: string;
   tone: "default" | "green" | "amber" | "blue" | "red" | "brand";
   meta: string;
+  trend?: string;
   action_label: string;
 };
 
@@ -294,6 +295,7 @@ export type Workbench = {
   deferred_modules: WorkbenchItem[];
   weekly_onsite: WorkbenchItem[];
   weekly_pinned: boolean;
+  geo_questions: WorkbenchItem[];
 };
 
 export type CustomerBriefSection = {
@@ -692,6 +694,17 @@ export type GeoPrompt = {
   ai_status?: string;
   evidence?: string;
   sample_verdict?: string;
+  recorded_from?: string;
+  recorded_from_label?: string;
+  source_note?: string;
+  sample_compare_note?: string;
+  sample_trend?: { at: string; mentioned: boolean; owned: boolean; note: string; others: string[] }[];
+  trend_note?: string;
+  cited_others?: string[];
+  competitor_note?: string;
+  page_draft?: string;
+  faq_draft?: string;
+  llms_txt?: string;
 };
 
 export type GeoSummary = {

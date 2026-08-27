@@ -105,8 +105,11 @@ def test_customer_brief_empty_tenant_stays_untested(client: TestClient, demo_use
     assert "已被 AI 稳定推荐" not in body["markdown"]
     assert "0%" not in body["markdown"]
     keys = [section["key"] for section in body["sections"]]
-    assert keys == ["findability", "this_week", "retest", "inquiries"]
+    assert keys == ["findability", "buyer_kpi", "this_week", "retest", "inquiries"]
     assert "这个月记到" in body["markdown"]
+    buyer_kpi = next(section for section in body["sections"] if section["key"] == "buyer_kpi")
+    assert any("还没有买家原句" in item for item in buyer_kpi["items"])
+    assert any("不会编" in item for item in buyer_kpi["items"])
 
 
 def test_customer_brief_merges_onsite_and_geo(client: TestClient, demo_user, db) -> None:
@@ -186,7 +189,7 @@ def test_seeded_demo_counts_align_across_surfaces(client: TestClient, db) -> Non
     assert summary["geo_prompts"] == geo["prompts"] == 2
     assert summary["geo_untested"] == geo["untested"] == 16
     assert summary["geo_tickets_open"] == 2
-    assert [section["key"] for section in brief["sections"]] == ["findability", "this_week", "retest", "inquiries"]
+    assert [section["key"] for section in brief["sections"]] == ["findability", "buyer_kpi", "this_week", "retest", "inquiries"]
     assert any("紧急" in item for item in brief["this_week"])
     assert "这个月记到" in brief["markdown"]
     assert guide["open_high"] == 6
@@ -415,3 +418,128 @@ def test_customer_brief_hides_internal_issue_codes(client: TestClient, demo_user
     assert "GEO-ENT-002" not in blob
     assert "schema" not in blob.lower()
     assert "首页缺少公司介绍说明" in blob
+
+
+def test_record_buyer_question_shows_kpi_on_brief_and_home(client: TestClient, demo_user, db) -> None:
+    tenant = db.get(Tenant, demo_user.tenant_id)
+    tenant.site_origin = "https://www.snipers.com.cn"
+    tenant.name = "SNIPERS"
+    db.commit()
+    headers = auth_header(client)
+
+    rejected = client.post(
+        "/api/geo/prompts",
+        headers=headers,
+        json={"prompt_text": "fastener", "locale": "en-US"},
+    )
+    assert rejected.status_code == 400
+    assert "不要编" in rejected.json()["detail"]
+
+    lock = client.post(
+        "/api/geo/prompts",
+        headers=headers,
+        json={"prompt_text": "best smart lock for renters in apartments", "locale": "en-US", "recorded_from": "sales"},
+    )
+    assert lock.status_code == 400
+    assert "门锁" in lock.json()["detail"]
+
+    created = client.post(
+        "/api/geo/prompts",
+        headers=headers,
+        json={
+            "prompt_text": "Which factory can export industrial fasteners to the US?",
+            "locale": "en-US",
+            "recorded_from": "sales",
+            "source_note": "展会后销售转述",
+        },
+    )
+    assert created.status_code == 201, created.text
+    assert created.json()["recorded_from"] == "sales"
+    assert created.json()["recorded_from_label"] == "销售听到的"
+    assert created.json()["sample_compare_note"] == "" or created.json()["sample_compare_note"]
+
+    listed = client.get("/api/geo/prompts", headers=headers).json()
+    assert listed[0]["sample_compare_note"] == "还没联网抽查。"
+
+    brief = client.get("/api/dashboard/customer-brief", headers=headers).json()
+    kpi = next(section for section in brief["sections"] if section["key"] == "buyer_kpi")
+    assert any("Which factory can export industrial fasteners to the US?" in item for item in kpi["items"])
+    assert any("还没联网抽查" in item for item in kpi["items"])
+    assert any("不保证这次被提到" in item for item in kpi["items"])
+
+    workbench = client.get("/api/dashboard/workbench?days=28", headers=headers).json()
+    assert workbench["geo_questions"][0]["title"].startswith("Which factory")
+    assert workbench["geo_questions"][0]["status"] == "还没抽查"
+    assert "销售听到的" in workbench["geo_questions"][0]["subtitle"]
+    assert "还没有抽查记录" in (workbench["geo_questions"][0].get("trend") or "")
+
+
+def test_geo_war_room_has_trend_and_cite_pack(client: TestClient, demo_user, db) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    from app.models import GeoPrompt, GeoSampleResult, GeoSampleRun
+
+    tenant = db.get(Tenant, demo_user.tenant_id)
+    tenant.site_origin = "https://www.snipers.com.cn"
+    tenant.name = "SNIPERS"
+    prompt = GeoPrompt(
+        tenant_id=demo_user.tenant_id,
+        prompt_text="Which factory can export industrial fasteners to the US?",
+        locale="en-US",
+        recorded_from="exhibition",
+    )
+    db.add(prompt)
+    db.flush()
+    older = datetime.now(timezone.utc) - timedelta(days=4)
+    newer = datetime.now(timezone.utc)
+    for evidence_id, started_at, mentioned in (("ev_trend_old", older, False), ("ev_trend_new", newer, True)):
+        run = GeoSampleRun(
+            tenant_id=demo_user.tenant_id,
+            config_hash=evidence_id,
+            status="done",
+            started_at=started_at,
+        )
+        db.add(run)
+        db.flush()
+        db.add(
+            GeoSampleResult(
+                tenant_id=demo_user.tenant_id,
+                run_id=run.id,
+                prompt_id=prompt.id,
+                evidence_id=evidence_id,
+                engine="tavily",
+                web_grounded="true",
+                prompt_text_hash="c" * 64,
+                answer_text_hash="d" * 64,
+                answer_excerpt="A factory list.",
+                mentioned=mentioned,
+                citations_json='["https://other.example/fastener"]',
+                owned_citations_json="[]",
+                third_party_citations_json='["https://other.example/fastener"]',
+                competitor_hits="Other Factory",
+            )
+        )
+    db.commit()
+
+    headers = auth_header(client)
+    listed = client.get("/api/geo/prompts", headers=headers).json()
+    row = next(item for item in listed if item["id"] == prompt.id)
+    assert len(row["sample_trend"]) == 2
+    assert row["sample_trend"][0]["mentioned"] is False
+    assert row["sample_trend"][1]["mentioned"] is True
+    assert "2 轮" in row["trend_note"]
+    assert "没提到" in row["trend_note"] and "提到了" in row["trend_note"]
+    assert "other.example" in " ".join(row["cited_others"])
+    assert "Other Factory" in row["competitor_note"]
+    assert "Which factory can export industrial fasteners to the US?" in row["page_draft"]
+    assert "[NEED_INPUT" in row["page_draft"]
+    assert "Do not invent specs" in row["page_draft"]
+    assert row["faq_draft"].startswith("Q:")
+    assert "# SNIPERS" in row["llms_txt"] or "# SNIPERS" in row["llms_txt"].upper() or "SNIPERS" in row["llms_txt"]
+    assert "we do not edit the live site" in row["page_draft"].lower()
+
+    brief = client.get("/api/dashboard/customer-brief", headers=headers).json()
+    kpi = next(section for section in brief["sections"] if section["key"] == "buyer_kpi")
+    assert "2 轮" in "".join(kpi["items"])
+    workbench = client.get("/api/dashboard/workbench?days=28", headers=headers).json()
+    assert "2 轮" in (workbench["geo_questions"][0].get("trend") or "")

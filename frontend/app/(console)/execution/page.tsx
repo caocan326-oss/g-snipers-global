@@ -109,9 +109,9 @@ export default function ExecutionPage() {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <Badge tone="brand">处理清单</Badge>
-            <h1 className="mt-3 text-2xl font-semibold text-slate-950">本周期处理清单</h1>
+            <h1 className="mt-3 text-2xl font-semibold text-slate-950">问题板</h1>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
-              「未关闭」是网站检查、AI 搜索、站外曝光三处加总，不是只算网站问题。总览左侧「紧急/优先」只算网站。数字对不上是口径不同，不是算错。点一项会回到原模块继续处理。
+              「未关闭」是检查记录加总，不是这周要做完。这周给客户看的三处在总览和站内。客户改不改官网不挡交付。点一项回到原模块。
             </p>
           </div>
           <div className="grid w-full gap-2 sm:grid-cols-3 lg:w-[520px]">

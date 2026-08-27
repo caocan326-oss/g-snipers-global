@@ -88,6 +88,16 @@ def is_buyer_question(text: str) -> bool:
     return len(raw) >= 8 and any(mark in raw for mark in starters)
 
 
+def is_recordable_question(text: str) -> bool:
+    """Hand-written record: a sentence, not a one-word keyword."""
+    raw = (text or "").strip()
+    if not raw:
+        return False
+    if is_buyer_question(raw):
+        return True
+    return len(raw.split()) >= 3
+
+
 def _purge_lock_prompt(db: Session, prompt: GeoPrompt) -> None:
     db.query(GeoSampleResult).filter(GeoSampleResult.prompt_id == prompt.id).delete(synchronize_session=False)
     db.query(GeoObservation).filter(GeoObservation.prompt_id == prompt.id).delete(synchronize_session=False)

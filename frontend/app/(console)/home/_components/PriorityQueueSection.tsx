@@ -64,16 +64,22 @@ function PriorityRow({ item }: { item: ExecutionItem }) {
 
 export function PriorityQueueSection({
   board,
+  weeklyIds,
   loading,
   error,
   reload,
 }: {
   board: ExecutionBoard | null;
+  weeklyIds: string[];
   loading: boolean;
   error: string;
   reload: () => void;
 }) {
-  const items = (board?.items ?? []).slice(0, 8);
+  const weekItems = (board?.items ?? []).filter(
+    (item) => weeklyIds.includes(item.id) || item.source_module === "geo",
+  );
+  const items = weekItems.slice(0, 8);
+  const boardTotal = board?.total_open ?? 0;
 
   return (
     <Card className="rounded-md border-brand-100 shadow-sm">
@@ -81,14 +87,15 @@ export function PriorityQueueSection({
         <div>
           <div className="flex items-center gap-2">
             <Badge tone="brand">优先处理</Badge>
-            {board ? <Badge tone={board.total_open ? "amber" : "green"}>{board.total_open} 个未关闭</Badge> : null}
+            {board ? <Badge tone={weekItems.length ? "amber" : "green"}>这周 {weekItems.length} 项</Badge> : null}
+            {board && boardTotal > weekItems.length ? <Badge>{`问题板 ${boardTotal} 条，不是这周要做完`}</Badge> : null}
           </div>
           <CardTitle className="mt-3 flex items-center gap-2 text-xl">
             <ListChecks className="h-5 w-5 text-brand-700" />
             本周期待处理优先级队列
           </CardTitle>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
-            按紧急、优先、受阻和待复查排序，汇总网站检查、AI 搜索和站外曝光里还没关闭的事项。先处理这里的前几项。
+            这周给客户看的项。问题板上那些检查记录不是这周要做完。客户改不改官网不挡交付。
           </p>
         </div>
         <div className="flex gap-2">
@@ -97,7 +104,7 @@ export function PriorityQueueSection({
             刷新
           </Button>
           <Button asChild size="sm">
-            <Link href="/execution">查看全部待处理</Link>
+            <Link href="/execution">查看问题板</Link>
           </Button>
         </div>
       </CardHeader>
@@ -106,8 +113,8 @@ export function PriorityQueueSection({
         {loading && !board ? <p className="rounded-md border border-dashed border-slate-300 bg-slate-50 px-3 py-4 text-sm text-slate-500">正在加载待处理队列…</p> : null}
         {!loading && board && items.length === 0 ? (
           <div className="rounded-md border border-emerald-100 bg-emerald-50 px-4 py-5">
-            <h3 className="font-medium text-emerald-900">本周期没有待处理项</h3>
-            <p className="mt-1 text-sm text-emerald-700">网站检查、AI 搜索和站外曝光暂时没有未关闭事项，可以进入复查或整理客户说明。</p>
+            <h3 className="font-medium text-emerald-900">这周还没有要给客户看的项</h3>
+            <p className="mt-1 text-sm text-emerald-700">有紧急或优先页、或 AI 搜索待处理时会出现。问题板上的检查记录不是这周要做完。</p>
           </div>
         ) : null}
         {items.map((item) => <PriorityRow key={`${item.source_module}-${item.id}`} item={item} />)}

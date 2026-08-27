@@ -7,8 +7,13 @@ from datetime import datetime, timezone
 from sqlalchemy import func
 from sqlalchemy.orm import Session, selectinload
 
-from app.models import GeoTicket, Inquiry, OnsiteIssue, SeoPerformanceRow, SerpRun, SitePage, Tenant, User
+from app.models import GeoPrompt, GeoTicket, Inquiry, OnsiteIssue, SeoPerformanceRow, SerpRun, SitePage, Tenant, User
 from app.geo_loop import (
+    prompt_batch_rows,
+    prompt_compare_note_for,
+    prompt_trend_points,
+    recorded_from_label,
+    trend_note,
     reconcile_open_ticket_status,
     refresh_open_tickets_from_samples,
     ticket_customer_note,
@@ -270,6 +275,31 @@ def build_customer_brief(user: User, db: Session) -> CustomerBriefOut:
         "软件不会自动抓邮箱。客户来问之后，由客户经理登记。",
     ]
 
+    buyer_prompts = (
+        db.query(GeoPrompt)
+        .filter(GeoPrompt.tenant_id == user.tenant_id)
+        .order_by(GeoPrompt.created_at.desc())
+        .limit(8)
+        .all()
+    )
+    if not buyer_prompts:
+        buyer_kpi = [
+            "还没有买家原句。先从销售、询盘、展会或客户自己说的记下来。",
+            "没有原句不会编。不保证这次被提到。",
+        ]
+    else:
+        latest_by, previous_by = prompt_batch_rows(db, user.tenant_id)
+        buyer_kpi = []
+        for prompt in buyer_prompts:
+            note = prompt_compare_note_for(prompt.id, latest_by, previous_by)
+            source = recorded_from_label(getattr(prompt, "recorded_from", "") or "")
+            extra = (getattr(prompt, "source_note", "") or "").strip()
+            history = trend_note(prompt_trend_points(db, user.tenant_id, prompt.id))
+            buyer_kpi.append(
+                f"{prompt.prompt_text}（{source}{(' · ' + extra) if extra else ''}）{note}{history}"
+            )
+        buyer_kpi.append("抽查是联网搜索源，不是 ChatGPT 本人。不保证这次被提到。测完给可粘贴的英文段和 FAQ，我们不代改。")
+
     headline = _headline(
         site_origin=site_origin,
         pages=len(pages),
@@ -282,6 +312,7 @@ def build_customer_brief(user: User, db: Session) -> CustomerBriefOut:
 
     sections = [
         CustomerBriefSection(key="findability", title="哪些地方让老外搜不到我", items=findability),
+        CustomerBriefSection(key="buyer_kpi", title="AI 可见度作战室：这些问句有没有动", items=buyer_kpi),
         CustomerBriefSection(key="this_week", title="这周带给客户改的三处", items=this_week),
         CustomerBriefSection(key="retest", title="客户改完你再看一次", items=retest),
         CustomerBriefSection(key="inquiries", title="这个月有几个老外来问过", body=f"这个月记到 {inquiry_count} 条。", items=inquiry_items),

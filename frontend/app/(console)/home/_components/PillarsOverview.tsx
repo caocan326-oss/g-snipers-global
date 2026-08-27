@@ -13,6 +13,7 @@ export function PillarsOverview({
   geoRecorded,
   workTone,
   reviewTotal,
+  boardTotal,
   perf,
 }: {
   data: Workbench;
@@ -22,6 +23,7 @@ export function PillarsOverview({
   geoRecorded: number;
   workTone: "default" | "green" | "amber" | "blue" | "red" | "brand";
   reviewTotal: number;
+  boardTotal: number;
   perf: WorkbenchSeoPerformance;
 }) {
   return (
@@ -63,12 +65,16 @@ export function PillarsOverview({
         </PillarCard>
 
         <PillarCard
-          title="站外曝光与跟进"
-          status={reviewTotal > 0 ? "待处理" : "清爽"}
+          title="这周交付"
+          status={reviewTotal > 0 ? "进行中" : "这周还没有"}
           statusTone={workTone}
-          primary={`${reviewTotal} 个执行项`}
-          helper={`网站 + AI 搜索 + 站外未关闭加总，和左边「紧急/优先」不是同一个数。其中 AI 搜索待处理 ${data.summary.geo_tickets_open}，网站待复查 ${data.summary.seo_pending_review}。`}
-          href="/offsite"
+          primary={`${reviewTotal} 项给客户看`}
+          helper={
+            boardTotal > reviewTotal
+              ? `问题板另有 ${boardTotal} 条检查记录，不是这周要做完。站外不进这周交付。`
+              : "这周给客户看的站内改法和 AI 搜索待处理。客户改不改官网不挡。"
+          }
+          href="/onsite"
           icon={ListChecks}
         >
           <div className="grid grid-cols-2 gap-2 text-sm">

@@ -7,7 +7,21 @@ from sqlalchemy.orm import Session, selectinload
 from app.ai_engine import assist_geo_prompt
 from app.auth import get_current_user
 from app.database import get_db
-from app.geo_loop import compare_batches_note, mention_split_for_runs, pick_sample_batches, prompt_sample_verdict, summarize_runs
+from app.geo_loop import (
+    RECORDED_FROM,
+    compare_batches_note,
+    mention_split_for_runs,
+    pick_sample_batches,
+    _citation_hosts,
+    cite_pack_for_prompt,
+    competitor_note,
+    prompt_batch_rows,
+    prompt_compare_note_for,
+    prompt_sample_verdict,
+    prompt_trend_points,
+    trend_note,
+    summarize_runs,
+)
 from app.geo_helpers import DIAGNOSES, ENGINES, OBS_STATUSES, ensure_engine_slots
 from app.geo_providers import provider_statuses
 from app.models import (
@@ -24,7 +38,7 @@ from app.models import (
     Tenant,
     User,
 )
-from app.site_identity import adopt_live_site, is_buyer_question, is_lock_leftover_text
+from app.site_identity import adopt_live_site, is_buyer_question, is_lock_leftover_text, is_recordable_question, is_snipers_host
 from app.schemas import (
     AiAssistOut,
     AiStepIn,
@@ -172,27 +186,29 @@ def list_prompts(
             .order_by(GeoPrompt.created_at.desc())
             .all()
         )
-    recent_runs = (
-        db.query(GeoSampleRun)
-        .options(selectinload(GeoSampleRun.results))
-        .filter(GeoSampleRun.tenant_id == user.tenant_id)
-        .order_by(GeoSampleRun.started_at.desc())
-        .limit(12)
-        .all()
-    )
-    latest_batch, _previous = pick_sample_batches(recent_runs)
-    by_prompt: dict[str, list] = {}
-    for run in latest_batch:
-        for result in run.results:
-            by_prompt.setdefault(result.prompt_id, []).append(result)
-    return [
-        _prompt_out(
-            r,
-            sample_verdict=prompt_sample_verdict(by_prompt.get(r.id, [])),
-            sample_rows=by_prompt.get(r.id, []),
+    latest_by, previous_by = prompt_batch_rows(db, user.tenant_id)
+    tenant = db.get(Tenant, user.tenant_id)
+    packed = []
+    for r in rows:
+        points = prompt_trend_points(db, user.tenant_id, r.id)
+        latest_rows = latest_by.get(r.id, [])
+        pack = cite_pack_for_prompt(db, tenant, r)
+        packed.append(
+            _prompt_out(
+                r,
+                sample_verdict=prompt_sample_verdict(latest_rows),
+                sample_rows=latest_rows,
+                sample_compare_note=prompt_compare_note_for(r.id, latest_by, previous_by),
+                sample_trend=points,
+                trend_note=trend_note(points),
+                cited_others=_citation_hosts(latest_rows),
+                competitor_note=competitor_note(latest_rows),
+                page_draft=pack["page_draft"],
+                faq_draft=pack["faq_draft"],
+                llms_txt=pack["llms_txt"],
+            )
         )
-        for r in rows
-    ]
+    return packed
 
 
 @router.post("/prompts", response_model=GeoPromptOut, status_code=201)
@@ -203,6 +219,17 @@ def create_prompt(
 ) -> GeoPromptOut:
     if body.prompt_type not in PROMPT_TYPES:
         raise HTTPException(status_code=400, detail="无效问句类型")
+    if (body.recorded_from or "") not in RECORDED_FROM:
+        raise HTTPException(status_code=400, detail="来源只能是销售、询盘、展会或客户自己说的。")
+    if not is_recordable_question(body.prompt_text):
+        raise HTTPException(status_code=400, detail="这不是买家原句。搜索词不要记。不要编。")
+    tenant = db.get(Tenant, user.tenant_id)
+    if (
+        tenant
+        and is_lock_leftover_text(body.prompt_text)
+        and ((tenant.name or "").strip() == "SNIPERS" or is_snipers_host(tenant.site_origin or ""))
+    ):
+        raise HTTPException(status_code=400, detail="门锁演示问句不要记到这家客户。")
     row = GeoPrompt(tenant_id=user.tenant_id, diagnosis="untested", **body.model_dump())
     db.add(row)
     db.flush()

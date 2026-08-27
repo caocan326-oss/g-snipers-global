@@ -48,7 +48,7 @@ export default function GeoPage() {
   const [pageId, setPageId] = useState("");
   const [items, setItems] = useState<GeoChecklistItem[]>([]);
   const [error, setError] = useState("");
-  const [form, setForm] = useState({ prompt_text: "", country_code: "US" });
+  const [form, setForm] = useState({ prompt_text: "", country_code: "US", recorded_from: "sales", source_note: "" });
   const [ticketForm, setTicketForm] = useState<TicketForm>({
     prompt_id: "",
     title: "",
@@ -125,9 +125,22 @@ export default function GeoPage() {
 
   async function addPrompt(e: FormEvent) {
     e.preventDefault();
-    await api("/api/geo/prompts", { method: "POST", body: JSON.stringify({ prompt_text: form.prompt_text, locale: localeForCode(form.country_code) }) });
-    setForm({ prompt_text: "", country_code: form.country_code });
-    loadPrompts();
+    setError("");
+    try {
+      await api("/api/geo/prompts", {
+        method: "POST",
+        body: JSON.stringify({
+          prompt_text: form.prompt_text,
+          locale: localeForCode(form.country_code),
+          recorded_from: form.recorded_from,
+          source_note: form.source_note,
+        }),
+      });
+      setForm({ prompt_text: "", country_code: form.country_code, recorded_from: form.recorded_from, source_note: "" });
+      loadPrompts();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "记下问句失败");
+    }
   }
 
   async function setObs(id: string, status: string, extra: Record<string, string | null> = {}) {

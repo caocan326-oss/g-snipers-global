@@ -70,8 +70,8 @@ export function SamplePromptsPanel({
   setObs,
 }: {
   prompts: GeoPrompt[];
-  form: { prompt_text: string; country_code: string };
-  setForm: (form: { prompt_text: string; country_code: string }) => void;
+  form: { prompt_text: string; country_code: string; recorded_from: string; source_note: string };
+  setForm: (form: { prompt_text: string; country_code: string; recorded_from: string; source_note: string }) => void;
   addPrompt: (e: FormEvent) => void;
   aiPrompt: (id: string) => void;
   setDiagnosis: (promptId: string, diagnosis: string) => void;
@@ -88,9 +88,21 @@ export function SamplePromptsPanel({
             <CardHeader>
               <CardTitle className="text-base">{p.prompt_text}</CardTitle>
               <p className="text-xs text-slate-500">
-                {countryLabel(p.locale)} · 联网抽查被提到 {displayRate(p.mention_rate)} · 给出官网 {displayRate(p.cite_rate)}
+                {countryLabel(p.locale)} · {p.recorded_from_label || "已记原句"}
+                {p.source_note ? ` · ${p.source_note}` : ""} · 联网抽查被提到 {displayRate(p.mention_rate)} · 给出官网 {displayRate(p.cite_rate)}
               </p>
+              {p.trend_note ? <p className="mt-1 text-sm font-medium text-slate-800">{p.trend_note}</p> : null}
+              {p.sample_compare_note ? <p className="mt-1 text-xs font-medium text-slate-700">{p.sample_compare_note}</p> : null}
+              {p.competitor_note ? <p className="mt-1 text-xs text-slate-600">{p.competitor_note}</p> : null}
               {p.sample_verdict ? <p className="mt-1 text-xs font-medium text-slate-700">{p.sample_verdict}</p> : null}
+              {p.page_draft ? (
+                <details className="mt-2">
+                  <summary className="cursor-pointer text-xs text-brand-700">可引用资产（粘贴给客户，我们不代改）</summary>
+                  <pre className="mt-2 whitespace-pre-wrap rounded-md bg-slate-50 p-3 text-xs leading-5 text-slate-700">{p.page_draft}</pre>
+                  {p.faq_draft ? <pre className="mt-2 whitespace-pre-wrap rounded-md bg-slate-50 p-3 text-xs leading-5 text-slate-700">{p.faq_draft}</pre> : null}
+                  {p.llms_txt ? <pre className="mt-2 whitespace-pre-wrap rounded-md bg-slate-50 p-3 text-xs leading-5 text-slate-700">{p.llms_txt}</pre> : null}
+                </details>
+              ) : null}
               <p className="mt-1 text-[11px] text-slate-400">
                 ChatGPT / Perplexity 等还没逐个打开
                 {closedCount ? `（空着 ${closedCount} 个记位，不假装有覆盖）` : ""}。上面比例只算已跑过的联网抽查。
@@ -135,17 +147,36 @@ export function SamplePromptsPanel({
         </CardHeader>
         <CardContent>
           <form className="space-y-3" onSubmit={addPrompt}>
+            <p className="text-sm leading-6 text-slate-500">记销售、询盘、展会或客户自己说的原句。搜索词不要记。不要编。</p>
             <Input
-              placeholder="例如：Which brand makes the best 100W USB-C charger for laptops?"
+              placeholder="例如：Which factory can export industrial fasteners to the US?"
               value={form.prompt_text}
               onChange={(e) => setForm({ ...form, prompt_text: e.target.value })}
               required
             />
             <div>
+              <div className="mb-1 text-xs text-slate-500">这句哪来的</div>
+              <select
+                className="h-9 w-full rounded-md border border-slate-200 px-2 text-sm"
+                value={form.recorded_from}
+                onChange={(e) => setForm({ ...form, recorded_from: e.target.value })}
+              >
+                <option value="sales">销售听到的</option>
+                <option value="inquiry">询盘里的</option>
+                <option value="exhibition">展会听到的</option>
+                <option value="customer">客户自己说的</option>
+              </select>
+            </div>
+            <Input
+              placeholder="谁说的，可选"
+              value={form.source_note}
+              onChange={(e) => setForm({ ...form, source_note: e.target.value })}
+            />
+            <div>
               <div className="mb-1 text-xs text-slate-500">这个问题按哪个国家记</div>
               <CountryPicker value={form.country_code} onChange={(country_code) => setForm({ ...form, country_code })} />
             </div>
-            <Button type="submit">添加</Button>
+            <Button type="submit">记下这句</Button>
           </form>
         </CardContent>
       </Card>

@@ -24,6 +24,7 @@ import { QuickLinksSection } from "./_components/QuickLinksSection";
 import { ReportReadinessSection } from "./_components/ReportReadinessSection";
 import { SeoPerformanceSection } from "./_components/SeoPerformanceSection";
 import { SiteArchivesSection } from "./_components/SiteArchivesSection";
+import { BuyerQuestionsSection } from "./_components/BuyerQuestionsSection";
 import { WeeklyOnsiteSection } from "./_components/WeeklyOnsiteSection";
 import { WorkbenchSummaryHeader } from "./_components/WorkbenchSummaryHeader";
 
@@ -65,9 +66,9 @@ export default function HomePage() {
   }, []);
 
   const reviewTotal = useMemo(() => {
-    if (executionBoard) return executionBoard.total_open;
-    return 0;
-  }, [executionBoard]);
+    return (data?.weekly_onsite ?? []).length + (data?.summary.geo_tickets_open ?? 0);
+  }, [data]);
+  const boardTotal = executionBoard?.total_open ?? 0;
 
   if (loadError) return <p className="text-sm text-red-600">{loadError}</p>;
   if (!data) return <p className="text-sm text-slate-500">加载中…</p>;
@@ -92,11 +93,9 @@ export default function HomePage() {
     },
     {
       label: "AI 搜索",
-      text: geoSampled > 0
-        ? `最近联网搜索写了 ${geoSampled} 条记录。ChatGPT 等引擎空位不是这周的缺口。`
-        : data.summary.geo_prompts > 0
-          ? `${data.summary.geo_prompts} 个买家问题还没联网抽查。`
-          : "还没有买家问题。",
+      text: (data.geo_questions ?? []).length
+        ? `已记 ${(data.geo_questions ?? []).length} 条买家原句。用同一问看有没有提到、有没有官网。不保证这次被提到。`
+        : "还没有买家原句。先从销售、询盘、展会记下来。不要编。",
       tone: geoStatusTone,
     },
     {
@@ -248,6 +247,8 @@ export default function HomePage() {
 
       <WeeklyOnsiteSection items={data.weekly_onsite ?? []} pinned={Boolean(data.weekly_pinned)} />
 
+      <BuyerQuestionsSection items={data.geo_questions ?? []} />
+
       <DiagnosticTargetsSection
         targets={targets}
         targetForm={targetForm}
@@ -269,7 +270,13 @@ export default function HomePage() {
         loadArchives={loadArchives}
       />
 
-      <PriorityQueueSection board={executionBoard} loading={executionLoading} error={executionError} reload={loadExecutionBoard} />
+      <PriorityQueueSection
+        board={executionBoard}
+        weeklyIds={(data.weekly_onsite ?? []).map((item) => item.id)}
+        loading={executionLoading}
+        error={executionError}
+        reload={loadExecutionBoard}
+      />
 
       <PillarsOverview
         data={data}
@@ -279,6 +286,7 @@ export default function HomePage() {
         geoRecorded={geoRecorded}
         workTone={workTone}
         reviewTotal={reviewTotal}
+        boardTotal={boardTotal}
         perf={perf}
       />
 

@@ -36,6 +36,7 @@ from app.onsite_analyzer import rank_distribution
 from app.routers.onsite.constants import OPENISH
 from app.routers.onsite.common import decorate_weekly_issues, load_weekly_onsite_issues
 from app.onsite_loop import weekly_pin_state
+from app.geo_loop import prompt_batch_rows, prompt_compare_note_for, prompt_trend_points, recorded_from_label, trend_note
 from app.customer_brief import build_customer_brief
 from app.report_export import pdf_response
 from app.site_identity import adopt_live_site
@@ -447,6 +448,41 @@ def workbench(
     week_rows = load_weekly_onsite_issues(db, user.tenant_id)
     week_out = decorate_weekly_issues(db, user.tenant_id, week_rows)
     pin = weekly_pin_state(db, user.tenant_id)
+    latest_by, previous_by = prompt_batch_rows(db, user.tenant_id)
+    geo_questions: list[WorkbenchItem] = []
+    for prompt in (
+        db.query(GeoPrompt)
+        .filter(GeoPrompt.tenant_id == user.tenant_id)
+        .order_by(GeoPrompt.created_at.desc())
+        .limit(8)
+        .all()
+    ):
+        note = prompt_compare_note_for(prompt.id, latest_by, previous_by)
+        points = prompt_trend_points(db, user.tenant_id, prompt.id)
+        if "还没联网" in note:
+            status, tone = "还没抽查", "amber"
+        elif "仍没有提到" in note or note.startswith("这一次没有提到"):
+            status, tone = "没提到", "amber"
+        elif "这次提到了" in note or note.startswith("这一次提到了") or "这次也提到了" in note:
+            status, tone = "提到了", "green"
+        else:
+            status, tone = "已抽查", "default"
+        source = recorded_from_label(getattr(prompt, "recorded_from", "") or "")
+        extra = (getattr(prompt, "source_note", "") or "").strip()
+        geo_questions.append(
+            WorkbenchItem(
+                id=prompt.id,
+                title=prompt.prompt_text,
+                subtitle=f"{source}{(' · ' + extra) if extra else ''}",
+                href="/geo",
+                status=status,
+                tone=tone,
+                meta=note,
+                trend=trend_note(points),
+                action_label="去作战室",
+            )
+        )
+
     weekly_onsite: list[WorkbenchItem] = []
     for item in week_out:
         if item.sent_to_customer:
@@ -617,6 +653,7 @@ def workbench(
         chains=chains,
         weekly_onsite=weekly_onsite,
         weekly_pinned=bool(pin.get("issue_ids")),
+        geo_questions=geo_questions,
         deferred_modules=[
             WorkbenchItem(
                 id="sem",

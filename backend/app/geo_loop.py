@@ -13,7 +13,7 @@ from urllib.parse import urlparse
 from sqlalchemy.orm import Session, selectinload
 
 from app.geo_helpers import ENGINE_LABELS
-from app.models import GeoPrompt, GeoSampleResult, GeoSampleRun, GeoTicket, SitePage, SourcePlatform, Tenant
+from app.models import FactPack, GeoPrompt, GeoSampleResult, GeoSampleRun, GeoTicket, SitePage, SourcePlatform, Tenant
 from app.official_apis import OFFICIAL_APIS, official_api_for
 
 HONEST_ACCEPTANCE = (
@@ -325,6 +325,209 @@ def compare_prompt_note(latest_rows: list[GeoSampleResult], previous_rows: list[
     else:
         owned = "两次都有疑似官网。"
     return mention + owned
+
+
+RECORDED_FROM_LABELS = {
+    "sales": "销售听到的",
+    "inquiry": "询盘里的",
+    "exhibition": "展会听到的",
+    "customer": "客户自己说的",
+    "": "已记原句",
+}
+RECORDED_FROM = set(RECORDED_FROM_LABELS)
+
+
+def recorded_from_label(value: str) -> str:
+    return RECORDED_FROM_LABELS.get((value or "").strip(), "已记原句")
+
+
+def rows_by_prompt(runs: list[GeoSampleRun]) -> dict[str, list[GeoSampleResult]]:
+    grouped: dict[str, list[GeoSampleResult]] = {}
+    for run in runs:
+        for row in list(getattr(run, "results", None) or []):
+            grouped.setdefault(row.prompt_id, []).append(row)
+    return grouped
+
+
+def prompt_batch_rows(db: Session, tenant_id: str) -> tuple[dict[str, list[GeoSampleResult]], dict[str, list[GeoSampleResult]]]:
+    recent = (
+        db.query(GeoSampleRun)
+        .options(selectinload(GeoSampleRun.results))
+        .filter(GeoSampleRun.tenant_id == tenant_id)
+        .order_by(GeoSampleRun.started_at.desc())
+        .limit(12)
+        .all()
+    )
+    latest, previous = pick_sample_batches(recent)
+    return rows_by_prompt(latest), rows_by_prompt(previous)
+
+
+def prompt_compare_note_for(prompt_id: str, latest_by: dict[str, list[GeoSampleResult]], previous_by: dict[str, list[GeoSampleResult]]) -> str:
+    latest_rows = latest_by.get(prompt_id) or []
+    if not latest_rows:
+        return "还没联网抽查。"
+    return compare_prompt_note(latest_rows, previous_by.get(prompt_id) or [])
+
+
+def _citation_hosts(rows: list[GeoSampleResult]) -> list[str]:
+    hosts: list[str] = []
+    seen: set[str] = set()
+    for row in rows:
+        for url in _json_list(row.third_party_citations_json):
+            host = urlparse(url).netloc.lower().removeprefix("www.")
+            if host and host not in seen:
+                seen.add(host)
+                hosts.append(host)
+    return hosts[:3]
+
+
+def prompt_trend_points(db: Session, tenant_id: str, prompt_id: str) -> list[dict]:
+    runs = (
+        db.query(GeoSampleRun)
+        .options(selectinload(GeoSampleRun.results))
+        .filter(GeoSampleRun.tenant_id == tenant_id)
+        .order_by(GeoSampleRun.started_at.asc())
+        .all()
+    )
+    usable = [run for run in runs if any(row.prompt_id == prompt_id for row in list(getattr(run, "results", None) or []))]
+    batches: list[list[GeoSampleRun]] = []
+    used: set[str] = set()
+    for run in usable:
+        if run.id in used:
+            continue
+        batch = [item for item in usable if item.id not in used and same_sample_batch(item, run)]
+        used.update(item.id for item in batch)
+        if batch:
+            batches.append(batch)
+    points: list[dict] = []
+    for batch in batches[-8:]:
+        rows = [row for run in batch for row in list(getattr(run, "results", None) or []) if row.prompt_id == prompt_id]
+        mentioned = _mention_signal(rows)
+        started = min((run.started_at for run in batch if run.started_at), default=None)
+        points.append(
+            {
+                "at": started.isoformat() if started else "",
+                "mentioned": mentioned,
+                "owned": any(_owned(row) for row in rows),
+                "note": "提到了" if mentioned else "没提到",
+                "others": _citation_hosts(rows),
+            }
+        )
+    return points
+
+
+def trend_note(points: list[dict]) -> str:
+    if not points:
+        return "还没有抽查记录，谈不上趋势。"
+    marks = " · ".join(str(point.get("note") or "没提到") for point in points)
+    return f"{len(points)} 轮：{marks}。不保证下一轮会提到。"
+
+
+def page_draft_for_prompt(db: Session, tenant: Tenant | None, prompt: GeoPrompt) -> str:
+    fact = None
+    if tenant is not None:
+        fact = (
+            db.query(FactPack)
+            .filter(FactPack.tenant_id == tenant.id)
+            .order_by(FactPack.updated_at.desc())
+            .first()
+        )
+    brand = (tenant.name if tenant else "") or "this company"
+    website = ((tenant.site_origin if tenant else "") or "").rstrip("/")
+    cats = boiler = specs = certs = ""
+    if fact is not None:
+        names = [part.strip() for part in (fact.brand_names or "").split(",") if part.strip()]
+        brand = names[0] if names else (fact.legal_name or brand)
+        website = (fact.website or website).rstrip("/")
+        cats = (fact.product_categories_en or "").strip()
+        boiler = (fact.approved_boilerplate_en or "").strip()
+        specs = (fact.key_specs or "").strip()
+        certs = (fact.certifications or "").strip()
+    page = suggest_page(db, tenant.id, prompt.prompt_text) if tenant is not None else None
+    path = (page.path if page else "/") or "/"
+    url = f"{website}{path}" if website else ""
+    lines = [
+        f'Buyers ask: "{(prompt.prompt_text or "").strip()}"',
+        f"{brand} official website: {website or '[NEED_INPUT: website]'}",
+    ]
+    if cats:
+        lines.append(f"What we supply: {cats}")
+    if boiler:
+        lines.append(boiler)
+    else:
+        lines.append("[NEED_INPUT: approved English description. Do not invent specs.]")
+    if specs:
+        lines.append(f"Public specs: {specs}")
+    if certs:
+        lines.append(f"Public certifications: {certs}")
+    if url:
+        lines.append(f"Read more: {url}")
+    lines.append("Paste this onto the matching page. We do not edit the live site. Same question will be sampled again. Mention is not guaranteed.")
+    return "\n".join(lines)
+
+
+def cite_pack_for_prompt(db: Session, tenant: Tenant | None, prompt: GeoPrompt) -> dict[str, str]:
+    page_draft = page_draft_for_prompt(db, tenant, prompt)
+    brand = (tenant.name if tenant else "") or "this company"
+    website = ((tenant.site_origin if tenant else "") or "").rstrip("/")
+    boiler = ""
+    if tenant is not None:
+        fact = (
+            db.query(FactPack)
+            .filter(FactPack.tenant_id == tenant.id)
+            .order_by(FactPack.updated_at.desc())
+            .first()
+        )
+        if fact is not None:
+            names = [part.strip() for part in (fact.brand_names or "").split(",") if part.strip()]
+            brand = names[0] if names else (fact.legal_name or brand)
+            website = (fact.website or website).rstrip("/")
+            boiler = (fact.approved_boilerplate_en or "").strip()
+    question = (prompt.prompt_text or "").strip()
+    answer = boiler or "[NEED_INPUT: approved English answer. Do not invent specs.]"
+    faq_draft = "\n".join(
+        [
+            f"Q: {question}",
+            f"A: {answer}",
+            f"Official page: {website or '[NEED_INPUT: website]'}",
+            "Publish this FAQ on the matching page. We do not edit the live site.",
+        ]
+    )
+    llms_txt = "\n".join(
+        [
+            f"# {brand}",
+            website or "[NEED_INPUT: website]",
+            boiler or "[NEED_INPUT: approved English description. Do not invent specs.]",
+            "",
+            "# Buyer questions we can answer with public facts",
+            f"- {question}" if question else "- [NEED_INPUT: recorded buyer question]",
+            "",
+            "# Note",
+            "Only recorded facts. Mention in AI answers is not guaranteed.",
+        ]
+    )
+    return {"page_draft": page_draft, "faq_draft": faq_draft, "llms_txt": llms_txt}
+
+
+def competitor_note(rows: list[GeoSampleResult]) -> str:
+    names: list[str] = []
+    seen: set[str] = set()
+    for row in rows:
+        for part in (row.competitor_hits or "").replace(";", ",").split(","):
+            name = part.strip()
+            key = name.lower()
+            if name and key not in seen:
+                seen.add(key)
+                names.append(name)
+    others = _citation_hosts(rows)
+    bits: list[str] = []
+    if names:
+        bits.append("同一问里还出现了：" + "、".join(names[:4]))
+    if others:
+        bits.append("AI 引用的外来站：" + "、".join(others))
+    if not bits:
+        return ""
+    return "。".join(bits) + "。不是我们编的竞品名单。"
 
 
 def suggest_page(db: Session, tenant_id: str, prompt_text: str) -> SitePage | None:

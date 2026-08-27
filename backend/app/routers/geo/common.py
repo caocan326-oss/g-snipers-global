@@ -10,6 +10,7 @@ from app.geo_citations import is_owned_url, marketplace_urls, split_citations
 from app.geo_helpers import DIAGNOSES, ENGINE_LABELS, ENGINES, engine_region
 from app.geo_loop import (
     HANDOFF_LABELS,
+    recorded_from_label,
     parse_ticket_evidence,
     ticket_channel_key,
     ticket_channel_name,
@@ -370,7 +371,19 @@ def _sample_prompt_rates(rows: list[GeoSampleResult]) -> dict[str, str]:
     }
 
 
-def _prompt_out(row: GeoPrompt, sample_verdict: str = "", sample_rows: list[GeoSampleResult] | None = None) -> GeoPromptOut:
+def _prompt_out(
+    row: GeoPrompt,
+    sample_verdict: str = "",
+    sample_rows: list[GeoSampleResult] | None = None,
+    sample_compare_note: str = "",
+    sample_trend: list | None = None,
+    trend_note: str = "",
+    cited_others: list[str] | None = None,
+    competitor_note: str = "",
+    page_draft: str = "",
+    faq_draft: str = "",
+    llms_txt: str = "",
+) -> GeoPromptOut:
     diagnosis = row.diagnosis or "untested"
     rates = _prompt_rates(row.observations)
     if sample_rows:
@@ -399,6 +412,17 @@ def _prompt_out(row: GeoPrompt, sample_verdict: str = "", sample_rows: list[GeoS
         ai_status=row.ai_status or "untested",
         evidence=row.evidence or "",
         sample_verdict=sample_verdict,
+        recorded_from=getattr(row, "recorded_from", "") or "",
+        recorded_from_label=recorded_from_label(getattr(row, "recorded_from", "") or ""),
+        source_note=getattr(row, "source_note", "") or "",
+        sample_compare_note=sample_compare_note,
+        sample_trend=sample_trend or [],
+        trend_note=trend_note,
+        cited_others=cited_others or [],
+        competitor_note=competitor_note,
+        page_draft=page_draft,
+        faq_draft=faq_draft,
+        llms_txt=llms_txt,
     )
 
 
