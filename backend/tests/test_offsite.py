@@ -109,6 +109,8 @@ def test_workbench_fact_pack_is_first_until_ready(client: TestClient, demo_user,
     assert draft["summary"]["fact_pack_ready"] is False
     assert draft["summary"]["fact_pack_status"] == "draft"
     assert draft["next_actions"][0]["id"] == "fact-pack-approve"
+    assert draft["next_actions"][0]["action_label"] == "去核对"
+    assert "没有客户确认过的英文不要批" in draft["next_actions"][0]["subtitle"]
 
     pack = db.query(FactPack).filter(FactPack.tenant_id == demo_user.tenant_id).one()
     pack.status = "approved"

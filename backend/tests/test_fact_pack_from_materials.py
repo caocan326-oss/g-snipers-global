@@ -91,6 +91,7 @@ def test_from_materials_saves_draft_not_approved(client: TestClient, demo_user, 
     assert workbench["summary"]["fact_pack_ready"] is False
     assert workbench["summary"]["fact_pack_status"] == "draft"
     assert workbench["next_actions"][0]["id"] == "fact-pack-approve"
+    assert workbench["next_actions"][0]["action_label"] == "去核对"
     prompt = client.post(
         "/api/geo/prompts",
         headers=headers,

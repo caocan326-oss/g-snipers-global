@@ -1,4 +1,6 @@
-import { FormEvent } from "react";
+"use client";
+
+import { FormEvent, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -68,6 +70,8 @@ export function ContentTab({
   copyCustomerPaste: (assetId: string) => void;
   copiedAssetId: string;
 }) {
+  const [customerEnglishOk, setCustomerEnglishOk] = useState(false);
+
   return (
     <section className="grid gap-5 xl:grid-cols-[1fr_420px]">
       <div className="space-y-4">
@@ -93,12 +97,28 @@ export function ContentTab({
                       <span>禁用语：{fact.banned_claims || "未填"}</span>
                     </div>
                   </div>
-                  <Button size="sm" variant="outline" onClick={() => approveFactPack(fact.id)} disabled={fact.status === "approved"}>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => approveFactPack(fact.id)}
+                    disabled={fact.status === "approved" || !customerEnglishOk}
+                  >
                     批准事实包
                   </Button>
                 </div>
               </div>
             )) : <p className="text-sm text-slate-500">还没有客户事实资料。把客户给的英文说明贴到右边，收成草稿后再批准。没有的不要编。</p>}
+            {factPacks.some((fact) => fact.status !== "approved") ? (
+              <label className="flex items-start gap-2 text-sm leading-5 text-slate-700">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={customerEnglishOk}
+                  onChange={(e) => setCustomerEnglishOk(e.target.checked)}
+                />
+                <span>这些英文是客户确认过的，不是我编的。没勾不能批。</span>
+              </label>
+            ) : null}
           </CardContent>
         </Card>
 

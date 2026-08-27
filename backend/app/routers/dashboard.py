@@ -604,11 +604,11 @@ def workbench(
                 WorkbenchItem(
                     id="fact-pack-approve",
                     title="核对并批准 Fact Pack",
-                    subtitle="草稿还不能出对外页稿。只批资料里有的英文。没有的认证不要补。",
+                    subtitle="草稿还不能出对外页稿。没有客户确认过的英文不要批。只批资料里有的英文。没有的认证不要补。",
                     href="/offsite?tab=content",
                     status="草稿待批",
                     tone="amber",
-                    action_label="去批准",
+                    action_label="去核对",
                 )
             )
         else:
