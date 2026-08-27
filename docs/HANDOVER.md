@@ -8,7 +8,7 @@
 
 约定：家里和公司**不会同时改**。换机器前必须把这边 push 完。
 
-最后更新：2026-08-27 13:08（公司。`ad36846` 清门锁 llms.txt。）。
+最后更新：2026-08-27 14:10（公司。`6299516` 定位脊柱三门已发版。）。
 
 ---
 
@@ -745,14 +745,14 @@ git log -1 --oneline
 
 | 项 | 值 |
 | --- | --- |
-| 日期 | 2026-08-27 13:08 |
+| 日期 | 2026-08-27 14:10 |
 | 最后一台 | 公司 `E:\G-snipers海外版` |
 | 分支 | `main` |
-| 提交 | `ad36846` 清 SNIPERS 门锁 llms.txt。地图空着人测已过。 |
+| 提交 | `6299516` 定位脊柱：Fact Pack 门、工单复测才能关、本周三处只从紧急/优先来。 |
 | 已 push origin / upstream | 是。 |
-| 已发版生产 | **是。** `sync-from-local.ps1 -Rebuild`。三处 `ad36846`。迁移 `025` 已跑。`DEMO_LOGIN_ENABLED` 仍关。 |
-| 接口实测 | 硬刷新 GEO：llms.txt 不应再是智能门锁。地图仍空。不要编问句、不要测绿联。 |
-| 未完成 | 脊柱三门已写进代码（未提交）。没有原句则 GEO 空着。 |
+| 已发版生产 | **是。** `sync-from-local.ps1 -Rebuild`。生产 git `6299516`。迁移 `025`。`DEMO_LOGIN_ENABLED` 仍关。 |
+| 接口实测 | `/api/health` 200。没有 Fact Pack 不应再出英文草稿。没有复测不能关 GEO 工单。不要编问句、不要测绿联。 |
+| 未完成 | 没有原句则 GEO 空着。SNIPERS 还没有 Fact Pack。 |
 | 下一台先做 | 海外版家里先 `git pull origin main`。对照 `docs/POSITIONING.md`。不代改、不编问句、不抽第三轮绿联。 |
 
 `www` 灰云、A 仍 `39.97.52.149`。`relay.weiyids.com` 橙云，不要 CNAME 回 `workers.dev`。不要开 Google Ads。不要在服务器 `git pull`。
