@@ -814,7 +814,7 @@ git log -1 --oneline
 | 日期 | 2026-08-27 |
 | 最后一台 | Cursor cloud agent（对照 `origin/main` `b2c9bc1`） |
 | 分支 | `cursor/weekly-overview-handover-3b8f` → 待合 `main` |
-| 提交 | 产品 `45a21f1`。交接随后提交（本文件）。对照 `origin/main` 仍是 `b2c9bc1`，这条还在功能分支。 |
+| 提交 | 产品 `45a21f1`。交接 `638c887`（本文件）。对照 `origin/main` 仍是 `b2c9bc1`，这条还在功能分支。 |
 | 已 push origin / upstream | 只推 origin 功能分支。不要当生产已发版。不要 `git push upstream` 这条功能分支当主仓。 |
 | 已发版生产 | **否。** 生产仍是此前 `4c3e8da` / `b2c9bc1` 一带。不要在服务器 `git pull`。合入后公司仓 `sync-from-local.ps1 -Rebuild`。 |
 | 本机/接口实测 | `this_week_open` = 这周三处 + GEO 未关闭。`total_open` 仍是加总。`fastener` 不能记下。打开核对只记看过。Fact Pack 没齐时 `next_actions[0]=fact-pack`。SNIPERS 清掉 `alex@example.com`。 |
