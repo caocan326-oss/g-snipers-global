@@ -14,16 +14,19 @@ export type TargetForm = {
   competitors: TargetCompetitorDraft[];
 };
 
+const DEMO_LOCK_TENANT = "演示客户 · 智能门锁出海";
+
 export function keywordPlaceholder(siteOrigin: string, brand: string): string {
   const host = siteOrigin.replace(/^https?:\/\//i, "").split("/")[0].replace(/^www\./i, "").toLowerCase();
-  if (!host || host.includes("snipers.com")) {
+  const name = (brand || "").trim();
+  if (name === DEMO_LOCK_TENANT) {
     return "smart lock for renters\n賃貸 スマートロック 許可";
   }
   if (host.includes("ugreen")) {
     return "100W USB-C charger\nUSB-C docking station";
   }
-  const name = (brand || host.split(".")[0] || "brand").trim();
-  return `${name} official website\n${name} review`;
+  const label = name || host.split(".")[0] || "brand";
+  return `${label} official website\n${label} review`;
 }
 
 export const emptyTargetForm: TargetForm = {
