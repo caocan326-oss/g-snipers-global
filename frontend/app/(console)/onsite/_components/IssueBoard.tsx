@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import {
   catLabel,
   filters,
+  isTemplateLimited,
   plainIssueTitle,
   type FilterKey,
   nextStep,
@@ -40,6 +41,8 @@ export function IssueBoard({
   retestIssue,
   apply,
   ignoreIssue,
+  markTemplateLimit,
+  clearTemplateLimit,
 }: {
   visibleIssues: OnsiteIssue[];
   totalCount: number;
@@ -58,6 +61,8 @@ export function IssueBoard({
   retestIssue: (issue: OnsiteIssue) => void;
   apply: (issue: OnsiteIssue) => void;
   ignoreIssue: (issue: OnsiteIssue) => void;
+  markTemplateLimit: (issue: OnsiteIssue) => void;
+  clearTemplateLimit: (issue: OnsiteIssue) => void;
 }) {
   return (
     <Card id="onsite-issues" className="rounded-md">
@@ -118,6 +123,7 @@ export function IssueBoard({
                     <span className="font-medium text-slate-900">{plainIssueTitle(issue.title)}</span>
                     <Badge>{catLabel[issue.category] ?? issue.category}</Badge>
                     <Badge tone="amber">{issue.metric_status === "untested" ? "尚未检查" : issue.metric_status}</Badge>
+                    {isTemplateLimited(issue) ? <Badge tone="red">受模板限制</Badge> : null}
                   </div>
                   <div className="mt-1 flex flex-wrap gap-2 text-xs text-slate-500">
                     <span className="text-brand-700">{issue.page_title || issue.page_path}</span>
@@ -177,6 +183,9 @@ export function IssueBoard({
                       </div>
                     </div>
                     <div className="space-y-2">
+                      {issue.blocked_reason ? (
+                        <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{issue.blocked_reason}</p>
+                      ) : null}
                       {issue.customer_note ? (
                         <div className="rounded-md border border-amber-200 bg-amber-50/70 p-3">
                           <div className="text-xs font-medium text-slate-500">给客户的短稿</div>
@@ -224,6 +233,15 @@ export function IssueBoard({
                           <Button size="sm" onClick={() => apply(issue)} disabled={busyId === issue.id}>
                             <Wrench className="mr-1.5 h-3.5 w-3.5" />
                             标记已修改
+                          </Button>
+                        )}
+                        {isTemplateLimited(issue) ? (
+                          <Button size="sm" variant="outline" onClick={() => clearTemplateLimit(issue)} disabled={busyId === issue.id}>
+                            取消受模板限制
+                          </Button>
+                        ) : (
+                          <Button size="sm" variant="outline" onClick={() => markTemplateLimit(issue)} disabled={busyId === issue.id}>
+                            记受模板限制
                           </Button>
                         )}
                         <Button size="sm" variant="outline" onClick={() => ignoreIssue(issue)} disabled={busyId === issue.id}>

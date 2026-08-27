@@ -1238,3 +1238,99 @@ def test_board_this_week_picks_three_pages_not_all_issues(client: TestClient, de
     for row in week:
         assert row["page_path"] in brief_text
         assert "请改这一页" in brief_text
+
+
+def test_template_limit_drops_page_from_this_week_not_closed(client: TestClient, demo_user, db: Session) -> None:
+    tenant = db.get(Tenant, demo_user.tenant_id)
+    assert tenant is not None
+    tenant.site_origin = "https://www.snipers.com.cn"
+    tenant.name = "SNIPERS"
+    wiki = SitePage(
+        tenant_id=demo_user.tenant_id,
+        path="/snipers/article/articlelist/cat_id/3.html",
+        locale="zh-CN",
+        title="知识百科",
+        crawl_status="ok",
+    )
+    news = SitePage(tenant_id=demo_user.tenant_id, path="/news", locale="zh-CN", title="资讯", crawl_status="ok")
+    extra = SitePage(tenant_id=demo_user.tenant_id, path="/about", locale="zh-CN", title="关于", crawl_status="ok")
+    db.add_all([wiki, news, extra])
+    db.flush()
+    wiki_issue = OnsiteIssue(
+        tenant_id=demo_user.tenant_id,
+        page_id=wiki.id,
+        category="schema",
+        title="缺少 JSON-LD / schema",
+        severity="critical",
+        status="open",
+        risk="high",
+    )
+    db.add_all(
+        [
+            wiki_issue,
+            OnsiteIssue(
+                tenant_id=demo_user.tenant_id,
+                page_id=news.id,
+                category="tdk",
+                title="首页标题过长",
+                severity="high",
+                status="open",
+                risk="high",
+            ),
+            OnsiteIssue(
+                tenant_id=demo_user.tenant_id,
+                page_id=extra.id,
+                category="content",
+                title="正文太少，买家看不够",
+                severity="high",
+                status="open",
+                risk="high",
+            ),
+        ]
+    )
+    db.commit()
+
+    headers = auth_header(client)
+    before = client.get("/api/onsite/board", headers=headers).json()["this_week"]
+    assert [row["page_path"] for row in before] == [
+        "/snipers/article/articlelist/cat_id/3.html",
+        "/news",
+        "/about",
+    ]
+
+    marked = client.post(f"/api/onsite/issues/{wiki_issue.id}/template-limit", headers=headers)
+    assert marked.status_code == 200, marked.text
+    assert marked.json()["status"] == "open"
+    assert marked.json()["blocked_reason"].startswith("受模板限制")
+    assert "不代改" in marked.json()["blocked_reason"]
+    assert marked.json()["closed_at"] is None
+
+    after = client.get("/api/onsite/board", headers=headers).json()["this_week"]
+    assert [row["page_path"] for row in after] == ["/news", "/about"]
+    assert all(row["id"] != wiki_issue.id for row in after)
+
+    brief = "\n".join(client.get("/api/dashboard/customer-brief", headers=headers).json()["this_week"])
+    assert "cat_id/3" not in brief
+    assert "/news" in brief
+
+    execution = client.get("/api/execution/items", headers=headers).json()
+    seo = next(item for item in execution["items"] if item["id"] == wiki_issue.id)
+    assert seo["status"] == "blocked"
+    assert seo["blocked_reason"].startswith("受模板限制")
+    assert execution["blocked"] >= 1
+
+    cleared = client.post(f"/api/onsite/issues/{wiki_issue.id}/clear-template-limit", headers=headers)
+    assert cleared.status_code == 200, cleared.text
+    assert cleared.json()["blocked_reason"] == ""
+    restored = client.get("/api/onsite/board", headers=headers).json()["this_week"]
+    assert restored[0]["id"] == wiki_issue.id
+
+    closed = client.post(
+        f"/api/onsite/issues/{wiki_issue.id}/wont-fix",
+        headers=headers,
+        json={"note": "本轮不处理"},
+    )
+    assert closed.status_code == 200
+    denied = client.post(f"/api/onsite/issues/{wiki_issue.id}/template-limit", headers=headers)
+    assert denied.status_code == 400
+    assert "已关闭" in denied.json()["detail"]

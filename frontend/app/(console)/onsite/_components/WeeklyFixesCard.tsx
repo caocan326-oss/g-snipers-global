@@ -12,11 +12,15 @@ export function WeeklyFixesCard({
   copyOne,
   copyAll,
   openIssue,
+  markTemplateLimit,
+  busyId,
 }: {
   issues: OnsiteIssue[];
   copyOne: (issue: OnsiteIssue) => void;
   copyAll: () => void;
   openIssue: (id: string) => void;
+  markTemplateLimit: (issue: OnsiteIssue) => void;
+  busyId: string;
 }) {
   return (
     <Card className="rounded-md border-amber-200">
@@ -25,7 +29,7 @@ export function WeeklyFixesCard({
           <div>
             <h2 className="text-lg font-semibold text-slate-950">这周给客户改三处</h2>
             <p className="mt-1 text-sm leading-6 text-slate-500">
-              从紧急/优先里每页只挑一条，最多三页。不是全部问题。短稿只写哪一页、请做、怎么验。我们不代改官网。
+              从紧急/优先里每页只挑一条，最多三页。受模板限制的不进这三处，会换下一页。不是客户没理。短稿只写哪一页、请做、怎么验。我们不代改官网。
             </p>
           </div>
           {issues.length ? (
@@ -52,6 +56,9 @@ export function WeeklyFixesCard({
                   </Button>
                   <Button size="sm" variant="ghost" onClick={() => openIssue(issue.id)}>
                     打开这条
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => markTemplateLimit(issue)} disabled={busyId === issue.id}>
+                    记受模板限制
                   </Button>
                 </div>
               </div>

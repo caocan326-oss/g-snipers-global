@@ -18,6 +18,7 @@ from app.geo_loop import (
     ticket_paste,
 )
 from app.models import BacklinkGap, GeoTicket, OnsiteIssue, SitePage, Tenant, User
+from app.onsite_loop import is_template_limited
 from app.routers.onsite.common import _category_label, _page_short, _plain_title
 from app.schemas import ExecutionBoardOut, ExecutionItemOut
 from app.site_identity import adopt_live_site
@@ -57,7 +58,7 @@ def list_execution_items(user: User = Depends(get_current_user), db: Session = D
                 title=_plain_title(issue.title),
                 subtitle=f"{_page_short(page)} · {_category_label(issue.category)}",
                 href=f"/onsite/{issue.page_id}",
-                status=issue.status,
+                status="blocked" if is_template_limited(issue) else issue.status,
                 priority=priority,
                 owner_hint=issue.owner_hint or "内容运营 / 客户经理",
                 acceptance_criteria=issue.acceptance_criteria or "处理后重新抓取页面，确认该问题不再出现。",

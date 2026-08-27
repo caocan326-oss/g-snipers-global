@@ -788,6 +788,35 @@ export default function OnsiteBoardPage() {
     }
   }
 
+  async function markTemplateLimit(issue: OnsiteIssue) {
+    setError("");
+    setBusyId(issue.id);
+    try {
+      await api<OnsiteIssue>(`/api/onsite/issues/${issue.id}/template-limit`, { method: "POST" });
+      setNote("已记下受模板限制。不是客户没理。这周改三处会换下一页。我们不代改。");
+      if (expandedId === issue.id) setExpandedId("");
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "没记下");
+    } finally {
+      setBusyId("");
+    }
+  }
+
+  async function clearTemplateLimit(issue: OnsiteIssue) {
+    setError("");
+    setBusyId(issue.id);
+    try {
+      await api<OnsiteIssue>(`/api/onsite/issues/${issue.id}/clear-template-limit`, { method: "POST" });
+      setNote("已取消受模板限制。这条可以再进这周改三处。");
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "没取消");
+    } finally {
+      setBusyId("");
+    }
+  }
+
   async function ignoreIssue(issue: OnsiteIssue) {
     setError("");
     setBusyId(issue.id);
@@ -927,6 +956,8 @@ export default function OnsiteBoardPage() {
         issues={board.this_week || []}
         copyOne={copyDraft}
         copyAll={() => void copyWeek()}
+        markTemplateLimit={(issue) => void markTemplateLimit(issue)}
+        busyId={busyId}
         openIssue={(id) => {
           setFilter("all");
           setExpandedId(id);
@@ -952,6 +983,8 @@ export default function OnsiteBoardPage() {
         retestIssue={retestIssue}
         apply={apply}
         ignoreIssue={ignoreIssue}
+        markTemplateLimit={(issue) => void markTemplateLimit(issue)}
+        clearTemplateLimit={(issue) => void clearTemplateLimit(issue)}
       />
 
       <PagesAndBriefsSection pages={pages} form={form} setForm={setForm} create={create} briefs={briefs} />

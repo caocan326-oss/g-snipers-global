@@ -9,6 +9,7 @@ from app.ai_engine import assist_onsite_issue
 from app.llm import UNCONFIGURED, configured
 from app.models import OnsiteIssue, SitePage, User
 from app.onsite_fetch import OriginError, normalize_origin
+from app.onsite_loop import TEMPLATE_LIMIT_REASON, is_template_limited
 from app.risk import RISKS, SEVERITIES, default_severity, needs_confirm, require_confirm, severity_to_risk
 from app.schemas import (
     AiAssistOut,
@@ -258,6 +259,41 @@ def retest_issue(
     db.refresh(row)
     row.last_checked_at = datetime.now(timezone.utc)
     row.retest_result = "已重新抓取页面并刷新诊断状态。"
+    db.commit()
+    db.refresh(row)
+    return _out(db, user, row, page)
+
+
+@router.post("/issues/{issue_id}/template-limit", response_model=OnsiteIssueOut)
+def mark_template_limit(
+    issue_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> OnsiteIssueOut:
+    row = _owned_issue(db, user, issue_id)
+    page = db.get(SitePage, row.page_id)
+    if page is None or page.tenant_id != user.tenant_id:
+        raise HTTPException(status_code=404, detail="页面不存在")
+    if row.status in {"verified", "wont_fix"}:
+        raise HTTPException(status_code=400, detail="已关闭的项不用再记受模板限制。")
+    row.blocked_reason = TEMPLATE_LIMIT_REASON
+    db.commit()
+    db.refresh(row)
+    return _out(db, user, row, page)
+
+
+@router.post("/issues/{issue_id}/clear-template-limit", response_model=OnsiteIssueOut)
+def clear_template_limit(
+    issue_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> OnsiteIssueOut:
+    row = _owned_issue(db, user, issue_id)
+    page = db.get(SitePage, row.page_id)
+    if page is None or page.tenant_id != user.tenant_id:
+        raise HTTPException(status_code=404, detail="页面不存在")
+    if is_template_limited(row):
+        row.blocked_reason = ""
     db.commit()
     db.refresh(row)
     return _out(db, user, row, page)

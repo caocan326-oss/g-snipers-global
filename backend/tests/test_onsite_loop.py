@@ -1,6 +1,7 @@
 from app.models import OnsiteIssue, SitePage
 from app.onsite_loop import (
     ONSITE_CUSTOMER_CLOSE,
+    TEMPLATE_LIMIT_REASON,
     issue_customer_note,
     issue_customer_paste,
     plain_issue_title,
@@ -116,3 +117,28 @@ def test_weekly_onsite_picks_same_when_created_at_ties() -> None:
     forward = [row.id for row in weekly_onsite_picks(issues)]
     backward = [row.id for row in weekly_onsite_picks(list(reversed(issues)))]
     assert forward == backward == ["i0", "i1", "i2"]
+
+
+def test_weekly_onsite_picks_skips_template_limited_and_takes_next_page() -> None:
+    home = SitePage(id="p-home", tenant_id="t1", path="/", title="Home")
+    product = SitePage(id="p-pro", tenant_id="t1", path="/products/a", title="A")
+    about = SitePage(id="p-about", tenant_id="t1", path="/about", title="About")
+    extra = SitePage(id="p-news", tenant_id="t1", path="/news", title="News")
+    issues = [
+        OnsiteIssue(id="c1", tenant_id="t1", page_id=home.id, category="tdk", title="首页标题过长", severity="critical", status="open"),
+        OnsiteIssue(
+            id="h1",
+            tenant_id="t1",
+            page_id=product.id,
+            category="schema",
+            title="缺少 JSON-LD / schema",
+            severity="high",
+            status="open",
+            blocked_reason=TEMPLATE_LIMIT_REASON,
+        ),
+        OnsiteIssue(id="h2", tenant_id="t1", page_id=about.id, category="content", title="正文太少，买家看不够", severity="high", status="open"),
+        OnsiteIssue(id="h3", tenant_id="t1", page_id=extra.id, category="tdk", title="首页标题过长", severity="high", status="open"),
+    ]
+    picks = weekly_onsite_picks(issues)
+    assert [row.id for row in picks] == ["c1", "h2", "h3"]
+    assert "h1" not in [row.id for row in picks]

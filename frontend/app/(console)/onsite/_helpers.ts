@@ -100,7 +100,12 @@ export function priorityRank(issue: OnsiteIssue) {
   return (severityRank[issue.severity] ?? 20) + (statusRank[issue.status] ?? 5);
 }
 
+export function isTemplateLimited(issue: OnsiteIssue) {
+  return (issue.blocked_reason || "").startsWith("受模板限制");
+}
+
 export function nextStep(issue: OnsiteIssue) {
+  if (isTemplateLimited(issue)) return "等有主题权限的人改，不代改";
   if (issue.status === "confirmed") return "重新打开页面核对";
   if (issue.status === "draft_applied") return "等待修改后再复查";
   if (issue.status === "drafted") return issue.risk === "high" ? "确认后交给网站执行" : "交给执行修改";

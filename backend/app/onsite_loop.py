@@ -9,6 +9,8 @@ from urllib.parse import urlparse
 from app.models import OnsiteIssue, SitePage
 
 ONSITE_CUSTOMER_CLOSE = "我们不代改官网。改完告诉我，我再打开该页核对。"
+TEMPLATE_LIMIT_MARK = "受模板限制"
+TEMPLATE_LIMIT_REASON = "受模板限制。后台改不了，要等有主题文件权限的人改。不是客户没理。我们不代改。"
 WEEKLY_ONSITE_LIMIT = 3
 _CLOSED = {"verified", "wont_fix"}
 _SEV_RANK = {"critical": 0, "high": 1, "low": 2}
@@ -99,9 +101,17 @@ def issue_customer_paste(
     return issue_customer_note(issue, page, site_origin)
 
 
+def is_template_limited(issue: OnsiteIssue) -> bool:
+    return (issue.blocked_reason or "").startswith(TEMPLATE_LIMIT_MARK)
+
+
 def weekly_onsite_picks(issues: list[OnsiteIssue], *, limit: int = WEEKLY_ONSITE_LIMIT) -> list[OnsiteIssue]:
     """At most three pages. Prefer critical/high. One issue per page. No live-site edits."""
-    active = [issue for issue in issues if (issue.status or "") not in _CLOSED]
+    active = [
+        issue
+        for issue in issues
+        if (issue.status or "") not in _CLOSED and not is_template_limited(issue)
+    ]
     urgent = [issue for issue in active if (issue.severity or "low") in {"critical", "high"}]
     pool = urgent or active
 
