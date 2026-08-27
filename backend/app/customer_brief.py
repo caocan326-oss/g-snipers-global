@@ -9,11 +9,18 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.models import GeoPrompt, GeoTicket, Inquiry, OnsiteIssue, SeoPerformanceRow, SerpRun, SitePage, Tenant, User
 from app.geo_loop import (
+    cite_pack_for_prompt,
+    cite_paste_for_prompt,
+    cite_published_url,
+    cite_stage,
+    cite_stage_label,
+    last_sampled_at_by_prompt,
     prompt_batch_rows,
     prompt_compare_note_for,
     prompt_trend_points,
     recorded_from_label,
     trend_note,
+    watch_state,
     reconcile_open_ticket_status,
     refresh_open_tickets_from_samples,
     ticket_customer_note,
@@ -282,23 +289,47 @@ def build_customer_brief(user: User, db: Session) -> CustomerBriefOut:
         .limit(8)
         .all()
     )
+    pending_paste: list[str] = []
     if not buyer_prompts:
         buyer_kpi = [
             "还没有买家原句。先从销售、询盘、展会或客户自己说的记下来。",
             "没有原句不会编。不保证这次被提到。",
         ]
+        cite_assets = ["没有原句，没有可引用资产。不会编英文段。客户自己贴。我们不代改。"]
     else:
         latest_by, previous_by = prompt_batch_rows(db, user.tenant_id)
+        last_by = last_sampled_at_by_prompt(db, user.tenant_id)
         buyer_kpi = []
+        due = 0
         for prompt in buyer_prompts:
             note = prompt_compare_note_for(prompt.id, latest_by, previous_by)
             source = recorded_from_label(getattr(prompt, "recorded_from", "") or "")
             extra = (getattr(prompt, "source_note", "") or "").strip()
             history = trend_note(prompt_trend_points(db, user.tenant_id, prompt.id))
+            watched = watch_state(last_by.get(prompt.id))
+            if watched["due"]:
+                due += 1
             buyer_kpi.append(
-                f"{prompt.prompt_text}（{source}{(' · ' + extra) if extra else ''}）{note}{history}"
+                f"{prompt.prompt_text}（{source}{(' · ' + extra) if extra else ''}）{note}{history}{watched['note']}"
             )
+        if due:
+            buyer_kpi.append(f"{due} 句到期该复测。常驻监控只抽已记原句，不编问句。")
         buyer_kpi.append("抽查是联网搜索源，不是 ChatGPT 本人。不保证这次被提到。测完给可粘贴的英文段和 FAQ，我们不代改。")
+
+    if not buyer_prompts:
+        cite_assets = ["没有原句，没有可引用资产。不会编英文段。客户自己贴。我们不代改。"]
+    else:
+        tenant = db.get(Tenant, user.tenant_id)
+        cite_assets = []
+        for prompt in buyer_prompts:
+            pack = cite_pack_for_prompt(db, tenant, prompt)
+            stage = cite_stage(prompt)
+            url = cite_published_url(prompt)
+            extra = f" {url}" if url else ""
+            cite_assets.append(f"{prompt.prompt_text}：{cite_stage_label(stage)}{extra}")
+            if stage in {"draft", "sent"}:
+                pending_paste.append(cite_paste_for_prompt(pack, prompt))
+        cite_assets.append("只写已记事实，缺的标 NEED_INPUT。客户自己贴。我们不代改。不保证这次被提到。")
 
     headline = _headline(
         site_origin=site_origin,
@@ -313,6 +344,7 @@ def build_customer_brief(user: User, db: Session) -> CustomerBriefOut:
     sections = [
         CustomerBriefSection(key="findability", title="哪些地方让老外搜不到我", items=findability),
         CustomerBriefSection(key="buyer_kpi", title="AI 可见度作战室：这些问句有没有动", items=buyer_kpi),
+        CustomerBriefSection(key="cite_assets", title="请客户自己贴的英文段", items=cite_assets),
         CustomerBriefSection(key="this_week", title="这周带给客户改的三处", items=this_week),
         CustomerBriefSection(key="retest", title="客户改完你再看一次", items=retest),
         CustomerBriefSection(key="inquiries", title="这个月有几个老外来问过", body=f"这个月记到 {inquiry_count} 条。", items=inquiry_items),
@@ -335,6 +367,8 @@ def build_customer_brief(user: User, db: Session) -> CustomerBriefOut:
             lines.append(f"- {item}")
         lines.append("")
     paste_text = weekly_paste(tenant.name if tenant else "", this_week)
+    if pending_paste:
+        paste_text = paste_text + "\n\n" + "\n\n".join(pending_paste)
     lines += [
         "## 发给客户的短稿",
         "",

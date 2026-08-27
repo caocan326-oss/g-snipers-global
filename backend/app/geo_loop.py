@@ -7,9 +7,10 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session, selectinload
 
 from app.geo_helpers import ENGINE_LABELS
@@ -341,6 +342,63 @@ def recorded_from_label(value: str) -> str:
     return RECORDED_FROM_LABELS.get((value or "").strip(), "已记原句")
 
 
+WATCH_INTERVAL_DAYS = 7
+
+
+def last_sampled_at_by_prompt(db: Session, tenant_id: str) -> dict[str, datetime]:
+    rows = (
+        db.query(GeoSampleResult.prompt_id, func.max(GeoSampleResult.sampled_at))
+        .filter(GeoSampleResult.tenant_id == tenant_id)
+        .group_by(GeoSampleResult.prompt_id)
+        .all()
+    )
+    found: dict[str, datetime] = {}
+    for prompt_id, sampled_at in rows:
+        if sampled_at is None:
+            continue
+        found[prompt_id] = sampled_at if sampled_at.tzinfo else sampled_at.replace(tzinfo=timezone.utc)
+    return found
+
+
+def watch_state(last_sampled: datetime | None, *, now: datetime | None = None, interval_days: int = WATCH_INTERVAL_DAYS) -> dict:
+    current = now or datetime.now(timezone.utc)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=timezone.utc)
+    if last_sampled is None:
+        return {
+            "due": True,
+            "last_sampled_at": None,
+            "next_watch_at": current,
+            "note": "还没抽过。记下后就算进常驻监控。到期该复测。不保证这次被提到。",
+        }
+    sampled = last_sampled if last_sampled.tzinfo else last_sampled.replace(tzinfo=timezone.utc)
+    next_at = sampled + timedelta(days=interval_days)
+    if current >= next_at:
+        return {
+            "due": True,
+            "last_sampled_at": sampled,
+            "next_watch_at": current,
+            "note": f"上次抽查已过 {interval_days} 天，到期该复测。不保证这次被提到。",
+        }
+    return {
+        "due": False,
+        "last_sampled_at": sampled,
+        "next_watch_at": next_at,
+        "note": f"常驻监控中。下次复测大约 {next_at.date().isoformat()}。不保证这次被提到。",
+    }
+
+
+def due_watch_prompts(db: Session, tenant_id: str, *, now: datetime | None = None) -> list[GeoPrompt]:
+    prompts = (
+        db.query(GeoPrompt)
+        .filter(GeoPrompt.tenant_id == tenant_id)
+        .order_by(GeoPrompt.created_at.desc())
+        .all()
+    )
+    last_by = last_sampled_at_by_prompt(db, tenant_id)
+    return [prompt for prompt in prompts if watch_state(last_by.get(prompt.id), now=now)["due"]]
+
+
 def rows_by_prompt(runs: list[GeoSampleRun]) -> dict[str, list[GeoSampleResult]]:
     grouped: dict[str, list[GeoSampleResult]] = {}
     for run in runs:
@@ -507,6 +565,60 @@ def cite_pack_for_prompt(db: Session, tenant: Tenant | None, prompt: GeoPrompt) 
         ]
     )
     return {"page_draft": page_draft, "faq_draft": faq_draft, "llms_txt": llms_txt}
+
+
+CITE_STAGES = ("draft", "sent", "published")
+CITE_STAGE_LABELS = {
+    "draft": "草稿已出，还没把这段发给客户",
+    "sent": "已把这段发给客户，客户还没贴上",
+    "published": "客户说已贴上，可以用同一问再测",
+}
+CITE_LOOP_CLOSE = "请自己贴到对应页。我们不代改。贴完告诉我，我再用同一问看一次。不保证这次被提到。"
+
+
+def cite_stage(prompt: GeoPrompt) -> str:
+    value = (getattr(prompt, "cite_stage", "") or "draft").strip()
+    return value if value in CITE_STAGES else "draft"
+
+
+def cite_stage_label(value: str) -> str:
+    return CITE_STAGE_LABELS.get((value or "").strip(), CITE_STAGE_LABELS["draft"])
+
+
+def cite_published_url(prompt: GeoPrompt) -> str:
+    return (getattr(prompt, "cite_published_url", "") or "").strip()
+
+
+def cite_paste_for_prompt(pack: dict[str, str], prompt: GeoPrompt | None = None) -> str:
+    question = ((prompt.prompt_text if prompt is not None else "") or "").strip()
+    parts = [CITE_LOOP_CLOSE]
+    if question:
+        parts.append(f'Buyers ask: "{question}"')
+    page = (pack.get("page_draft") or "").strip()
+    faq = (pack.get("faq_draft") or "").strip()
+    llms = (pack.get("llms_txt") or "").strip()
+    if page:
+        parts.append(page)
+    if faq:
+        parts.append(faq)
+    if llms:
+        parts.append(llms)
+    return "\n\n".join(parts)
+
+
+def set_cite_stage(prompt: GeoPrompt, stage: str, published_url: str = "") -> None:
+    if stage not in CITE_STAGES:
+        raise ValueError("cite_stage")
+    url = (published_url or cite_published_url(prompt) or "").strip()
+    if stage == "published":
+        if not is_http_url(url):
+            raise ValueError("published_url")
+        prompt.cite_published_url = url
+    elif stage == "draft":
+        prompt.cite_published_url = ""
+    elif url and is_http_url(url):
+        prompt.cite_published_url = url
+    prompt.cite_stage = stage
 
 
 def competitor_note(rows: list[GeoSampleResult]) -> str:

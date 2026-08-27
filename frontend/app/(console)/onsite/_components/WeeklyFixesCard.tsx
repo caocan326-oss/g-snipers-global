@@ -19,6 +19,8 @@ export function WeeklyFixesCard({
   pinWeek,
   unpinWeek,
   recheckIssue,
+  restoreDropped,
+  canRestore,
   busyId,
 }: {
   issues: OnsiteIssue[];
@@ -32,6 +34,8 @@ export function WeeklyFixesCard({
   pinWeek: () => void;
   unpinWeek: () => void;
   recheckIssue: (issue: OnsiteIssue) => void;
+  restoreDropped: () => void;
+  canRestore: boolean;
   busyId: string;
 }) {
   return (
@@ -41,7 +45,7 @@ export function WeeklyFixesCard({
           <div>
             <h2 className="text-lg font-semibold text-slate-950">这周给客户改三处</h2>
             <p className="mt-1 text-sm leading-6 text-slate-500">
-              从紧急/优先里每页只挑一条，最多三页。钉住后新抓到的紧急页不会顶掉。客户说改完了就点「打开核对」，只看现网，我们不代改。已发给客户不是官网已改。
+              从紧急/优先里每页只挑一条，最多三页。钉住后新抓到的紧急页不会顶掉。「打开核对」只打开现网并记下看过，不会自己勾完、也不会拿掉。已发给客户不是官网已改。我们不代改。
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -59,6 +63,11 @@ export function WeeklyFixesCard({
               <Button size="sm" variant="outline" onClick={pinWeek} disabled={busyId === "weekly-pin"}>
                 <Pin className="mr-1.5 h-3.5 w-3.5" />
                 钉住这三处
+              </Button>
+            ) : null}
+            {canRestore ? (
+              <Button size="sm" variant="outline" onClick={restoreDropped} disabled={busyId === "weekly-restore"}>
+                放回刚拿掉的一页
               </Button>
             ) : null}
           </div>

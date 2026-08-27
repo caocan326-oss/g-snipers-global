@@ -21,6 +21,7 @@ export function HeroSection({
   runGroundedBatch,
   retestSameQuestions,
   canRetestSame,
+  runDueWatches,
   downloadGeoReport,
   downloadGeoTable,
   note,
@@ -39,6 +40,7 @@ export function HeroSection({
   runGroundedBatch: () => void;
   retestSameQuestions: () => void;
   canRetestSame: boolean;
+  runDueWatches: () => void;
   downloadGeoReport: () => void;
   downloadGeoTable: () => void;
   note: string;
@@ -56,7 +58,7 @@ export function HeroSection({
           </div>
           <h1 className="mt-3 text-2xl font-semibold text-slate-950">AI 可见度作战室</h1>
           <p className="mt-1 max-w-4xl text-sm leading-6 text-slate-500">
-            同一批真问句看时间序列：提没提到、有没有官网、AI 引用了谁。测完给可粘贴的英文段、FAQ、llms.txt。默认抽查是 Tavily / 博查，不是 ChatGPT 本人。不编问句、不代改、不保证这次被提到。
+            同一批真问句：抽查看没看到，测完出可粘贴英文段 / FAQ / llms.txt，发给客户，他们贴上后再测同一问。默认抽查是 Tavily / 博查，不是 ChatGPT 本人。不编问句、不代改、不保证这次被提到。
           </p>
           <div className="mt-2">
             <UsageTodayBar meters={["bocha", "bailian", "tavily", "llm"]} refreshToken={busyAction} />
@@ -93,8 +95,16 @@ export function HeroSection({
         <Button
           size="sm"
           variant="outline"
+          onClick={runDueWatches}
+          disabled={!(summary?.watch_due) || busyAction === "auto-sample" || busyAction === "grounded-batch" || busyAction === "retest-same" || busyAction === "watch-due"}
+        >
+          {busyAction === "watch-due" ? "复测中…" : (summary?.watch_due ? `复测到期问句（${summary.watch_due}）` : "没有到期问句")}
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
           onClick={retestSameQuestions}
-          disabled={!canRetestSame || busyAction === "auto-sample" || busyAction === "grounded-batch" || busyAction === "retest-same"}
+          disabled={!canRetestSame || busyAction === "auto-sample" || busyAction === "grounded-batch" || busyAction === "retest-same" || busyAction === "watch-due"}
         >
           {busyAction === "retest-same" ? "复测中…" : "同一问再测"}
         </Button>

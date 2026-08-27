@@ -10,6 +10,7 @@ import {
   type GeoAsset,
   type GeoChecklistItem,
   type GeoGroundedBatch,
+  type GeoWatchRunDue,
   type GeoPrompt,
   type GeoProviderStatusList,
   type GeoReportTable,
@@ -61,6 +62,7 @@ export default function GeoPage() {
   const [busyAction, setBusyAction] = useState("");
   const [sampleProvider, setSampleProvider] = useState("");
   const [providerPicked, setProviderPicked] = useState(false);
+  const [citeUrl, setCiteUrl] = useState<Record<string, string>>({});
 
   function loadPrompts() {
     Promise.all([api<GeoPrompt[]>("/api/geo/prompts"), api<GeoSummary>("/api/geo/summary")])
@@ -121,6 +123,47 @@ export default function GeoPage() {
     const res = await api<AiAssist>(`/api/geo/assets/${id}/ai`, { method: "POST", body: JSON.stringify({ step: "content" }) });
     if (res.status === "未配置") setError(res.detail);
     loadAssets();
+  }
+
+  async function setCiteStage(id: string, stage: "draft" | "sent" | "published", publishedUrl = "") {
+    setError("");
+    setNote("");
+    setBusyAction(`cite-${id}`);
+    try {
+      const row = await api<GeoPrompt>(`/api/geo/prompts/${id}/cite-stage`, {
+        method: "POST",
+        body: JSON.stringify({ stage, published_url: publishedUrl }),
+      });
+      if (stage === "sent") setNote("已记下把这段发给客户。不是官网已改。我们不代改。");
+      if (stage === "published") setNote("已记下客户贴上。可以用同一问再测。不保证这次被提到。我们不代改。");
+      if (stage === "draft") setNote("已退回草稿。");
+      if (row.cite_published_url) setCiteUrl((current) => ({ ...current, [id]: row.cite_published_url || "" }));
+      loadPrompts();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "没记下资产进度");
+    } finally {
+      setBusyAction("");
+    }
+  }
+
+  async function citeRetest(id: string) {
+    setError("");
+    setNote("");
+    setBusyAction(`cite-retest-${id}`);
+    try {
+      const batch = await api<GeoGroundedBatch>(`/api/geo/prompts/${id}/cite-retest`, {
+        method: "POST",
+        timeoutMs: 180000,
+      });
+      setNote(`${batch.note || "已再测同一问。"} 只记有没有变化，不保证这次被提到。`);
+      loadRuns();
+      loadPrompts();
+      loadTickets();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "同一问再测失败");
+    } finally {
+      setBusyAction("");
+    }
   }
 
   async function addPrompt(e: FormEvent) {
@@ -251,6 +294,33 @@ export default function GeoPage() {
       loadTickets();
     } catch (e) {
       setError(e instanceof Error ? e.message : "联网源抽查失败");
+    } finally {
+      setBusyAction("");
+    }
+  }
+
+  async function runDueWatches() {
+    if (!(summary?.watch_due)) {
+      setError("没有到期的已记问句。没有原句不会编。");
+      return;
+    }
+    setError("");
+    setNote("");
+    setBusyAction("watch-due");
+    try {
+      const batch = await api<GeoWatchRunDue>("/api/geo/watches/run-due", {
+        method: "POST",
+        timeoutMs: 180000,
+      });
+      setNote(batch.note);
+      if (batch.due > 0 && batch.results_count === 0) {
+        setError(batch.failed.length ? `到期复测没有写出记录。失败：${batch.failed.join("、")}` : "到期复测没有写出记录。");
+      }
+      loadRuns();
+      loadPrompts();
+      loadTickets();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "到期复测失败");
     } finally {
       setBusyAction("");
     }
@@ -472,6 +542,7 @@ export default function GeoPage() {
         runGroundedBatch={runGroundedBatch}
         retestSameQuestions={retestSameQuestions}
         canRetestSame={Boolean(runs[0]?.results?.length)}
+        runDueWatches={runDueWatches}
         downloadGeoReport={downloadGeoReport}
         downloadGeoTable={downloadGeoTable}
         note={note}
@@ -507,6 +578,11 @@ export default function GeoPage() {
           aiPrompt={aiPrompt}
           setDiagnosis={setDiagnosis}
           setObs={setObs}
+          setCiteStage={(id, stage, url) => void setCiteStage(id, stage, url)}
+          citeRetest={(id) => void citeRetest(id)}
+          citeUrl={citeUrl}
+          setCiteUrl={setCiteUrl}
+          busyAction={busyAction}
         />
       ) : null}
 

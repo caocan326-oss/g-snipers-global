@@ -876,12 +876,29 @@ export default function OnsiteBoardPage() {
   async function weeklyRecheck(issue: OnsiteIssue) {
     setError("");
     setBusyId(issue.id);
+    if (issue.page_url) {
+      window.open(issue.page_url, "_blank", "noopener,noreferrer");
+    }
     try {
       const body = await api<{ note?: string }>(`/api/onsite/issues/${issue.id}/weekly-recheck`, { method: "POST" });
-      setNote(body.note || "已打开该页核对。");
+      setNote(body.note || "已打开该页。只记看过，不是工作台勾完。");
       load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "没核对成");
+      setError(e instanceof Error ? e.message : "没打开成");
+    } finally {
+      setBusyId("");
+    }
+  }
+
+  async function restoreDropped() {
+    setError("");
+    setBusyId("weekly-restore");
+    try {
+      const body = await api<{ note?: string }>("/api/onsite/weekly/restore-dropped", { method: "POST" });
+      setNote(body.note || "已放回这周三处。");
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "没放回去");
     } finally {
       setBusyId("");
     }
@@ -1033,6 +1050,8 @@ export default function OnsiteBoardPage() {
         pinWeek={() => void pinWeek()}
         unpinWeek={() => void unpinWeek()}
         recheckIssue={(issue) => void weeklyRecheck(issue)}
+        restoreDropped={() => void restoreDropped()}
+        canRestore={Boolean(board.can_restore)}
         busyId={busyId}
         openIssue={(id) => {
           setFilter("all");

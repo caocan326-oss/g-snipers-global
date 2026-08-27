@@ -1386,8 +1386,11 @@ def test_weekly_pin_keeps_pages_and_sent_is_not_live(client: TestClient, demo_us
     assert sent.json()["this_week"][0]["status"] != "verified"
     assert "不是官网已改" in sent.json()["note"]
     brief = client.get("/api/dashboard/customer-brief", headers=headers).json()
-    assert any("已发给客户" in item for item in brief["sections"][2]["items"])
-    assert all("已经改完" not in item for item in brief["sections"][2]["items"])
+    this_week = next(section for section in brief["sections"] if section["key"] == "this_week")
+    retest = next(section for section in brief["sections"] if section["key"] == "retest")
+    assert any("已发给客户" in item for item in retest["items"])
+    assert all("已经改完" not in item for item in this_week["items"])
+    assert all("已经改完" not in item for item in retest["items"])
 
     unpinned = client.post("/api/onsite/weekly/unpin", headers=headers)
     assert unpinned.status_code == 200, unpinned.text
@@ -1426,11 +1429,13 @@ def test_weekly_recheck_fail_stays_pass_drops(client: TestClient, demo_user, db:
     )
     failed = client.post(f"/api/onsite/issues/{target_id}/weekly-recheck", headers=headers)
     assert failed.status_code == 200, failed.text
-    assert failed.json()["note"].startswith("不过")
-    assert "还没过" in failed.json()["note"]
+    assert failed.json()["note"].startswith("已打开该页")
+    assert "不是工作台勾完" in failed.json()["note"]
+    assert "还在这三处" in failed.json()["note"]
     assert "不代改" in failed.json()["note"]
     stayed = next(item for item in failed.json()["this_week"] if item["id"] == target_id)
     assert stayed["retest_result"].startswith("打开过该页")
+    assert stayed["status"] != "verified"
 
     denied = client.post(f"/api/onsite/issues/{other.id}/weekly-recheck", headers=headers)
     assert denied.status_code == 400
@@ -1443,8 +1448,71 @@ def test_weekly_recheck_fail_stays_pass_drops(client: TestClient, demo_user, db:
         return Snap(), 0, 1
 
     monkeypatch.setattr("app.routers.onsite.issue_actions._fetch_one_registered", _pass)
-    passed = client.post(f"/api/onsite/issues/{target_id}/weekly-recheck", headers=headers)
-    assert passed.status_code == 200, passed.text
-    assert passed.json()["note"].startswith("过。")
-    assert "不是我们改的" in passed.json()["note"]
-    assert all(item["id"] != target_id for item in passed.json()["this_week"])
+    opened = client.post(f"/api/onsite/issues/{target_id}/weekly-recheck", headers=headers)
+    assert opened.status_code == 200, opened.text
+    assert opened.json()["note"].startswith("已打开该页")
+    assert "不是工作台勾完" in opened.json()["note"]
+    assert "还在这三处" in opened.json()["note"]
+    stayed = next(item for item in opened.json()["this_week"] if item["id"] == target_id)
+    assert stayed["status"] != "verified"
+    assert stayed["retest_result"].startswith("打开过该页")
+    assert "不是工作台勾完" in stayed["retest_result"]
+
+
+def test_weekly_restore_puts_auto_closed_page_back(client: TestClient, demo_user, db: Session) -> None:
+    tenant = db.get(Tenant, demo_user.tenant_id)
+    assert tenant is not None
+    tenant.site_origin = "https://www.snipers.com.cn"
+    first = SitePage(tenant_id=demo_user.tenant_id, path="/snipers/article/articlelist/cat_id/3.html", locale="zh-CN", title="知识百科", crawl_status="ok")
+    second = SitePage(tenant_id=demo_user.tenant_id, path="/snipers/article/articlelist/cat_id/1.html", locale="zh-CN", title="最新资讯", crawl_status="ok")
+    third = SitePage(tenant_id=demo_user.tenant_id, path="/en/Article/detail/article_id/4.html", locale="en-US", title="SEO", crawl_status="ok")
+    filler = SitePage(tenant_id=demo_user.tenant_id, path="/snipers/Article/detail/article_id/5.html", locale="zh-CN", title="第五篇", crawl_status="ok")
+    db.add_all([first, second, third, filler])
+    db.flush()
+    dropped = OnsiteIssue(
+        tenant_id=demo_user.tenant_id,
+        page_id=first.id,
+        category="schema",
+        title="页面说明和正文对不上",
+        severity="critical",
+        status="verified",
+        risk="high",
+        retest_result="打开过该页。这一条现在对得上。不是我们改的。",
+    )
+    keepers = [
+        OnsiteIssue(tenant_id=demo_user.tenant_id, page_id=second.id, category="crawl", title="网址层级太深，不好被找到", severity="critical", status="open", risk="high"),
+        OnsiteIssue(tenant_id=demo_user.tenant_id, page_id=third.id, category="crawl", title="网址层级太深，不好被找到", severity="critical", status="open", risk="high"),
+        OnsiteIssue(tenant_id=demo_user.tenant_id, page_id=filler.id, category="tdk", title="首页标题过长", severity="critical", status="open", risk="high"),
+    ]
+    db.add_all([dropped, *keepers])
+    db.commit()
+    from app.onsite_loop import save_weekly_pin
+
+    save_weekly_pin(
+        db,
+        demo_user.tenant_id,
+        issue_ids=[keepers[0].id, keepers[1].id, keepers[2].id],
+        sent_ids=[],
+        last_dropped_id=dropped.id,
+        last_dropped_sent=True,
+    )
+    db.commit()
+
+    headers = auth_header(client)
+    board = client.get("/api/onsite/board", headers=headers).json()
+    assert board["can_restore"] is True
+    assert [item["page_path"] for item in board["this_week"]] == [
+        "/snipers/article/articlelist/cat_id/1.html",
+        "/en/Article/detail/article_id/4.html",
+        "/snipers/Article/detail/article_id/5.html",
+    ]
+
+    restored = client.post("/api/onsite/weekly/restore-dropped", headers=headers)
+    assert restored.status_code == 200, restored.text
+    assert "已放回这周三处" in restored.json()["note"]
+    paths = [item["page_path"] for item in restored.json()["this_week"]]
+    assert paths[0].endswith("cat_id/3.html")
+    assert "/snipers/Article/detail/article_id/5.html" not in paths
+    assert restored.json()["this_week"][0]["status"] == "open"
+    assert restored.json()["this_week"][0]["sent_to_customer"] is True
+    assert restored.json()["can_restore"] is False

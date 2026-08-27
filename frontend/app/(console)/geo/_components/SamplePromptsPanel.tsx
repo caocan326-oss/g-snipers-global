@@ -68,6 +68,11 @@ export function SamplePromptsPanel({
   aiPrompt,
   setDiagnosis,
   setObs,
+  setCiteStage,
+  citeRetest,
+  citeUrl,
+  setCiteUrl,
+  busyAction,
 }: {
   prompts: GeoPrompt[];
   form: { prompt_text: string; country_code: string; recorded_from: string; source_note: string };
@@ -76,6 +81,11 @@ export function SamplePromptsPanel({
   aiPrompt: (id: string) => void;
   setDiagnosis: (promptId: string, diagnosis: string) => void;
   setObs: (id: string, status: string, extra?: Record<string, string | null>) => void;
+  setCiteStage: (id: string, stage: "draft" | "sent" | "published", publishedUrl?: string) => void;
+  citeRetest: (id: string) => void;
+  citeUrl: Record<string, string>;
+  setCiteUrl: (citeUrl: Record<string, string>) => void;
+  busyAction: string;
 }) {
   return (
     <div className="space-y-4">
@@ -91,16 +101,68 @@ export function SamplePromptsPanel({
                 {countryLabel(p.locale)} · {p.recorded_from_label || "已记原句"}
                 {p.source_note ? ` · ${p.source_note}` : ""} · 联网抽查被提到 {displayRate(p.mention_rate)} · 给出官网 {displayRate(p.cite_rate)}
               </p>
+              {p.watch_due ? <Badge tone="amber">到期该复测</Badge> : null}
+              {p.watch_note ? <p className="mt-1 text-xs text-slate-600">{p.watch_note}</p> : null}
               {p.trend_note ? <p className="mt-1 text-sm font-medium text-slate-800">{p.trend_note}</p> : null}
               {p.sample_compare_note ? <p className="mt-1 text-xs font-medium text-slate-700">{p.sample_compare_note}</p> : null}
               {p.competitor_note ? <p className="mt-1 text-xs text-slate-600">{p.competitor_note}</p> : null}
               {p.sample_verdict ? <p className="mt-1 text-xs font-medium text-slate-700">{p.sample_verdict}</p> : null}
+              {p.cite_stage_label ? (
+                <p className="mt-1 text-xs font-medium text-slate-700">
+                  {p.cite_stage === "published" ? <Badge tone="green">客户已贴</Badge> : null}
+                  {p.cite_stage === "sent" ? <Badge tone="blue">已发客户</Badge> : null}
+                  {p.cite_stage === "draft" ? <Badge>草稿待发</Badge> : null}
+                  <span className="ml-2">{p.cite_stage_label}</span>
+                </p>
+              ) : null}
               {p.page_draft ? (
-                <details className="mt-2">
+                <details className="mt-2" open={p.cite_stage !== "published"}>
                   <summary className="cursor-pointer text-xs text-brand-700">可引用资产（粘贴给客户，我们不代改）</summary>
-                  <pre className="mt-2 whitespace-pre-wrap rounded-md bg-slate-50 p-3 text-xs leading-5 text-slate-700">{p.page_draft}</pre>
-                  {p.faq_draft ? <pre className="mt-2 whitespace-pre-wrap rounded-md bg-slate-50 p-3 text-xs leading-5 text-slate-700">{p.faq_draft}</pre> : null}
-                  {p.llms_txt ? <pre className="mt-2 whitespace-pre-wrap rounded-md bg-slate-50 p-3 text-xs leading-5 text-slate-700">{p.llms_txt}</pre> : null}
+                  <pre className="mt-2 whitespace-pre-wrap rounded-md bg-slate-50 p-3 text-xs leading-5 text-slate-700">{p.cite_paste || p.page_draft}</pre>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        void navigator.clipboard.writeText(p.cite_paste || p.page_draft || "");
+                      }}
+                    >
+                      复制这段
+                    </Button>
+                    {p.cite_stage === "sent" ? (
+                      <Button size="sm" variant="outline" onClick={() => setCiteStage(p.id, "draft")} disabled={busyAction === `cite-${p.id}`}>
+                        取消已发
+                      </Button>
+                    ) : (
+                      <Button size="sm" variant="outline" onClick={() => setCiteStage(p.id, "sent")} disabled={busyAction === `cite-${p.id}`}>
+                        已把这段发给客户
+                      </Button>
+                    )}
+                  </div>
+                  <Input
+                    className="mt-2"
+                    placeholder="客户贴上的页地址，https://…"
+                    value={citeUrl[p.id] ?? p.cite_published_url ?? ""}
+                    onChange={(e) => setCiteUrl({ ...citeUrl, [p.id]: e.target.value })}
+                  />
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setCiteStage(p.id, "published", citeUrl[p.id] || p.cite_published_url)}
+                      disabled={busyAction === `cite-${p.id}`}
+                    >
+                      客户已贴上
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => citeRetest(p.id)}
+                      disabled={p.cite_stage !== "published" || busyAction === `cite-retest-${p.id}`}
+                    >
+                      {busyAction === `cite-retest-${p.id}` ? "复测中…" : "同一问再测"}
+                    </Button>
+                  </div>
+                  <p className="mt-2 text-[11px] text-slate-500">只写已记事实，缺的标 NEED_INPUT。客户自己贴。工作台打勾不算官网已改。不保证这次被提到。我们不代改。</p>
                 </details>
               ) : null}
               <p className="mt-1 text-[11px] text-slate-400">

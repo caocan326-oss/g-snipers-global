@@ -12,6 +12,7 @@ from app.onsite_fetch import OriginError, normalize_origin
 from app.onsite_loop import (
     TEMPLATE_LIMIT_REASON,
     clear_weekly_pin,
+    dropped_restore_id,
     is_template_limited,
     save_weekly_pin,
     weekly_pin_state,
@@ -293,12 +294,34 @@ def mark_template_limit(
     return _out(db, user, row, page)
 
 
+def _return_issue_to_week(db: Session, user: User, row: OnsiteIssue, *, sent: bool) -> None:
+    if row.status == "verified":
+        row.status = "open"
+        row.closed_at = None
+    row.blocked_reason = ""
+    row.retest_result = "已放回这周三处。打开核对只记看过，不是工作台勾完。我们不代改。"
+    pin = weekly_pin_state(db, user.tenant_id)
+    issue_ids = [row.id, *[item for item in (pin.get("issue_ids") or []) if item != row.id]]
+    sent_ids = [item for item in (pin.get("sent_ids") or []) if item != row.id]
+    if sent:
+        sent_ids = [row.id, *sent_ids]
+    save_weekly_pin(
+        db,
+        user.tenant_id,
+        issue_ids=issue_ids,
+        sent_ids=sent_ids,
+        last_dropped_id="",
+        last_dropped_sent=False,
+    )
+
+
 def _weekly_out(db: Session, user: User, note: str = "") -> WeeklyOnsiteOut:
     rows = load_weekly_onsite_issues(db, user.tenant_id)
     pin = weekly_pin_state(db, user.tenant_id)
     return WeeklyOnsiteOut(
         this_week=decorate_weekly_issues(db, user.tenant_id, rows),
         weekly_pinned=bool(pin.get("issue_ids")),
+        can_restore=bool(dropped_restore_id(db, user.tenant_id)),
         note=note,
     )
 
@@ -319,6 +342,21 @@ def unpin_weekly_onsite(user: User = Depends(get_current_user), db: Session = De
     clear_weekly_pin(db, user.tenant_id)
     db.commit()
     return _weekly_out(db, user, "已取消钉住。这周三处按紧急/优先重新挑。")
+
+
+@router.post("/weekly/restore-dropped", response_model=WeeklyOnsiteOut)
+def restore_dropped_weekly(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> WeeklyOnsiteOut:
+    dropped_id = dropped_restore_id(db, user.tenant_id)
+    if not dropped_id:
+        raise HTTPException(status_code=400, detail="没有刚拿掉的一页可以放回。")
+    row = _owned_issue(db, user, dropped_id)
+    pin = weekly_pin_state(db, user.tenant_id)
+    sent = dropped_id in (pin.get("sent_ids") or []) or bool(pin.get("last_dropped_sent")) or (
+        row.status == "verified" and (row.retest_result or "").startswith("打开过该页。这一条现在对得上")
+    )
+    _return_issue_to_week(db, user, row, sent=sent)
+    db.commit()
+    return _weekly_out(db, user, "已放回这周三处。打开核对只记看过，不是工作台勾完。不是官网已改。我们不代改。")
 
 
 @router.post("/issues/{issue_id}/sent-to-customer", response_model=WeeklyOnsiteOut)
@@ -371,6 +409,7 @@ def weekly_recheck_issue(
     if page is None or page.tenant_id != user.tenant_id:
         raise HTTPException(status_code=404, detail="页面不存在")
     origin = _require_origin(_tenant(db, user))
+    prior_status = row.status
     try:
         snap, _created, _verified = _fetch_one_registered(db, user, page, origin)
     except OriginError as exc:
@@ -379,15 +418,14 @@ def weekly_recheck_issue(
     db.refresh(row)
     row.last_checked_at = datetime.now(timezone.utc)
     if row.status == "verified":
-        row.retest_result = "打开过该页。这一条现在对得上。不是我们改的。"
-        refresh_weekly_pin_after_drop(db, user.tenant_id, row.id)
-        note = "过。打开过该页，这一条对得上。不是我们改的。我们不代改。"
-    elif not getattr(snap, "usable", False):
-        row.retest_result = "打开过该页，但这次没抓全。不能写成已经改完。我们不代改。"
-        note = "不过。打开过该页，但这次没抓全。不能写成已经改完。我们不代改。"
+        row.status = prior_status if prior_status != "verified" else "open"
+        row.closed_at = None
+    if not getattr(snap, "usable", False):
+        row.retest_result = "打开过该页，但这次没抓全。只记看过，不是工作台勾完。还在这三处。我们不代改。"
+        note = "已打开该页。这次没抓全。只记看过，不是工作台勾完。还在这三处。我们不代改。"
     else:
-        row.retest_result = "打开过该页。这条还没过。不是我们改的。我们不代改。"
-        note = "不过。打开过该页，这条还没过。不是我们改的。我们不代改。"
+        row.retest_result = "打开过该页。只记看过，不是工作台勾完。还在这三处。我们不代改。"
+        note = "已打开该页。只记看过，不是工作台勾完。还在这三处。我们不代改。"
     db.commit()
     return _weekly_out(db, user, note)
 

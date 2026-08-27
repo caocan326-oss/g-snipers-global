@@ -12,6 +12,7 @@ from app.onsite_fetch import OriginError, normalize_origin
 from app.onsite_loop import (
     issue_customer_note,
     issue_customer_paste,
+    page_url,
     save_weekly_pin,
     weekly_onsite_picks,
     weekly_pin_state,
@@ -112,6 +113,7 @@ def _issue_out(row: OnsiteIssue, page: SitePage | None = None, site_origin: str 
         page_id=row.page_id,
         page_path=p.path if p else "",
         page_title=p.title if p else "",
+        page_url=page_url(p, site_origin),
         category=row.category,
         title=_plain_title(row.title),
         detail=row.detail,
@@ -386,7 +388,14 @@ def refresh_weekly_pin_after_drop(db: Session, tenant_id: str, dropped_id: str) 
         .all()
     )
     filled = weekly_onsite_picks(rows, pinned_ids=remaining)
-    save_weekly_pin(db, tenant_id, issue_ids=[row.id for row in filled], sent_ids=pin.get("sent_ids") or [])
+    save_weekly_pin(
+        db,
+        tenant_id,
+        issue_ids=[row.id for row in filled],
+        sent_ids=pin.get("sent_ids") or [],
+        last_dropped_id=dropped_id,
+        last_dropped_sent=dropped_id in (pin.get("sent_ids") or []),
+    )
 
 
 def _tenant(db: Session, user: User) -> Tenant:

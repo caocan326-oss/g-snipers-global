@@ -105,7 +105,7 @@ def test_customer_brief_empty_tenant_stays_untested(client: TestClient, demo_use
     assert "已被 AI 稳定推荐" not in body["markdown"]
     assert "0%" not in body["markdown"]
     keys = [section["key"] for section in body["sections"]]
-    assert keys == ["findability", "buyer_kpi", "this_week", "retest", "inquiries"]
+    assert keys == ["findability", "buyer_kpi", "cite_assets", "this_week", "retest", "inquiries"]
     assert "这个月记到" in body["markdown"]
     buyer_kpi = next(section for section in body["sections"] if section["key"] == "buyer_kpi")
     assert any("还没有买家原句" in item for item in buyer_kpi["items"])
@@ -189,7 +189,7 @@ def test_seeded_demo_counts_align_across_surfaces(client: TestClient, db) -> Non
     assert summary["geo_prompts"] == geo["prompts"] == 2
     assert summary["geo_untested"] == geo["untested"] == 16
     assert summary["geo_tickets_open"] == 2
-    assert [section["key"] for section in brief["sections"]] == ["findability", "buyer_kpi", "this_week", "retest", "inquiries"]
+    assert [section["key"] for section in brief["sections"]] == ["findability", "buyer_kpi", "cite_assets", "this_week", "retest", "inquiries"]
     assert any("紧急" in item for item in brief["this_week"])
     assert "这个月记到" in brief["markdown"]
     assert guide["open_high"] == 6
@@ -472,6 +472,11 @@ def test_record_buyer_question_shows_kpi_on_brief_and_home(client: TestClient, d
     assert workbench["geo_questions"][0]["status"] == "还没抽查"
     assert "销售听到的" in workbench["geo_questions"][0]["subtitle"]
     assert "还没有抽查记录" in (workbench["geo_questions"][0].get("trend") or "")
+    assert created.json()["watch_due"] is True
+    assert listed[0]["watch_due"] is True
+    assert workbench["summary"]["geo_watch_due"] >= 1
+    assert any(item["id"] == "geo-watch-due" for item in workbench["next_actions"])
+    assert any("到期该复测" in item for item in kpi["items"])
 
 
 def test_geo_war_room_has_trend_and_cite_pack(client: TestClient, demo_user, db) -> None:
@@ -543,3 +548,189 @@ def test_geo_war_room_has_trend_and_cite_pack(client: TestClient, demo_user, db)
     assert "2 轮" in "".join(kpi["items"])
     workbench = client.get("/api/dashboard/workbench?days=28", headers=headers).json()
     assert "2 轮" in (workbench["geo_questions"][0].get("trend") or "")
+    assert row["watch_due"] is False
+    assert "常驻监控中" in row["watch_note"]
+    assert row["cite_stage"] == "draft"
+    assert "还没把这段发给客户" in row["cite_stage_label"]
+    assert "NEED_INPUT" in row["cite_paste"]
+    assert "我们不代改" in row["cite_paste"]
+
+
+def test_cite_pack_loop_send_publish_retest(client: TestClient, demo_user, db, monkeypatch) -> None:
+    from types import SimpleNamespace
+
+    from app import geo_providers
+    from app.models import GeoPrompt
+
+    tenant = db.get(Tenant, demo_user.tenant_id)
+    tenant.site_origin = "https://www.snipers.com.cn"
+    tenant.name = "SNIPERS"
+    db.commit()
+    headers = auth_header(client)
+    created = client.post(
+        "/api/geo/prompts",
+        headers=headers,
+        json={
+            "prompt_text": "Which factory can export industrial fasteners to the US?",
+            "locale": "en-US",
+            "recorded_from": "sales",
+        },
+    )
+    assert created.status_code == 201, created.text
+    prompt_id = created.json()["id"]
+    assert created.json()["cite_stage"] == "draft"
+    assert "Do not invent specs" in created.json()["page_draft"]
+
+    sent = client.post(f"/api/geo/prompts/{prompt_id}/cite-stage", headers=headers, json={"stage": "sent"})
+    assert sent.status_code == 200, sent.text
+    assert sent.json()["cite_stage"] == "sent"
+    assert "已把这段发给客户" in sent.json()["cite_stage_label"]
+
+    missing = client.post(
+        f"/api/geo/prompts/{prompt_id}/cite-stage",
+        headers=headers,
+        json={"stage": "published"},
+    )
+    assert missing.status_code == 400
+    assert "页地址" in missing.json()["detail"]
+
+    early = client.post(f"/api/geo/prompts/{prompt_id}/cite-retest", headers=headers)
+    assert early.status_code == 400
+    assert "还没说已贴上" in early.json()["detail"]
+
+    live = client.post(
+        f"/api/geo/prompts/{prompt_id}/cite-stage",
+        headers=headers,
+        json={"stage": "published", "published_url": "https://www.snipers.com.cn/snipers/article/articlelist/cat_id/3.html"},
+    )
+    assert live.status_code == 200, live.text
+    assert live.json()["cite_stage"] == "published"
+    assert live.json()["cite_published_url"].endswith("cat_id/3.html")
+
+    brief = client.get("/api/dashboard/customer-brief", headers=headers).json()
+    assets = next(section for section in brief["sections"] if section["key"] == "cite_assets")
+    assert any("客户说已贴上" in item for item in assets["items"])
+    workbench = client.get("/api/dashboard/workbench?days=28", headers=headers).json()
+    assert workbench["geo_questions"][0]["status"] == "客户已贴，可再测"
+    assert any(item["id"] == "cite-retest" for item in workbench["next_actions"])
+
+    monkeypatch.setattr(geo_providers.settings, "bocha_api_key", "")
+    monkeypatch.setattr(geo_providers.settings, "dashscope_api_key", "")
+    monkeypatch.setattr(geo_providers.settings, "tavily_api_key", "test-tavily")
+
+    def fake_sample(provider, prompt_text, **kwargs):
+        return SimpleNamespace(
+            provider=provider,
+            engine=provider,
+            model="fake",
+            answer="https://other.example/fastener",
+            citations=["https://other.example/fastener"],
+            web_grounded=True,
+            surface="api_search",
+        )
+
+    monkeypatch.setattr("app.routers.geo.sample_with_provider", fake_sample)
+    retest = client.post(f"/api/geo/prompts/{prompt_id}/cite-retest", headers=headers)
+    assert retest.status_code == 200, retest.text
+    assert retest.json()["results_count"] >= 1
+
+
+def test_geo_watch_due_only_samples_recorded_prompts(client: TestClient, demo_user, db, monkeypatch) -> None:
+    from datetime import datetime, timedelta, timezone
+    from types import SimpleNamespace
+
+    from app import geo_providers
+    from app.models import GeoPrompt, GeoSampleResult, GeoSampleRun
+
+    tenant = db.get(Tenant, demo_user.tenant_id)
+    tenant.site_origin = "https://www.snipers.com.cn"
+    tenant.name = "SNIPERS"
+    db.commit()
+    headers = auth_header(client)
+    client.get("/api/geo/prompts", headers=headers)
+
+    fresh = GeoPrompt(
+        tenant_id=demo_user.tenant_id,
+        prompt_text="Which factory can export industrial fasteners to the US?",
+        locale="en-US",
+        recorded_from="sales",
+    )
+    stale = GeoPrompt(
+        tenant_id=demo_user.tenant_id,
+        prompt_text="Do you have ISO documents for export fasteners?",
+        locale="en-US",
+        recorded_from="inquiry",
+    )
+    db.add_all([fresh, stale])
+    db.flush()
+    now = datetime.now(timezone.utc)
+    for prompt, sampled_at, evidence_id in (
+        (fresh, now, "ev_watch_fresh"),
+        (stale, now - timedelta(days=8), "ev_watch_stale"),
+    ):
+        run = GeoSampleRun(
+            tenant_id=demo_user.tenant_id,
+            config_hash=evidence_id,
+            status="done",
+            started_at=sampled_at,
+        )
+        db.add(run)
+        db.flush()
+        db.add(
+            GeoSampleResult(
+                tenant_id=demo_user.tenant_id,
+                run_id=run.id,
+                prompt_id=prompt.id,
+                evidence_id=evidence_id,
+                engine="tavily",
+                web_grounded="true",
+                prompt_text_hash="c" * 64,
+                answer_text_hash="d" * 64,
+                answer_excerpt="A factory list.",
+                mentioned=False,
+                sampled_at=sampled_at,
+            )
+        )
+    db.commit()
+
+    watches = client.get("/api/geo/watches", headers=headers).json()
+    due_ids = {item["prompt_id"] for item in watches["items"] if item["due"]}
+    assert stale.id in due_ids
+    assert fresh.id not in due_ids
+    assert watches["due"] >= 1
+    listed = {row["id"]: row for row in client.get("/api/geo/prompts", headers=headers).json()}
+    assert listed[stale.id]["watch_due"] is True
+    assert listed[fresh.id]["watch_due"] is False
+    workbench = client.get("/api/dashboard/workbench?days=28", headers=headers).json()
+    assert workbench["summary"]["geo_watch_due"] >= 1
+    stale_card = next(item for item in workbench["geo_questions"] if item["id"] == stale.id)
+    assert stale_card["status"] == "到期该复测"
+
+    monkeypatch.setattr(geo_providers.settings, "bocha_api_key", "")
+    monkeypatch.setattr(geo_providers.settings, "dashscope_api_key", "")
+    monkeypatch.setattr(geo_providers.settings, "tavily_api_key", "test-tavily")
+    sampled: list[str] = []
+
+    def fake_sample(provider, prompt_text, **kwargs):
+        sampled.append(prompt_text)
+        return SimpleNamespace(
+            provider=provider,
+            engine=provider,
+            model="fake",
+            answer="https://other.example/fastener",
+            citations=["https://other.example/fastener"],
+            web_grounded=True,
+            surface="api_search",
+        )
+
+    monkeypatch.setattr("app.routers.geo.sample_with_provider", fake_sample)
+    ran = client.post("/api/geo/watches/run-due", headers=headers)
+    assert ran.status_code == 200, ran.text
+    body = ran.json()
+    assert stale.id in body["prompt_ids"]
+    assert fresh.id not in body["prompt_ids"]
+    assert "Which factory can export industrial fasteners to the US?" not in sampled
+    assert "Do you have ISO documents for export fasteners?" in sampled
+    assert "不编问句" in body["note"] or "没有原句不会编" in body["note"]
+    after = client.get("/api/geo/watches", headers=headers).json()
+    assert stale.id not in {item["prompt_id"] for item in after["items"] if item["due"]}

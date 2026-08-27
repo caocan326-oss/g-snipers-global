@@ -10,7 +10,12 @@ from app.geo_citations import is_owned_url, marketplace_urls, split_citations
 from app.geo_helpers import DIAGNOSES, ENGINE_LABELS, ENGINES, engine_region
 from app.geo_loop import (
     HANDOFF_LABELS,
+    cite_paste_for_prompt,
+    cite_published_url,
+    cite_stage,
+    cite_stage_label,
     recorded_from_label,
+    watch_state,
     parse_ticket_evidence,
     ticket_channel_key,
     ticket_channel_name,
@@ -383,6 +388,7 @@ def _prompt_out(
     page_draft: str = "",
     faq_draft: str = "",
     llms_txt: str = "",
+    last_sampled_at=None,
 ) -> GeoPromptOut:
     diagnosis = row.diagnosis or "untested"
     rates = _prompt_rates(row.observations)
@@ -390,6 +396,7 @@ def _prompt_out(
         sample_rates = _sample_prompt_rates(sample_rows)
         rates["mention_rate"] = sample_rates["mention_rate"]
         rates["cite_rate"] = sample_rates["cite_rate"]
+    watched = watch_state(last_sampled_at)
     return GeoPromptOut(
         id=row.id,
         prompt_text=row.prompt_text,
@@ -423,6 +430,19 @@ def _prompt_out(
         page_draft=page_draft,
         faq_draft=faq_draft,
         llms_txt=llms_txt,
+        cite_stage=cite_stage(row),
+        cite_stage_label=cite_stage_label(cite_stage(row)),
+        cite_published_url=cite_published_url(row),
+        cite_paste=cite_paste_for_prompt(
+            {"page_draft": page_draft, "faq_draft": faq_draft, "llms_txt": llms_txt},
+            row,
+        )
+        if page_draft or faq_draft or llms_txt
+        else "",
+        watch_due=bool(watched["due"]),
+        watch_note=str(watched["note"] or ""),
+        last_sampled_at=watched["last_sampled_at"],
+        next_watch_at=watched["next_watch_at"],
     )
 
 

@@ -11,6 +11,7 @@ import {
   type ProjectTargets,
   type SiteArchive,
   type Workbench,
+  type WorkbenchItem,
 } from "@/lib/api";
 import { crawlFinishedNote, isHostSwitch, recrawlSavedSite } from "@/lib/site-origin";
 
@@ -44,6 +45,7 @@ export default function HomePage() {
   const [savingTargets, setSavingTargets] = useState(false);
   const [archives, setArchives] = useState<SiteArchive[]>([]);
   const [archiveBusyId, setArchiveBusyId] = useState("");
+  const [weeklyBusyId, setWeeklyBusyId] = useState("");
 
   useEffect(() => {
     api<Workbench>(`/api/dashboard/workbench?days=${days}`)
@@ -94,18 +96,22 @@ export default function HomePage() {
     {
       label: "AI 搜索",
       text: (data.geo_questions ?? []).length
-        ? `已记 ${(data.geo_questions ?? []).length} 条买家原句。用同一问看有没有提到、有没有官网。不保证这次被提到。`
+        ? (data.summary.geo_watch_due
+          ? `已记 ${(data.geo_questions ?? []).length} 条买家原句，其中 ${data.summary.geo_watch_due} 句到期该复测。不保证这次被提到。`
+          : `已记 ${(data.geo_questions ?? []).length} 条买家原句。用同一问看有没有提到、有没有官网。不保证这次被提到。`)
         : "还没有买家原句。先从销售、询盘、展会记下来。不要编。",
       tone: geoStatusTone,
     },
     {
       label: "下一步",
-      text: (data.weekly_onsite ?? []).length
-        ? `这周给客户看 ${data.weekly_onsite.length} 处改法。客户改不改官网不挡我们交付。`
-        : reviewTotal > 0
-          ? `处理清单里还有 ${reviewTotal} 条未关闭事项，先处理紧急网站改法、AI 搜索和站外曝光。`
-          : "本周期暂无阻塞动作，可以进入客户说明或复查。",
-      tone: (data.weekly_onsite ?? []).length || reviewTotal > 0 ? "amber" : "green",
+      text: (data.summary.geo_watch_due ?? 0) > 0
+        ? `有 ${data.summary.geo_watch_due} 句已记问句到期该复测。没有原句不会编。`
+        : (data.weekly_onsite ?? []).length
+          ? `这周给客户看 ${data.weekly_onsite.length} 处改法。客户改不改官网不挡我们交付。`
+          : reviewTotal > 0
+            ? `处理清单里还有 ${reviewTotal} 条未关闭事项，先处理紧急网站改法、AI 搜索和站外曝光。`
+            : "本周期暂无阻塞动作，可以进入客户说明或复查。",
+      tone: (data.summary.geo_watch_due ?? 0) > 0 || (data.weekly_onsite ?? []).length || reviewTotal > 0 ? "amber" : "green",
     },
   ];
 
@@ -196,6 +202,38 @@ export default function HomePage() {
     }
   }
 
+  async function weeklyRecheck(item: WorkbenchItem) {
+    setError("");
+    setWeeklyBusyId(item.id);
+    const origin = (data?.site_origin || "").replace(/\/$/, "");
+    const path = item.subtitle || "";
+    const url = /^https?:\/\//i.test(path) ? path : origin && path ? `${origin}${path.startsWith("/") ? path : `/${path}`}` : "";
+    if (url) window.open(url, "_blank", "noopener,noreferrer");
+    try {
+      const body = await api<{ note?: string }>(`/api/onsite/issues/${item.id}/weekly-recheck`, { method: "POST" });
+      setNote(body.note || "已打开该页。只记看过，不是工作台勾完。");
+      await reloadWorkbench();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "没打开成");
+    } finally {
+      setWeeklyBusyId("");
+    }
+  }
+
+  async function restoreDroppedWeek() {
+    setError("");
+    setWeeklyBusyId("weekly-restore");
+    try {
+      const body = await api<{ note?: string }>("/api/onsite/weekly/restore-dropped", { method: "POST" });
+      setNote(body.note || "已放回这周三处。");
+      await reloadWorkbench();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "没放回去");
+    } finally {
+      setWeeklyBusyId("");
+    }
+  }
+
   async function restoreArchive(item: SiteArchive) {
     setArchiveBusyId(item.id);
     setError("");
@@ -245,7 +283,15 @@ export default function HomePage() {
     <div className="space-y-6">
       <WorkbenchSummaryHeader data={data} targets={targets} executiveSummary={executiveSummary} />
 
-      <WeeklyOnsiteSection items={data.weekly_onsite ?? []} pinned={Boolean(data.weekly_pinned)} />
+      <WeeklyOnsiteSection
+        items={data.weekly_onsite ?? []}
+        pinned={Boolean(data.weekly_pinned)}
+        siteOrigin={data.site_origin || ""}
+        busyId={weeklyBusyId}
+        canRestore={Boolean(data.weekly_can_restore)}
+        recheckIssue={(item) => void weeklyRecheck(item)}
+        restoreDropped={() => void restoreDroppedWeek()}
+      />
 
       <BuyerQuestionsSection items={data.geo_questions ?? []} />
 

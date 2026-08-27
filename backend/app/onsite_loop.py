@@ -109,21 +109,27 @@ def is_template_limited(issue: OnsiteIssue) -> bool:
     return (issue.blocked_reason or "").startswith(TEMPLATE_LIMIT_MARK)
 
 
-def weekly_pin_state(db: Session, tenant_id: str) -> dict[str, list[str]]:
+def weekly_pin_state(db: Session, tenant_id: str) -> dict:
+    empty = {"issue_ids": [], "sent_ids": [], "last_dropped_id": "", "last_dropped_sent": False}
     row = (
         db.query(IntegrationSetting)
         .filter(IntegrationSetting.tenant_id == tenant_id, IntegrationSetting.key == WEEKLY_PIN_KEY)
         .first()
     )
     if row is None or not (row.value or "").strip():
-        return {"issue_ids": [], "sent_ids": []}
+        return empty
     try:
         raw = json.loads(row.value)
     except json.JSONDecodeError:
-        return {"issue_ids": [], "sent_ids": []}
+        return empty
     issue_ids = [str(item) for item in (raw.get("issue_ids") or []) if str(item).strip()]
     sent_ids = [str(item) for item in (raw.get("sent_ids") or []) if str(item).strip()]
-    return {"issue_ids": issue_ids[:WEEKLY_ONSITE_LIMIT], "sent_ids": sent_ids}
+    return {
+        "issue_ids": issue_ids[:WEEKLY_ONSITE_LIMIT],
+        "sent_ids": sent_ids,
+        "last_dropped_id": str(raw.get("last_dropped_id") or "").strip(),
+        "last_dropped_sent": bool(raw.get("last_dropped_sent")),
+    }
 
 
 def save_weekly_pin(
@@ -132,10 +138,20 @@ def save_weekly_pin(
     *,
     issue_ids: list[str],
     sent_ids: list[str] | None = None,
-) -> dict[str, list[str]]:
+    last_dropped_id: str | None = None,
+    last_dropped_sent: bool | None = None,
+) -> dict:
+    prev = weekly_pin_state(db, tenant_id)
     clean_ids = [item for item in issue_ids if item][:WEEKLY_ONSITE_LIMIT]
-    keep_sent = [item for item in (sent_ids if sent_ids is not None else weekly_pin_state(db, tenant_id)["sent_ids"]) if item in clean_ids]
-    payload = {"issue_ids": clean_ids, "sent_ids": keep_sent}
+    keep_sent = [item for item in (sent_ids if sent_ids is not None else prev["sent_ids"]) if item in clean_ids]
+    dropped = prev.get("last_dropped_id") or "" if last_dropped_id is None else last_dropped_id
+    dropped_sent = prev.get("last_dropped_sent") if last_dropped_sent is None else last_dropped_sent
+    payload = {
+        "issue_ids": clean_ids,
+        "sent_ids": keep_sent,
+        "last_dropped_id": dropped or "",
+        "last_dropped_sent": bool(dropped_sent),
+    }
     row = (
         db.query(IntegrationSetting)
         .filter(IntegrationSetting.tenant_id == tenant_id, IntegrationSetting.key == WEEKLY_PIN_KEY)
@@ -147,6 +163,26 @@ def save_weekly_pin(
     else:
         row.value = blob
     return payload
+
+
+def dropped_restore_id(db: Session, tenant_id: str) -> str:
+    pin = weekly_pin_state(db, tenant_id)
+    dropped_id = str(pin.get("last_dropped_id") or "").strip()
+    if dropped_id:
+        row = db.get(OnsiteIssue, dropped_id)
+        if row is not None and row.tenant_id == tenant_id:
+            return dropped_id
+    fallback = (
+        db.query(OnsiteIssue)
+        .filter(
+            OnsiteIssue.tenant_id == tenant_id,
+            OnsiteIssue.status == "verified",
+            OnsiteIssue.retest_result.startswith("打开过该页。这一条现在对得上"),
+        )
+        .order_by(OnsiteIssue.last_checked_at.desc())
+        .first()
+    )
+    return fallback.id if fallback is not None else ""
 
 
 def clear_weekly_pin(db: Session, tenant_id: str) -> None:

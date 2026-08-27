@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.auth import get_current_user
 from app.database import get_db
-from app.geo_loop import pick_sample_batches, summarize_runs
+from app.geo_loop import due_watch_prompts, pick_sample_batches, summarize_runs
 from app.models import (
     BacklinkGap,
     DemandSignal,
@@ -35,8 +35,18 @@ from app.llm import status_label
 from app.onsite_analyzer import rank_distribution
 from app.routers.onsite.constants import OPENISH
 from app.routers.onsite.common import decorate_weekly_issues, load_weekly_onsite_issues
-from app.onsite_loop import weekly_pin_state
-from app.geo_loop import prompt_batch_rows, prompt_compare_note_for, prompt_trend_points, recorded_from_label, trend_note
+from app.onsite_loop import dropped_restore_id, weekly_pin_state
+from app.geo_loop import (
+    cite_stage,
+    cite_stage_label,
+    last_sampled_at_by_prompt,
+    prompt_batch_rows,
+    prompt_compare_note_for,
+    prompt_trend_points,
+    recorded_from_label,
+    trend_note,
+    watch_state,
+)
 from app.customer_brief import build_customer_brief
 from app.report_export import pdf_response
 from app.site_identity import adopt_live_site
@@ -122,6 +132,7 @@ def _summary_for(user: User, db: Session) -> DashboardSummary:
     )
     latest_geo_batch, _previous_geo = pick_sample_batches(recent_geo_runs)
     geo_latest_sampled, geo_latest_mentioned, _owned, _third = summarize_runs(latest_geo_batch)
+    geo_watch_due = len(due_watch_prompts(db, tid))
     onsite_pages = db.query(func.count(SitePage.id)).filter(SitePage.tenant_id == tid).scalar() or 0
     onsite_open_low = (
         db.query(func.count(OnsiteIssue.id))
@@ -177,6 +188,7 @@ def _summary_for(user: User, db: Session) -> DashboardSummary:
         geo_evidence_results=geo_evidence_results,
         geo_latest_sampled=geo_latest_sampled,
         geo_latest_mentioned=geo_latest_mentioned,
+        geo_watch_due=geo_watch_due,
         onsite_pages=onsite_pages,
         onsite_open_low=onsite_open_low,
         onsite_open_high=onsite_open_high,
@@ -449,7 +461,9 @@ def workbench(
     week_out = decorate_weekly_issues(db, user.tenant_id, week_rows)
     pin = weekly_pin_state(db, user.tenant_id)
     latest_by, previous_by = prompt_batch_rows(db, user.tenant_id)
+    last_by = last_sampled_at_by_prompt(db, user.tenant_id)
     geo_questions: list[WorkbenchItem] = []
+    cite_published = cite_sent = cite_draft = 0
     for prompt in (
         db.query(GeoPrompt)
         .filter(GeoPrompt.tenant_id == user.tenant_id)
@@ -459,8 +473,22 @@ def workbench(
     ):
         note = prompt_compare_note_for(prompt.id, latest_by, previous_by)
         points = prompt_trend_points(db, user.tenant_id, prompt.id)
-        if "还没联网" in note:
+        watched = watch_state(last_by.get(prompt.id))
+        stage = cite_stage(prompt)
+        if stage == "published":
+            cite_published += 1
+        elif stage == "sent":
+            cite_sent += 1
+        else:
+            cite_draft += 1
+        if stage == "published":
+            status, tone = "客户已贴，可再测", "green"
+        elif stage == "sent":
+            status, tone = "资产已发，等客户贴", "blue"
+        elif last_by.get(prompt.id) is None:
             status, tone = "还没抽查", "amber"
+        elif watched["due"]:
+            status, tone = "到期该复测", "amber"
         elif "仍没有提到" in note or note.startswith("这一次没有提到"):
             status, tone = "没提到", "amber"
         elif "这次提到了" in note or note.startswith("这一次提到了") or "这次也提到了" in note:
@@ -477,7 +505,7 @@ def workbench(
                 href="/geo",
                 status=status,
                 tone=tone,
-                meta=note,
+                meta=f"{note} {cite_stage_label(stage)}".strip(),
                 trend=trend_note(points),
                 action_label="去作战室",
             )
@@ -505,6 +533,18 @@ def workbench(
         )
 
     next_actions: list[WorkbenchItem] = []
+    if summary.geo_watch_due:
+        next_actions.append(
+            WorkbenchItem(
+                id="geo-watch-due",
+                title=f"常驻复测：{summary.geo_watch_due} 句到期",
+                subtitle="同一批已记问句该再抽了。没有原句不会编。不保证这次被提到。",
+                href="/geo",
+                status="到期该复测",
+                tone="amber",
+                action_label="去作战室",
+            )
+        )
     if weekly_onsite:
         next_actions.append(
             WorkbenchItem(
@@ -515,6 +555,42 @@ def workbench(
                 status="已钉住" if pin.get("issue_ids") else "待钉住",
                 tone="amber",
                 action_label="去站内",
+            )
+        )
+    if cite_published:
+        next_actions.append(
+            WorkbenchItem(
+                id="cite-retest",
+                title=f"同一问再测：{cite_published} 句客户已贴上",
+                subtitle="只记有没有变化。不保证这次被提到。我们不代改。",
+                href="/geo",
+                status="可再测",
+                tone="green",
+                action_label="去作战室",
+            )
+        )
+    elif cite_sent:
+        next_actions.append(
+            WorkbenchItem(
+                id="cite-wait",
+                title="等客户贴上可引用资产",
+                subtitle="已把英文段发给客户。他们贴完再记页地址，同一问再测。我们不代改。",
+                href="/geo",
+                status="等客户贴",
+                tone="blue",
+                action_label="去作战室",
+            )
+        )
+    elif cite_draft:
+        next_actions.append(
+            WorkbenchItem(
+                id="cite-send",
+                title="把英文段发给客户",
+                subtitle="草稿只写已记事实，缺的标 NEED_INPUT。客户自己贴。我们不代改。",
+                href="/geo",
+                status="草稿待发",
+                tone="amber",
+                action_label="去作战室",
             )
         )
     if not site_origin:
@@ -646,13 +722,14 @@ def workbench(
         site_origin=site_origin or "",
         diagnostic_status=_diagnostic_status(summary, site_origin or ""),
         seo_performance=seo_performance,
-        next_actions=next_actions[:5],
+        next_actions=next_actions[:6],
         seo_items=seo_items,
         geo_items=geo_items,
         recent_signals=recent_signals,
         chains=chains,
         weekly_onsite=weekly_onsite,
         weekly_pinned=bool(pin.get("issue_ids")),
+        weekly_can_restore=bool(dropped_restore_id(db, user.tenant_id)),
         geo_questions=geo_questions,
         deferred_modules=[
             WorkbenchItem(

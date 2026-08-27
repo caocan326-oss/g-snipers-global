@@ -34,7 +34,7 @@ export function BuyerQuestionsSection({ items }: { items: WorkbenchItem[] }) {
           <div>
             <h2 className="text-lg font-semibold text-slate-950">AI 可见度作战室</h2>
             <p className="mt-1 text-sm leading-6 text-slate-500">
-              同一批真问句的时间序列：提没提到、有没有官网。测完给可粘贴的英文段和 FAQ。没有原句就空着。不保证这次被提到。我们不代改。
+              同一批真问句：抽查看没看到，测完出英文段，发给客户，他们贴上后再测同一问。没有原句就空着。不保证这次被提到。我们不代改。
             </p>
           </div>
           <Link href="/geo">

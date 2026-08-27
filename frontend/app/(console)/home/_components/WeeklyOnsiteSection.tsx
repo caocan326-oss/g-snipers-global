@@ -6,12 +6,29 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import type { WorkbenchItem } from "@/lib/api";
 
+function liveUrl(origin: string, path: string) {
+  if (/^https?:\/\//i.test(path)) return path;
+  const root = origin.replace(/\/$/, "");
+  if (!root || !path) return "";
+  return `${root}${path.startsWith("/") ? path : `/${path}`}`;
+}
+
 export function WeeklyOnsiteSection({
   items,
   pinned,
+  siteOrigin,
+  busyId,
+  canRestore,
+  recheckIssue,
+  restoreDropped,
 }: {
   items: WorkbenchItem[];
   pinned: boolean;
+  siteOrigin: string;
+  busyId: string;
+  canRestore: boolean;
+  recheckIssue: (item: WorkbenchItem) => void;
+  restoreDropped: () => void;
 }) {
   return (
     <Card className="rounded-md border-amber-200">
@@ -20,7 +37,7 @@ export function WeeklyOnsiteSection({
           <div>
             <h2 className="text-lg font-semibold text-slate-950">这周给客户改三处</h2>
             <p className="mt-1 text-sm leading-6 text-slate-500">
-              这三处是这周给客户看的改法。客户改不改官网不挡我们交付。钉住、发给客户、打开核对在站内。我们不代改。
+              这三处是这周给客户看的改法。客户改不改官网不挡我们交付。「打开核对」只打开现网并记下看过，不会自己勾完。钉住、发给客户在站内。我们不代改。
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -29,6 +46,11 @@ export function WeeklyOnsiteSection({
                 客户说明
               </Button>
             </Link>
+            {canRestore ? (
+              <Button size="sm" variant="outline" onClick={restoreDropped} disabled={busyId === "weekly-restore"}>
+                放回刚拿掉的一页
+              </Button>
+            ) : null}
             <Link href="/onsite">
               <Button size="sm">
                 去站内
@@ -40,21 +62,36 @@ export function WeeklyOnsiteSection({
         {pinned ? <Badge tone="amber">已钉住。新抓到的页不会顶掉。</Badge> : null}
         {items.length ? (
           <div className="grid gap-3 lg:grid-cols-3">
-            {items.map((item, index) => (
-              <Link
-                key={item.id}
-                href="/onsite"
-                className="space-y-2 rounded-md border border-slate-200 bg-white p-3 transition hover:border-brand-500"
-              >
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge>{index + 1}</Badge>
-                  {item.status ? <Badge tone={item.tone}>{item.status}</Badge> : null}
+            {items.map((item, index) => {
+              const url = liveUrl(siteOrigin, item.subtitle);
+              return (
+                <div key={item.id} className="space-y-2 rounded-md border border-slate-200 bg-white p-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge>{index + 1}</Badge>
+                    {item.status ? <Badge tone={item.tone}>{item.status}</Badge> : null}
+                  </div>
+                  <h3 className="text-sm font-medium text-slate-950">{item.title}</h3>
+                  {url ? (
+                    <a href={url} target="_blank" rel="noreferrer" className="block text-xs text-brand-700 underline">
+                      {item.subtitle}
+                    </a>
+                  ) : (
+                    <p className="text-xs text-slate-500">{item.subtitle}</p>
+                  )}
+                  {item.meta ? <p className="text-xs leading-5 text-slate-600">{item.meta}</p> : null}
+                  <div className="flex flex-wrap gap-2">
+                    <Button size="sm" variant="outline" onClick={() => recheckIssue(item)} disabled={busyId === item.id}>
+                      打开核对
+                    </Button>
+                    <Link href="/onsite">
+                      <Button size="sm" variant="ghost">
+                        去站内
+                      </Button>
+                    </Link>
+                  </div>
                 </div>
-                <h3 className="text-sm font-medium text-slate-950">{item.title}</h3>
-                <p className="text-xs text-slate-500">{item.subtitle}</p>
-                {item.meta ? <p className="text-xs leading-5 text-slate-600">{item.meta}</p> : null}
-              </Link>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <p className="text-sm text-slate-500">这周还没有要改的站内三处。有紧急或优先页才会出现。</p>

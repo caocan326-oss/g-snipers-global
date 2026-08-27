@@ -6,7 +6,17 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.auth import get_current_user
 from app.database import get_db
-from app.geo_loop import apply_loop_spec, kinds_from_sample_rows, loop_ticket_spec, pick_sample_batches, write_ticket_retest
+from app.geo_loop import (
+    WATCH_INTERVAL_DAYS,
+    apply_loop_spec,
+    due_watch_prompts,
+    kinds_from_sample_rows,
+    last_sampled_at_by_prompt,
+    loop_ticket_spec,
+    pick_sample_batches,
+    watch_state,
+    write_ticket_retest,
+)
 from app.geo_providers import GeoProviderError, configured_implemented_grounded
 from app.models import (
     GeoObservation,
@@ -26,6 +36,9 @@ from app.schemas import (
     GeoSampleRunCreate,
     GeoSampleRunOut,
     GeoTicketDraftOut,
+    GeoWatchItemOut,
+    GeoWatchListOut,
+    GeoWatchRunDueOut,
 )
 
 import app.routers.geo as _geo_pkg
@@ -380,12 +393,7 @@ def create_auto_sample_run(
     return _run_out(run, include_results=True)
 
 
-@router.post("/sample-runs/auto-grounded", response_model=GeoGroundedBatchOut, status_code=201)
-def create_grounded_batch_runs(
-    body: GeoAutoSampleIn,
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-) -> GeoGroundedBatchOut:
+def _run_grounded_batch(db: Session, user: User, body: GeoAutoSampleIn) -> GeoGroundedBatchOut:
     ready = configured_implemented_grounded()
     if not ready:
         raise HTTPException(status_code=400, detail="没有已配置、能联网返回网址的数据源。DeepSeek 不算。")
@@ -433,6 +441,86 @@ def create_grounded_batch_runs(
         failed=failed,
         note=note,
         runs=runs,
+    )
+
+
+@router.post("/sample-runs/auto-grounded", response_model=GeoGroundedBatchOut, status_code=201)
+def create_grounded_batch_runs(
+    body: GeoAutoSampleIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> GeoGroundedBatchOut:
+    return _run_grounded_batch(db, user, body)
+
+
+@router.get("/watches", response_model=GeoWatchListOut)
+def list_watches(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> GeoWatchListOut:
+    prompts = (
+        db.query(GeoPrompt)
+        .filter(GeoPrompt.tenant_id == user.tenant_id)
+        .order_by(GeoPrompt.created_at.desc())
+        .all()
+    )
+    last_by = last_sampled_at_by_prompt(db, user.tenant_id)
+    items = []
+    due = 0
+    for prompt in prompts:
+        state = watch_state(last_by.get(prompt.id))
+        if state["due"]:
+            due += 1
+        items.append(
+            GeoWatchItemOut(
+                prompt_id=prompt.id,
+                prompt_text=prompt.prompt_text,
+                due=bool(state["due"]),
+                last_sampled_at=state["last_sampled_at"],
+                next_watch_at=state["next_watch_at"],
+                note=str(state["note"] or ""),
+            )
+        )
+    note = (
+        f"{due} 句到期该复测。只抽已记原句，不编问句。不保证这次被提到。"
+        if due
+        else (
+            "没有到期问句。没有原句不会编。"
+            if not prompts
+            else "已记问句都还在监控间隔内。不保证这次被提到。"
+        )
+    )
+    return GeoWatchListOut(
+        interval_days=WATCH_INTERVAL_DAYS,
+        watching=len(prompts),
+        due=due,
+        items=items,
+        note=note,
+    )
+
+
+@router.post("/watches/run-due", response_model=GeoWatchRunDueOut)
+def run_due_watches(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> GeoWatchRunDueOut:
+    due = due_watch_prompts(db, user.tenant_id)
+    if not due:
+        return GeoWatchRunDueOut(
+            due=0,
+            ran=0,
+            note="没有到期的已记问句。没有原句不会编。不保证这次被提到。",
+        )
+    body = GeoAutoSampleIn(
+        prompt_ids=[prompt.id for prompt in due],
+        trials=1,
+        limit=min(30, len(due)),
+        web_grounded="true",
+    )
+    batch = _run_grounded_batch(db, user, body)
+    return GeoWatchRunDueOut(
+        due=len(due),
+        ran=batch.results_count,
+        prompt_ids=[prompt.id for prompt in due],
+        providers=batch.providers,
+        results_count=batch.results_count,
+        failed=batch.failed,
+        note=f"{batch.note} 常驻复测只抽已记问句。没有原句不会编。不保证这次被提到。",
+        runs=batch.runs,
     )
 
 

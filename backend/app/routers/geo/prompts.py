@@ -9,16 +9,21 @@ from app.auth import get_current_user
 from app.database import get_db
 from app.geo_loop import (
     RECORDED_FROM,
+    WATCH_INTERVAL_DAYS,
     compare_batches_note,
     mention_split_for_runs,
     pick_sample_batches,
     _citation_hosts,
     cite_pack_for_prompt,
+    cite_stage,
     competitor_note,
+    due_watch_prompts,
+    last_sampled_at_by_prompt,
     prompt_batch_rows,
     prompt_compare_note_for,
     prompt_sample_verdict,
     prompt_trend_points,
+    set_cite_stage,
     trend_note,
     summarize_runs,
 )
@@ -42,6 +47,7 @@ from app.site_identity import adopt_live_site, is_buyer_question, is_lock_leftov
 from app.schemas import (
     AiAssistOut,
     AiStepIn,
+    GeoCiteStageIn,
     GeoDiagnosisIn,
     GeoObservationOut,
     GeoObservationUpdate,
@@ -49,6 +55,7 @@ from app.schemas import (
     GeoPromptOut,
     GeoProviderStatusListOut,
     GeoProviderStatusOut,
+    GeoGroundedBatchOut,
     GeoSeedOut,
     GeoSummary,
 )
@@ -64,6 +71,19 @@ from .common import (
     _rate,
 )
 from .constants import PROMPT_TYPES, RECORDED_OBS
+
+
+def _out_with_pack(db, user: User, row: GeoPrompt) -> GeoPromptOut:
+    tenant = db.get(Tenant, user.tenant_id)
+    packed = cite_pack_for_prompt(db, tenant, row)
+    last_by = last_sampled_at_by_prompt(db, user.tenant_id)
+    return _prompt_out(
+        row,
+        page_draft=packed["page_draft"],
+        faq_draft=packed["faq_draft"],
+        llms_txt=packed["llms_txt"],
+        last_sampled_at=last_by.get(row.id),
+    )
 
 
 @router.get("/providers/status", response_model=GeoProviderStatusListOut)
@@ -153,6 +173,9 @@ def geo_summary(user: User = Depends(get_current_user), db: Session = Depends(ge
         previous_owned=previous_owned,
         compare_note=compare_batches_note(latest_batch, previous_batch),
         latest_mention_split=mention_split_for_runs(latest_batch),
+        watch_due=len(due_watch_prompts(db, tid)),
+        watch_count=prompts,
+        watch_interval_days=WATCH_INTERVAL_DAYS,
     )
 
 
@@ -187,6 +210,7 @@ def list_prompts(
             .all()
         )
     latest_by, previous_by = prompt_batch_rows(db, user.tenant_id)
+    last_by = last_sampled_at_by_prompt(db, user.tenant_id)
     tenant = db.get(Tenant, user.tenant_id)
     packed = []
     for r in rows:
@@ -206,6 +230,7 @@ def list_prompts(
                 page_draft=pack["page_draft"],
                 faq_draft=pack["faq_draft"],
                 llms_txt=pack["llms_txt"],
+                last_sampled_at=last_by.get(r.id),
             )
         )
     return packed
@@ -235,7 +260,7 @@ def create_prompt(
     db.flush()
     _create_untested_slots(db, user, row)
     db.commit()
-    return _prompt_out(_load_prompt(db, row.id))
+    return _out_with_pack(db, user, _load_prompt(db, row.id))
 
 
 @router.post("/prompt-panel/seed", response_model=GeoSeedOut)
@@ -329,7 +354,54 @@ def set_diagnosis(
         raise HTTPException(status_code=404, detail="问句不存在")
     row.diagnosis = body.diagnosis
     db.commit()
-    return _prompt_out(_load_prompt(db, row.id))
+    return _out_with_pack(db, user, _load_prompt(db, row.id))
+
+
+@router.post("/prompts/{prompt_id}/cite-stage", response_model=GeoPromptOut)
+def mark_cite_stage(
+    prompt_id: str,
+    body: GeoCiteStageIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> GeoPromptOut:
+    row = db.get(GeoPrompt, prompt_id)
+    if row is None or row.tenant_id != user.tenant_id:
+        raise HTTPException(status_code=404, detail="问句不存在")
+    try:
+        set_cite_stage(row, body.stage, published_url=body.published_url or "")
+    except ValueError as exc:
+        if str(exc) == "published_url":
+            raise HTTPException(
+                status_code=400,
+                detail="客户说已贴上时，先填他们贴上的页地址（http/https）。工作台打勾不算官网已改。我们不代改。",
+            ) from exc
+        raise HTTPException(status_code=400, detail="进度只能是：草稿已出、已发给客户、客户已贴上。") from exc
+    db.commit()
+    return _out_with_pack(db, user, _load_prompt(db, row.id))
+
+
+@router.post("/prompts/{prompt_id}/cite-retest", response_model=GeoGroundedBatchOut)
+def retest_published_cite(
+    prompt_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    row = db.get(GeoPrompt, prompt_id)
+    if row is None or row.tenant_id != user.tenant_id:
+        raise HTTPException(status_code=404, detail="问句不存在")
+    if cite_stage(row) != "published" or not (row.cite_published_url or "").strip():
+        raise HTTPException(
+            status_code=400,
+            detail="客户还没说已贴上，或还没有页地址。先记下他们贴上的网址，再用同一问看一次。工作台打勾不算官网已改。不保证这次被提到。",
+        )
+    from app.routers.geo.sampling import _run_grounded_batch
+    from app.schemas import GeoAutoSampleIn
+
+    return _run_grounded_batch(
+        db,
+        user,
+        GeoAutoSampleIn(prompt_ids=[row.id], trials=1, limit=1, web_grounded="true"),
+    )
 
 
 @router.patch("/observations/{obs_id}", response_model=GeoObservationOut)

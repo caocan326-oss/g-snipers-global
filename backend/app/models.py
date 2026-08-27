@@ -215,6 +215,8 @@ class GeoPrompt(Base):
     locale: Mapped[str] = mapped_column(String(16), nullable=False)
     recorded_from: Mapped[str] = mapped_column(String(40), default="")
     source_note: Mapped[str] = mapped_column(String(200), default="")
+    cite_stage: Mapped[str] = mapped_column(String(20), default="draft")
+    cite_published_url: Mapped[str] = mapped_column(String(500), default="")
     diagnosis: Mapped[str] = mapped_column(String(40), default="untested")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     ai_status: Mapped[str] = mapped_column(String(20), default="untested")

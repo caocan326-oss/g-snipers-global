@@ -205,6 +205,7 @@ export type DashboardSummary = {
   geo_evidence_results?: number;
   geo_latest_sampled?: number;
   geo_latest_mentioned?: number;
+  geo_watch_due?: number;
   onsite_pages: number;
   onsite_open_low: number;
   onsite_open_high: number;
@@ -295,6 +296,7 @@ export type Workbench = {
   deferred_modules: WorkbenchItem[];
   weekly_onsite: WorkbenchItem[];
   weekly_pinned: boolean;
+  weekly_can_restore?: boolean;
   geo_questions: WorkbenchItem[];
 };
 
@@ -705,6 +707,14 @@ export type GeoPrompt = {
   page_draft?: string;
   faq_draft?: string;
   llms_txt?: string;
+  cite_stage?: string;
+  cite_stage_label?: string;
+  cite_published_url?: string;
+  cite_paste?: string;
+  watch_due?: boolean;
+  watch_note?: string;
+  last_sampled_at?: string | null;
+  next_watch_at?: string | null;
 };
 
 export type GeoSummary = {
@@ -733,6 +743,9 @@ export type GeoSummary = {
   previous_owned?: number;
   compare_note?: string;
   latest_mention_split?: string;
+  watch_due?: number;
+  watch_count?: number;
+  watch_interval_days?: number;
 };
 
 export type GeoReport = {
@@ -815,6 +828,17 @@ export type GeoProviderStatusList = {
 };
 
 export type GeoGroundedBatch = {
+  providers: string[];
+  results_count: number;
+  failed: string[];
+  note: string;
+  runs: GeoSampleRun[];
+};
+
+export type GeoWatchRunDue = {
+  due: number;
+  ran: number;
+  prompt_ids: string[];
   providers: string[];
   results_count: number;
   failed: string[];
@@ -967,6 +991,7 @@ export type OnsiteIssue = {
   page_id: string;
   page_path?: string;
   page_title?: string;
+  page_url?: string;
   category: string;
   title: string;
   detail: string;
@@ -1006,6 +1031,7 @@ export type OnsiteBoard = {
   groups: { critical: OnsiteIssue[]; high: OnsiteIssue[]; low: OnsiteIssue[] };
   this_week?: OnsiteIssue[];
   weekly_pinned?: boolean;
+  can_restore?: boolean;
 };
 
 export type OnsiteGuide = {

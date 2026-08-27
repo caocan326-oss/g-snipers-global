@@ -41,6 +41,7 @@ class DashboardSummary(BaseModel):
     geo_evidence_results: int = 0
     geo_latest_sampled: int = 0
     geo_latest_mentioned: int = 0
+    geo_watch_due: int = 0
     onsite_pages: int
     onsite_open_low: int
     onsite_open_high: int
@@ -131,6 +132,7 @@ class WorkbenchOut(BaseModel):
     deferred_modules: list[WorkbenchItem] = []
     weekly_onsite: list[WorkbenchItem] = []
     weekly_pinned: bool = False
+    weekly_can_restore: bool = False
     geo_questions: list[WorkbenchItem] = []
 
 
@@ -492,10 +494,23 @@ class GeoPromptOut(BaseModel):
     page_draft: str = ""
     faq_draft: str = ""
     llms_txt: str = ""
+    cite_stage: str = "draft"
+    cite_stage_label: str = ""
+    cite_published_url: str = ""
+    cite_paste: str = ""
+    watch_due: bool = False
+    watch_note: str = ""
+    last_sampled_at: datetime | None = None
+    next_watch_at: datetime | None = None
 
 
 class GeoDiagnosisIn(BaseModel):
     diagnosis: str
+
+
+class GeoCiteStageIn(BaseModel):
+    stage: str
+    published_url: str = ""
 
 
 class GeoTicketCreate(BaseModel):
@@ -617,6 +632,9 @@ class GeoSummary(BaseModel):
     previous_owned: int = 0
     compare_note: str = ""
     latest_mention_split: str = ""
+    watch_due: int = 0
+    watch_count: int = 0
+    watch_interval_days: int = 7
 
 
 class GeoSeedOut(BaseModel):
@@ -661,6 +679,34 @@ class GeoGroundedBatchOut(BaseModel):
     results_count: int
     failed: list[str] = []
     note: str
+    runs: list["GeoSampleRunOut"] = []
+
+
+class GeoWatchItemOut(BaseModel):
+    prompt_id: str
+    prompt_text: str
+    due: bool
+    last_sampled_at: datetime | None = None
+    next_watch_at: datetime | None = None
+    note: str = ""
+
+
+class GeoWatchListOut(BaseModel):
+    interval_days: int = 7
+    watching: int = 0
+    due: int = 0
+    items: list[GeoWatchItemOut] = []
+    note: str = ""
+
+
+class GeoWatchRunDueOut(BaseModel):
+    due: int = 0
+    ran: int = 0
+    prompt_ids: list[str] = []
+    providers: list[str] = []
+    results_count: int = 0
+    failed: list[str] = []
+    note: str = ""
     runs: list["GeoSampleRunOut"] = []
 
 
@@ -790,6 +836,7 @@ class OnsiteIssueOut(BaseModel):
     page_id: str
     page_path: str = ""
     page_title: str = ""
+    page_url: str = ""
     category: str
     title: str
     detail: str
@@ -852,11 +899,13 @@ class OnsiteBoardOut(BaseModel):
     groups: dict[str, list[OnsiteIssueOut]]
     this_week: list[OnsiteIssueOut] = []
     weekly_pinned: bool = False
+    can_restore: bool = False
 
 
 class WeeklyOnsiteOut(BaseModel):
     this_week: list[OnsiteIssueOut] = []
     weekly_pinned: bool = False
+    can_restore: bool = False
     note: str = ""
 
 

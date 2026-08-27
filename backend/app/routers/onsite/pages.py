@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.auth import get_current_user
 from app.database import get_db
 from app.models import OnsiteIssue, SeoPage, SitePage, User
-from app.onsite_loop import weekly_pin_state
+from app.onsite_loop import dropped_restore_id, weekly_pin_state
 from app.risk import needs_confirm
 from app.schemas import (
     ContentBriefOut,
@@ -132,6 +132,7 @@ def issue_board(user: User = Depends(get_current_user), db: Session = Depends(ge
         groups=groups,
         this_week=this_week,
         weekly_pinned=bool(weekly_pin_state(db, user.tenant_id).get("issue_ids")),
+        can_restore=bool(dropped_restore_id(db, user.tenant_id)),
     )
 
 
