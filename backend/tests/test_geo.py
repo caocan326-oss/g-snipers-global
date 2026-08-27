@@ -1567,11 +1567,11 @@ def test_geo_ticket_offsite_draft_and_fill_back(client: TestClient, demo_user, d
 
     headers = auth_header(client)
     row = next(item for item in client.get("/api/geo/tickets", headers=headers).json() if item["id"] == ticket.id)
-    assert row["channel"] == "LinkedIn Company Page"
-    assert row["compose_url"].startswith("https://www.linkedin.com")
-    assert question in row["offsite_draft"]
-    assert "usa-65585" in row["offsite_draft"]
-    assert "代发" not in row["offsite_draft"]
+    assert row["channel"] == ""
+    assert "LinkedIn" not in (row["customer_note"] or "")
+    assert "LinkedIn" not in (row["customer_paste"] or "")
+    assert row["offsite_draft"] == ""
+    assert row["compose_url"] == ""
     assert row["offsite_url"] == ""
     assert row["handoff"] == "drafted"
 
@@ -1588,3 +1588,22 @@ def test_geo_ticket_offsite_draft_and_fill_back(client: TestClient, demo_user, d
     assert saved.json()["offsite_url"] == "https://www.linkedin.com/feed/update/urn:li:activity:1"
     assert saved.json()["handoff"] == "drafted"
     assert saved.json()["result_url"] == ""
+
+    from app.models import SourcePlatform
+
+    db.add(
+        SourcePlatform(
+            tenant_id=demo_user.tenant_id,
+            platform_key="linkedin_company",
+            name="LinkedIn Company Page",
+            has_official_api=True,
+            status="active",
+            profile_url="https://www.linkedin.com/company/example",
+        )
+    )
+    db.commit()
+    live = next(item for item in client.get("/api/geo/tickets", headers=headers).json() if item["id"] == ticket.id)
+    assert live["channel"] == "LinkedIn Company Page"
+    assert question in live["offsite_draft"]
+    assert "usa-65585" in live["offsite_draft"]
+    assert "代发" not in live["offsite_draft"]

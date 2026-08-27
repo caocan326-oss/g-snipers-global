@@ -107,7 +107,7 @@ def test_customer_brief_empty_tenant_stays_untested(client: TestClient, demo_use
     assert "已被 AI 稳定推荐" not in body["markdown"]
     assert "0%" not in body["markdown"]
     keys = [section["key"] for section in body["sections"]]
-    assert keys == ["findability", "buyer_kpi", "cite_assets", "trust_map", "this_week", "retest", "inquiries"]
+    assert keys == ["findability", "buyer_kpi", "cite_assets", "trust_map", "this_week", "verdicts", "retest", "inquiries"]
     assert "这个月记到" in body["markdown"]
     buyer_kpi = next(section for section in body["sections"] if section["key"] == "buyer_kpi")
     assert any("还没有买家原句" in item for item in buyer_kpi["items"])
@@ -194,7 +194,7 @@ def test_seeded_demo_counts_align_across_surfaces(client: TestClient, db) -> Non
     assert summary["geo_prompts"] == geo["prompts"] == 2
     assert summary["geo_untested"] == geo["untested"] == 16
     assert summary["geo_tickets_open"] == 2
-    assert [section["key"] for section in brief["sections"]] == ["findability", "buyer_kpi", "cite_assets", "trust_map", "this_week", "retest", "inquiries"]
+    assert [section["key"] for section in brief["sections"]] == ["findability", "buyer_kpi", "cite_assets", "trust_map", "this_week", "verdicts", "retest", "inquiries"]
     assert any("紧急" in item for item in brief["this_week"])
     assert "这个月记到" in brief["markdown"]
     assert guide["open_high"] == 6
@@ -958,10 +958,10 @@ def test_workbench_open_verify_stays_on_week_and_can_restore(client: TestClient,
     assert opened.status_code == 200, opened.text
     workbench = client.get("/api/dashboard/workbench?days=28", headers=headers).json()
     card = next(item for item in workbench["weekly_onsite"] if item["id"] == target_id)
-    assert card["status"] == "已发给客户"
+    assert card["status"] == "打开过，还没过"
     assert workbench["weekly_onsite"][0]["id"] == target_id
     assert workbench["weekly_can_restore"] is False
-    assert card["subtitle"].endswith("cat_id/3.html")
+    assert card["subtitle"].startswith("/")
 
     from app.onsite_loop import save_weekly_pin
 
@@ -988,5 +988,5 @@ def test_workbench_open_verify_stays_on_week_and_can_restore(client: TestClient,
     home = client.get("/api/dashboard/workbench?days=28", headers=headers).json()
     assert home["weekly_onsite"][0]["id"] == target_id
     assert home["weekly_onsite"][0]["status"] == "已发给客户"
-    assert home["weekly_onsite"][0]["subtitle"].endswith("cat_id/3.html")
+    assert home["weekly_onsite"][0]["subtitle"].startswith("/")
     assert home["weekly_can_restore"] is False

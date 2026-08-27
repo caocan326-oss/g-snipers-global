@@ -454,7 +454,7 @@ def _ticket_out(row: GeoTicket, sample_note: str = "", db: Session | None = None
     prompt = getattr(row, "prompt", None)
     if prompt is None and db is not None and row.prompt_id:
         prompt = db.get(GeoPrompt, row.prompt_id)
-    paste = ticket_paste(row, prompt)
+    paste = ticket_paste(row, prompt, db)
     if db is not None and prompt is not None:
         cite = cite_paste_for_prompt(cite_pack_for_prompt(db, tenant, prompt), prompt)
         if cite and cite not in paste:
@@ -470,14 +470,14 @@ def _ticket_out(row: GeoTicket, sample_note: str = "", db: Session | None = None
         priority=row.priority or "P2",
         owner_hint=row.owner_hint or "内容运营 / 客户经理",
         recommended_action=row.recommended_action or "补对应页。我们不代改线上、不代发。",
-        customer_note=ticket_customer_note(row, prompt),
+        customer_note=ticket_customer_note(row, prompt, db),
         customer_paste=paste,
         page_label=page_label,
         page_url=page_url,
-        channel=ticket_channel_name(row),
+        channel=ticket_channel_name(row, db),
         channel_key=ticket_channel_key(row),
-        compose_url=ticket_compose_url(row),
-        offsite_draft=ticket_offsite_draft(row, prompt),
+        compose_url=ticket_compose_url(row, db),
+        offsite_draft=ticket_offsite_draft(row, prompt, db),
         offsite_url=ticket_offsite_url(row),
         retest_method=row.retest_method or "对同一买家问题再抽查一次，只记有没有变化，不要求这次必须提到。",
         retest_result=row.retest_result or "",

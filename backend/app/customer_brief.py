@@ -282,6 +282,17 @@ def _build_english_report(
         "",
         *[f"- {item}" for item in buyer_lines],
         "",
+        "## This week's pass / fail",
+        "",
+        *[
+            f"- {item}"
+            for item in (
+                [line for line in week_lines if "checked:" in line or "page opened" in line]
+                + closed_lines
+                or ["No pass/fail recorded this week."]
+            )
+        ],
+        "",
         "## Same-question checks closed this week",
         "",
         *[f"- {item}" for item in closed_lines],
@@ -353,6 +364,7 @@ def build_customer_brief(user: User, db: Session) -> CustomerBriefOut:
         .limit(5)
         .all()
     )
+    closed = _closed_tickets_this_week(db, user.tenant_id, _week_start(generated))
     serp_ok = (
         db.query(SerpRun)
         .filter(SerpRun.tenant_id == user.tenant_id, SerpRun.status == "ok")
@@ -446,8 +458,8 @@ def build_customer_brief(user: User, db: Session) -> CustomerBriefOut:
         this_week.append("查看已登记网站的页面。")
     geo_lines: list[str] = []
     for ticket in tickets[:1]:
-        note = ticket_customer_note(ticket, ticket.prompt)
-        ask = ticket_offsite_ask(ticket, ticket.prompt)
+        note = ticket_customer_note(ticket, ticket.prompt, db)
+        ask = ticket_offsite_ask(ticket, ticket.prompt, db)
         block = f"{ticket.title}\n{note}".strip() if note else ticket.title
         if ask:
             block = f"{block}\n{ask}"
@@ -460,13 +472,6 @@ def build_customer_brief(user: User, db: Session) -> CustomerBriefOut:
         this_week.append("对照已有记录，整理给客户的说明，并安排下一轮复查。")
 
     retest: list[str] = []
-    for issue in priority_issues:
-        kind = weekly_recheck_kind(issue.retest_result or "")
-        path = (issue.page.path if issue.page else "") or "站内页"
-        if kind == "pass":
-            retest.append(f"{path}：核对过。这一条现在对得上。不是我们改的。我们不代改。")
-        elif kind == "fail":
-            retest.append(f"{path}：核对不过。问题还在。我们不代改。")
     geo_waiting = [ticket for ticket in tickets if ticket_handoff(ticket) in {"drafted", "sent"}]
     geo_live = [ticket for ticket in tickets if ticket_handoff(ticket) == "live"]
     if geo_waiting:
@@ -498,6 +503,22 @@ def build_customer_brief(user: User, db: Session) -> CustomerBriefOut:
         retest.append("客户改完对应页或发出帖后，用同一买家问题再抽查一次。只记有没有变化，不承诺这次会提到。")
     if not retest:
         retest.append("这一轮还没有要复查的改动。")
+
+    verdicts: list[str] = []
+    for issue in priority_issues:
+        kind = weekly_recheck_kind(issue.retest_result or "")
+        path = (issue.page.path if issue.page else "") or "站内页"
+        if kind == "pass":
+            verdicts.append(f"{path}：核对过。这一条现在对得上。不是我们改的。我们不代改。")
+        elif kind == "fail":
+            verdicts.append(f"{path}：核对不过。问题还在。我们不代改。")
+        elif kind == "viewed":
+            verdicts.append(f"{path}：打开过，还没记下过/不过。")
+    for ticket in closed:
+        note = (ticket.retest_result or "").strip() or "工单已关。"
+        verdicts.append(f"「{_ticket_question(ticket)}」：{note} 贴上了不等于被提到。")
+    if not verdicts:
+        verdicts.append("这一轮还没有记下过/不过。")
 
     inquiry_items = [
         f"这个月记到 {inquiry_count} 条。",
@@ -600,6 +621,7 @@ def build_customer_brief(user: User, db: Session) -> CustomerBriefOut:
         CustomerBriefSection(key="cite_assets", title="请客户自己贴的英文段", items=cite_assets),
         CustomerBriefSection(key="trust_map", title="AI 引用了谁、提到了谁", items=trust_items),
         CustomerBriefSection(key="this_week", title="这周带给客户改的三处", items=this_week),
+        CustomerBriefSection(key="verdicts", title="这周过了没有", items=verdicts),
         CustomerBriefSection(key="retest", title="客户改完你再看一次", items=retest),
         CustomerBriefSection(key="inquiries", title="这个月有几个老外来问过", body=f"这个月记到 {inquiry_count} 条。", items=inquiry_items),
     ]
@@ -637,7 +659,6 @@ def build_customer_brief(user: User, db: Session) -> CustomerBriefOut:
         "",
     ]
 
-    closed = _closed_tickets_this_week(db, user.tenant_id, _week_start(generated))
     english_title, english_headline, english_markdown, english_paste = _build_english_report(
         tenant_name=tenant.name if tenant else "",
         site_origin=site_origin,

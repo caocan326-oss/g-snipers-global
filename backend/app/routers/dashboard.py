@@ -582,10 +582,10 @@ def workbench(
             status, tone = "核对过", "green"
         elif kind == "fail":
             status, tone = "核对不过", "red"
-        elif item.sent_to_customer:
-            status, tone = "已发给客户", "blue"
         elif kind == "viewed":
             status, tone = "打开过，还没过", "amber"
+        elif item.sent_to_customer:
+            status, tone = "已发给客户", "blue"
         else:
             status, tone = "待发给客户", "default"
         weekly_onsite.append(
@@ -652,6 +652,26 @@ def workbench(
                 action_label="去站内",
             )
         )
+        pending = [item for item in weekly_onsite if item.status in {"打开过，还没过", "核对不过"}]
+        if pending:
+            viewed_n = sum(1 for item in pending if item.status == "打开过，还没过")
+            fail_n = sum(1 for item in pending if item.status == "核对不过")
+            bits = []
+            if viewed_n:
+                bits.append(f"{viewed_n} 处打开过还没记下过/不过")
+            if fail_n:
+                bits.append(f"{fail_n} 处核对不过")
+            next_actions.append(
+                WorkbenchItem(
+                    id="weekly-verdict",
+                    title="本周三处还有没过的",
+                    subtitle="；".join(bits) + "。先打开核对再记过或记不过。不会自己勾完。我们不代改。",
+                    href="/home",
+                    status="还没过",
+                    tone="red" if fail_n else "amber",
+                    action_label="去总览",
+                )
+            )
     if summary.inquiries_month_unlinked:
         next_actions.append(
             WorkbenchItem(

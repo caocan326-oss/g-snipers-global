@@ -1236,16 +1236,44 @@ def ticket_channel_key(ticket: GeoTicket) -> str:
     return ""
 
 
-def ticket_channel_name(ticket: GeoTicket) -> str:
+def verified_channel_or_blank(db: Session, tenant_id: str, stored: str) -> str:
+    name = (stored or "").strip()
+    if not name or not tenant_id:
+        return ""
+    rows = (
+        db.query(SourcePlatform)
+        .filter(SourcePlatform.tenant_id == tenant_id, SourcePlatform.status == "active")
+        .all()
+    )
+    hay = name.lower()
+    for row in rows:
+        if not is_http_url((row.profile_url or "").strip()):
+            continue
+        label = (row.name or "").strip()
+        key = (row.platform_key or "").strip()
+        if name in {label, key}:
+            return name
+        if label and label.lower() in hay:
+            return name
+        if key and key.replace("_", " ") in hay:
+            return name
+    return ""
+
+
+def ticket_channel_name(ticket: GeoTicket, db: Session | None = None) -> str:
     ev = parse_ticket_evidence(ticket)
     name = str(ev.get("channel") or "").strip()
-    if name:
-        return name
-    spec = official_api_for(ticket_channel_key(ticket))
-    return spec.label if spec else ""
+    if not name:
+        spec = official_api_for(ticket_channel_key(ticket))
+        name = spec.label if spec else ""
+    if db is not None:
+        return verified_channel_or_blank(db, ticket.tenant_id, name)
+    return name
 
 
-def ticket_compose_url(ticket: GeoTicket) -> str:
+def ticket_compose_url(ticket: GeoTicket, db: Session | None = None) -> str:
+    if db is not None and not ticket_channel_name(ticket, db):
+        return ""
     spec = official_api_for(ticket_channel_key(ticket))
     return spec.compose_url if spec else ""
 
@@ -1261,9 +1289,12 @@ def offsite_post_draft(*, question: str, page_url: str) -> str:
     return "\n".join(lines)
 
 
-def ticket_offsite_draft(ticket: GeoTicket, prompt: GeoPrompt | None = None) -> str:
+def ticket_offsite_draft(ticket: GeoTicket, prompt: GeoPrompt | None = None, db: Session | None = None) -> str:
     ev = parse_ticket_evidence(ticket)
-    if not str(ev.get("channel") or "").strip():
+    channel = str(ev.get("channel") or "").strip()
+    if db is not None:
+        channel = ticket_channel_name(ticket, db)
+    if not channel:
         return ""
     prompt = prompt if prompt is not None else getattr(ticket, "prompt", None)
     question = " ".join(((prompt.prompt_text if prompt else "") or "").split())
@@ -1330,7 +1361,7 @@ def _slim_stored_action(raw: str) -> str:
     return " ".join(text.split())
 
 
-def ticket_customer_note(ticket: GeoTicket, prompt: GeoPrompt | None = None) -> str:
+def ticket_customer_note(ticket: GeoTicket, prompt: GeoPrompt | None = None, db: Session | None = None) -> str:
     ev = parse_ticket_evidence(ticket)
     prompt = prompt if prompt is not None else getattr(ticket, "prompt", None)
     kind = str(ev.get("kind") or "")
@@ -1347,6 +1378,8 @@ def ticket_customer_note(ticket: GeoTicket, prompt: GeoPrompt | None = None) -> 
         page_bit = str(ev.get("page_path") or "").strip()
     url = str(ev.get("page_url") or "").strip()
     channel = str(ev.get("channel") or "").strip()
+    if db is not None:
+        channel = ticket_channel_name(ticket, db)
     if ev.get("kind") or page_bit or url:
         note = customer_note(kind=kind, question=question, page_bit=page_bit, url=url, channel=channel)
     else:
@@ -1359,17 +1392,17 @@ def ticket_customer_note(ticket: GeoTicket, prompt: GeoPrompt | None = None) -> 
     return note
 
 
-def ticket_offsite_ask(ticket: GeoTicket, prompt: GeoPrompt | None = None) -> str:
-    draft = ticket_offsite_draft(ticket, prompt).strip()
+def ticket_offsite_ask(ticket: GeoTicket, prompt: GeoPrompt | None = None, db: Session | None = None) -> str:
+    draft = ticket_offsite_draft(ticket, prompt, db).strip()
     if not draft:
         return ""
-    channel = ticket_channel_name(ticket) or "站外"
+    channel = ticket_channel_name(ticket, db) or "站外"
     return f"请在「{channel}」自己发这一条（我们不代发）：\n{draft}"
 
 
-def ticket_paste(ticket: GeoTicket, prompt: GeoPrompt | None = None) -> str:
-    note = ticket_customer_note(ticket, prompt)
-    parts = [ticket.title.strip(), note.strip(), ticket_offsite_ask(ticket, prompt)]
+def ticket_paste(ticket: GeoTicket, prompt: GeoPrompt | None = None, db: Session | None = None) -> str:
+    note = ticket_customer_note(ticket, prompt, db)
+    parts = [ticket.title.strip(), note.strip(), ticket_offsite_ask(ticket, prompt, db)]
     return "\n\n".join(part for part in parts if part)
 
 
