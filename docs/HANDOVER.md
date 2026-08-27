@@ -8,7 +8,7 @@
 
 约定：家里和公司**不会同时改**。换机器前必须把这边 push 完。
 
-最后更新：2026-08-27 14:10（公司。`6299516` 定位脊柱三门已发版。）。
+最后更新：2026-08-27 14:55（公司。`bbcbed9` GEO 短稿闭环已发版。）。
 
 ---
 
@@ -751,14 +751,14 @@ git log -1 --oneline
 
 | 项 | 值 |
 | --- | --- |
-| 日期 | 2026-08-27 14:10 |
+| 日期 | 2026-08-27 14:55 |
 | 最后一台 | 公司 `E:\G-snipers海外版` |
 | 分支 | `main` |
-| 提交 | `6299516` 定位脊柱：Fact Pack 门、工单复测才能关、本周三处只从紧急/优先来。 |
+| 提交 | `bbcbed9` GEO 短稿跟客户说明同一份；没有可核渠道不写 LinkedIn；待处理可关掉。 |
 | 已 push origin / upstream | 是。 |
-| 已发版生产 | **是。** `sync-from-local.ps1 -Rebuild`。生产 git `6299516`。迁移 `025`。`DEMO_LOGIN_ENABLED` 仍关。 |
-| 接口实测 | `/api/health` 200。SNIPERS 已记三句原句并抽过：都没提到。没有可核 LinkedIn 不要写进短稿。不要编问句、不要测绿联。 |
-| 未完成 | 发给赛珀的需求在 `docs/snipers-week-brief-2026-08-27.txt`。他们回四条链接之前不打开、不抽查。短稿代码还没发版。 |
+| 已发版生产 | **是。** `sync-from-local.ps1 -Rebuild`。生产 git `bbcbed9`。迁移 `025`。`DEMO_LOGIN_ENABLED` 仍关。 |
+| 接口实测 | `/api/health` 200。硬刷新 GEO 后短稿不应再出现 LinkedIn。没有复测不能关。不要编问句、不要打开赛珀站、不要再抽。 |
+| 未完成 | 赛珀回四条链接之前不打开、不抽查。回了再登记真地址、同一问复测、记下过/不过。 |
 | 下一台先做 | 海外版家里先 `git pull origin main`。对照 `docs/POSITIONING.md`。不代改、不编问句、不抽第三轮绿联。活不拆到下一周。 |
 
 `www` 灰云、A 仍 `39.97.52.149`。`relay.weiyids.com` 橙云，不要 CNAME 回 `workers.dev`。不要开 Google Ads。不要在服务器 `git pull`。
