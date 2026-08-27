@@ -142,3 +142,20 @@ def test_weekly_onsite_picks_skips_template_limited_and_takes_next_page() -> Non
     picks = weekly_onsite_picks(issues)
     assert [row.id for row in picks] == ["c1", "h2", "h3"]
     assert "h1" not in [row.id for row in picks]
+
+
+def test_weekly_onsite_picks_keeps_pinned_when_newer_critical_arrives() -> None:
+    old = SitePage(id="p-old", tenant_id="t1", path="/old", title="Old")
+    mid = SitePage(id="p-mid", tenant_id="t1", path="/mid", title="Mid")
+    extra = SitePage(id="p-extra", tenant_id="t1", path="/extra", title="Extra")
+    fresh = SitePage(id="p-new", tenant_id="t1", path="/new", title="New")
+    pinned = [
+        OnsiteIssue(id="old", tenant_id="t1", page_id=old.id, category="tdk", title="首页标题过长", severity="high", status="open"),
+        OnsiteIssue(id="mid", tenant_id="t1", page_id=mid.id, category="content", title="正文太少，买家看不够", severity="high", status="open"),
+        OnsiteIssue(id="extra", tenant_id="t1", page_id=extra.id, category="heading", title="页面缺少主标题", severity="high", status="open"),
+    ]
+    newer = OnsiteIssue(id="new", tenant_id="t1", page_id=fresh.id, category="tdk", title="首页标题过长", severity="critical", status="open")
+    picks = weekly_onsite_picks([*pinned, newer], pinned_ids=["old", "mid", "extra"])
+    assert [row.id for row in picks] == ["old", "mid", "extra"]
+    auto = weekly_onsite_picks([*pinned, newer])
+    assert auto[0].id == "new"

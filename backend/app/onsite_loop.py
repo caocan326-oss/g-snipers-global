@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
+import json
 import re
 from datetime import datetime, timezone
 from urllib.parse import urlparse
 
-from app.models import OnsiteIssue, SitePage
+from sqlalchemy.orm import Session
+
+from app.models import IntegrationSetting, OnsiteIssue, SitePage
 
 ONSITE_CUSTOMER_CLOSE = "我们不代改官网。改完告诉我，我再打开该页核对。"
 TEMPLATE_LIMIT_MARK = "受模板限制"
 TEMPLATE_LIMIT_REASON = "受模板限制。后台改不了，要等有主题文件权限的人改。不是客户没理。我们不代改。"
+WEEKLY_PIN_KEY = "onsite_weekly_pin"
 WEEKLY_ONSITE_LIMIT = 3
 _CLOSED = {"verified", "wont_fix"}
 _SEV_RANK = {"critical": 0, "high": 1, "low": 2}
@@ -105,8 +109,59 @@ def is_template_limited(issue: OnsiteIssue) -> bool:
     return (issue.blocked_reason or "").startswith(TEMPLATE_LIMIT_MARK)
 
 
-def weekly_onsite_picks(issues: list[OnsiteIssue], *, limit: int = WEEKLY_ONSITE_LIMIT) -> list[OnsiteIssue]:
-    """At most three pages. Prefer critical/high. One issue per page. No live-site edits."""
+def weekly_pin_state(db: Session, tenant_id: str) -> dict[str, list[str]]:
+    row = (
+        db.query(IntegrationSetting)
+        .filter(IntegrationSetting.tenant_id == tenant_id, IntegrationSetting.key == WEEKLY_PIN_KEY)
+        .first()
+    )
+    if row is None or not (row.value or "").strip():
+        return {"issue_ids": [], "sent_ids": []}
+    try:
+        raw = json.loads(row.value)
+    except json.JSONDecodeError:
+        return {"issue_ids": [], "sent_ids": []}
+    issue_ids = [str(item) for item in (raw.get("issue_ids") or []) if str(item).strip()]
+    sent_ids = [str(item) for item in (raw.get("sent_ids") or []) if str(item).strip()]
+    return {"issue_ids": issue_ids[:WEEKLY_ONSITE_LIMIT], "sent_ids": sent_ids}
+
+
+def save_weekly_pin(
+    db: Session,
+    tenant_id: str,
+    *,
+    issue_ids: list[str],
+    sent_ids: list[str] | None = None,
+) -> dict[str, list[str]]:
+    clean_ids = [item for item in issue_ids if item][:WEEKLY_ONSITE_LIMIT]
+    keep_sent = [item for item in (sent_ids if sent_ids is not None else weekly_pin_state(db, tenant_id)["sent_ids"]) if item in clean_ids]
+    payload = {"issue_ids": clean_ids, "sent_ids": keep_sent}
+    row = (
+        db.query(IntegrationSetting)
+        .filter(IntegrationSetting.tenant_id == tenant_id, IntegrationSetting.key == WEEKLY_PIN_KEY)
+        .first()
+    )
+    blob = json.dumps(payload, ensure_ascii=False)
+    if row is None:
+        db.add(IntegrationSetting(tenant_id=tenant_id, key=WEEKLY_PIN_KEY, value=blob))
+    else:
+        row.value = blob
+    return payload
+
+
+def clear_weekly_pin(db: Session, tenant_id: str) -> None:
+    db.query(IntegrationSetting).filter(
+        IntegrationSetting.tenant_id == tenant_id, IntegrationSetting.key == WEEKLY_PIN_KEY
+    ).delete(synchronize_session=False)
+
+
+def weekly_onsite_picks(
+    issues: list[OnsiteIssue],
+    *,
+    pinned_ids: list[str] | None = None,
+    limit: int = WEEKLY_ONSITE_LIMIT,
+) -> list[OnsiteIssue]:
+    """At most three pages. Prefer critical/high. One issue per page. Pins stay put."""
     active = [
         issue
         for issue in issues
@@ -114,6 +169,7 @@ def weekly_onsite_picks(issues: list[OnsiteIssue], *, limit: int = WEEKLY_ONSITE
     ]
     urgent = [issue for issue in active if (issue.severity or "low") in {"critical", "high"}]
     pool = urgent or active
+    by_id = {issue.id: issue for issue in active}
 
     def sort_key(issue: OnsiteIssue) -> tuple[int, int, str, str]:
         created = (issue.created_at or datetime.min.replace(tzinfo=timezone.utc)).isoformat()
@@ -126,7 +182,20 @@ def weekly_onsite_picks(issues: list[OnsiteIssue], *, limit: int = WEEKLY_ONSITE
 
     picked: list[OnsiteIssue] = []
     seen_pages: set[str] = set()
+    for issue_id in pinned_ids or []:
+        issue = by_id.get(issue_id)
+        if issue is None:
+            continue
+        page_id = (issue.page_id or "").strip()
+        if not page_id or page_id in seen_pages:
+            continue
+        seen_pages.add(page_id)
+        picked.append(issue)
+        if len(picked) >= limit:
+            return picked
     for issue in sorted(pool, key=sort_key):
+        if issue in picked:
+            continue
         page_id = (issue.page_id or "").strip()
         if not page_id or page_id in seen_pages:
             continue

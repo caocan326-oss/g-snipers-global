@@ -9,7 +9,13 @@ from sqlalchemy.orm import Session, selectinload
 from app.models import CrawlSession, OnsiteIssue, SitePage, Tenant, User
 from app.onsite_analyzer import reconcile_issues
 from app.onsite_fetch import OriginError, normalize_origin
-from app.onsite_loop import issue_customer_note, issue_customer_paste, weekly_onsite_picks
+from app.onsite_loop import (
+    issue_customer_note,
+    issue_customer_paste,
+    save_weekly_pin,
+    weekly_onsite_picks,
+    weekly_pin_state,
+)
 from app.risk import needs_confirm
 from app.schemas import CrawlSessionOut, OnsiteIssueOut, SitePageOut
 
@@ -131,6 +137,7 @@ def _issue_out(row: OnsiteIssue, page: SitePage | None = None, site_origin: str 
         owner_hint=row.owner_hint or (guidance["owner"] if review_required else "内容运营 / 客户经理"),
         customer_note=issue_customer_note(row, p, site_origin),
         customer_paste=issue_customer_paste(row, p, site_origin),
+        sent_to_customer=False,
         last_checked_at=row.last_checked_at,
         closed_at=row.closed_at,
     )
@@ -352,7 +359,34 @@ def load_weekly_onsite_issues(db: Session, tenant_id: str) -> list[OnsiteIssue]:
         .filter(OnsiteIssue.tenant_id == tenant_id, OnsiteIssue.status.in_(list(BOARD_ACTIONABLE)))
         .all()
     )
-    return weekly_onsite_picks(rows)
+    pin = weekly_pin_state(db, tenant_id)
+    return weekly_onsite_picks(rows, pinned_ids=pin.get("issue_ids") or [])
+
+
+def decorate_weekly_issues(db: Session, tenant_id: str, rows: list[OnsiteIssue]) -> list[OnsiteIssueOut]:
+    origin = _site_origin(db, tenant_id)
+    sent = set(weekly_pin_state(db, tenant_id).get("sent_ids") or [])
+    items: list[OnsiteIssueOut] = []
+    for row in rows:
+        item = _issue_out(row, site_origin=origin)
+        item.sent_to_customer = row.id in sent
+        items.append(item)
+    return items
+
+
+def refresh_weekly_pin_after_drop(db: Session, tenant_id: str, dropped_id: str) -> None:
+    pin = weekly_pin_state(db, tenant_id)
+    if dropped_id not in (pin.get("issue_ids") or []):
+        return
+    remaining = [item for item in pin["issue_ids"] if item != dropped_id]
+    rows = (
+        db.query(OnsiteIssue)
+        .options(selectinload(OnsiteIssue.page))
+        .filter(OnsiteIssue.tenant_id == tenant_id, OnsiteIssue.status.in_(list(BOARD_ACTIONABLE)))
+        .all()
+    )
+    filled = weekly_onsite_picks(rows, pinned_ids=remaining)
+    save_weekly_pin(db, tenant_id, issue_ids=[row.id for row in filled], sent_ids=pin.get("sent_ids") or [])
 
 
 def _tenant(db: Session, user: User) -> Tenant:

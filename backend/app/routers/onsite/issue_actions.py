@@ -9,7 +9,13 @@ from app.ai_engine import assist_onsite_issue
 from app.llm import UNCONFIGURED, configured
 from app.models import OnsiteIssue, SitePage, User
 from app.onsite_fetch import OriginError, normalize_origin
-from app.onsite_loop import TEMPLATE_LIMIT_REASON, is_template_limited
+from app.onsite_loop import (
+    TEMPLATE_LIMIT_REASON,
+    clear_weekly_pin,
+    is_template_limited,
+    save_weekly_pin,
+    weekly_pin_state,
+)
 from app.risk import RISKS, SEVERITIES, default_severity, needs_confirm, require_confirm, severity_to_risk
 from app.schemas import (
     AiAssistOut,
@@ -20,6 +26,7 @@ from app.schemas import (
     OnsiteIssueCreate,
     OnsiteIssueOut,
     OnsiteStatusIn,
+    WeeklyOnsiteOut,
 )
 
 import app.routers.onsite as _onsite_pkg
@@ -36,6 +43,9 @@ from .common import (
     _require_origin,
     _site_origin,
     _tenant,
+    decorate_weekly_issues,
+    load_weekly_onsite_issues,
+    refresh_weekly_pin_after_drop,
 )
 from .constants import CATEGORIES
 from .crawl import _fetch_one_registered, _reconcile_site_patterns
@@ -277,9 +287,74 @@ def mark_template_limit(
     if row.status in {"verified", "wont_fix"}:
         raise HTTPException(status_code=400, detail="已关闭的项不用再记受模板限制。")
     row.blocked_reason = TEMPLATE_LIMIT_REASON
+    refresh_weekly_pin_after_drop(db, user.tenant_id, row.id)
     db.commit()
     db.refresh(row)
     return _out(db, user, row, page)
+
+
+def _weekly_out(db: Session, user: User, note: str = "") -> WeeklyOnsiteOut:
+    rows = load_weekly_onsite_issues(db, user.tenant_id)
+    pin = weekly_pin_state(db, user.tenant_id)
+    return WeeklyOnsiteOut(
+        this_week=decorate_weekly_issues(db, user.tenant_id, rows),
+        weekly_pinned=bool(pin.get("issue_ids")),
+        note=note,
+    )
+
+
+@router.post("/weekly/pin", response_model=WeeklyOnsiteOut)
+def pin_weekly_onsite(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> WeeklyOnsiteOut:
+    rows = load_weekly_onsite_issues(db, user.tenant_id)
+    if not rows:
+        raise HTTPException(status_code=400, detail="还没有这周的三处可以钉住。")
+    pin = weekly_pin_state(db, user.tenant_id)
+    save_weekly_pin(db, user.tenant_id, issue_ids=[row.id for row in rows], sent_ids=pin.get("sent_ids") or [])
+    db.commit()
+    return _weekly_out(db, user, "已钉住这三处。新抓到的紧急页不会顶掉。受模板限制仍会换下一页。")
+
+
+@router.post("/weekly/unpin", response_model=WeeklyOnsiteOut)
+def unpin_weekly_onsite(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> WeeklyOnsiteOut:
+    clear_weekly_pin(db, user.tenant_id)
+    db.commit()
+    return _weekly_out(db, user, "已取消钉住。这周三处按紧急/优先重新挑。")
+
+
+@router.post("/issues/{issue_id}/sent-to-customer", response_model=WeeklyOnsiteOut)
+def mark_sent_to_customer(
+    issue_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> WeeklyOnsiteOut:
+    row = _owned_issue(db, user, issue_id)
+    week = load_weekly_onsite_issues(db, user.tenant_id)
+    week_ids = [item.id for item in week]
+    if row.id not in week_ids:
+        raise HTTPException(status_code=400, detail="只记这周这三处已经发给客户。先打开站内「这周给客户改三处」。")
+    pin = weekly_pin_state(db, user.tenant_id)
+    issue_ids = pin.get("issue_ids") or week_ids
+    sent_ids = list(dict.fromkeys([*(pin.get("sent_ids") or []), row.id]))
+    save_weekly_pin(db, user.tenant_id, issue_ids=issue_ids, sent_ids=sent_ids)
+    db.commit()
+    return _weekly_out(db, user, "已记下发给客户。不是官网已改，也不是我们代改。")
+
+
+@router.post("/issues/{issue_id}/clear-sent-to-customer", response_model=WeeklyOnsiteOut)
+def clear_sent_to_customer(
+    issue_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> WeeklyOnsiteOut:
+    row = _owned_issue(db, user, issue_id)
+    pin = weekly_pin_state(db, user.tenant_id)
+    if not pin.get("issue_ids") and not pin.get("sent_ids"):
+        db.commit()
+        return _weekly_out(db, user, "这条还没有记成发给客户。")
+    sent_ids = [item for item in (pin.get("sent_ids") or []) if item != row.id]
+    save_weekly_pin(db, user.tenant_id, issue_ids=pin.get("issue_ids") or [], sent_ids=sent_ids)
+    db.commit()
+    return _weekly_out(db, user, "已取消「已发给客户」。")
 
 
 @router.post("/issues/{issue_id}/clear-template-limit", response_model=OnsiteIssueOut)
@@ -315,6 +390,7 @@ def wont_fix_issue(
     note = (body.note or "").strip()
     if note:
         row.evidence = ((row.evidence or "").rstrip() + f"\n忽略原因：{note}").strip()
+    refresh_weekly_pin_after_drop(db, user.tenant_id, row.id)
     db.commit()
     db.refresh(row)
     return _out(db, user, row, page)

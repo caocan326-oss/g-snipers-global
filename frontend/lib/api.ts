@@ -977,6 +977,7 @@ export type OnsiteIssue = {
   owner_hint?: string;
   customer_note?: string;
   customer_paste?: string;
+  sent_to_customer?: boolean;
   last_checked_at?: string | null;
   closed_at?: string | null;
 };
@@ -989,6 +990,7 @@ export type OnsiteBoard = {
   workflow_counts: Record<string, number>;
   groups: { critical: OnsiteIssue[]; high: OnsiteIssue[]; low: OnsiteIssue[] };
   this_week?: OnsiteIssue[];
+  weekly_pinned?: boolean;
 };
 
 export type OnsiteGuide = {

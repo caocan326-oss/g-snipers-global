@@ -790,6 +790,7 @@ class OnsiteIssueOut(BaseModel):
     owner_hint: str = ""
     customer_note: str = ""
     customer_paste: str = ""
+    sent_to_customer: bool = False
     last_checked_at: datetime | None = None
     closed_at: datetime | None = None
 
@@ -825,6 +826,13 @@ class OnsiteBoardOut(BaseModel):
     workflow_counts: dict[str, int] = {}
     groups: dict[str, list[OnsiteIssueOut]]
     this_week: list[OnsiteIssueOut] = []
+    weekly_pinned: bool = False
+
+
+class WeeklyOnsiteOut(BaseModel):
+    this_week: list[OnsiteIssueOut] = []
+    weekly_pinned: bool = False
+    note: str = ""
 
 
 class OnsiteGuideStepOut(BaseModel):

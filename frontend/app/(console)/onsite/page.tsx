@@ -845,6 +845,62 @@ export default function OnsiteBoardPage() {
     setNote(ok ? "短稿已复制，可直接贴微信或邮件。" : "短稿已写出，这台复制不到剪贴板。");
   }
 
+  async function pinWeek() {
+    setError("");
+    setBusyId("weekly-pin");
+    try {
+      const body = await api<{ note?: string }>("/api/onsite/weekly/pin", { method: "POST" });
+      setNote(body.note || "已钉住这三处。");
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "没钉住");
+    } finally {
+      setBusyId("");
+    }
+  }
+
+  async function unpinWeek() {
+    setError("");
+    setBusyId("weekly-pin");
+    try {
+      const body = await api<{ note?: string }>("/api/onsite/weekly/unpin", { method: "POST" });
+      setNote(body.note || "已取消钉住。");
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "没取消");
+    } finally {
+      setBusyId("");
+    }
+  }
+
+  async function markSent(issue: OnsiteIssue) {
+    setError("");
+    setBusyId(issue.id);
+    try {
+      const body = await api<{ note?: string }>(`/api/onsite/issues/${issue.id}/sent-to-customer`, { method: "POST" });
+      setNote(body.note || "已记下发给客户。");
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "没记下");
+    } finally {
+      setBusyId("");
+    }
+  }
+
+  async function clearSent(issue: OnsiteIssue) {
+    setError("");
+    setBusyId(issue.id);
+    try {
+      const body = await api<{ note?: string }>(`/api/onsite/issues/${issue.id}/clear-sent-to-customer`, { method: "POST" });
+      setNote(body.note || "已取消已发。");
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "没取消");
+    } finally {
+      setBusyId("");
+    }
+  }
+
   async function copyWeek() {
     const notes = (board?.this_week || [])
       .map((issue) => (issue.customer_paste || issue.customer_note || "").trim())
@@ -954,9 +1010,14 @@ export default function OnsiteBoardPage() {
 
       <WeeklyFixesCard
         issues={board.this_week || []}
+        pinned={Boolean(board.weekly_pinned)}
         copyOne={copyDraft}
         copyAll={() => void copyWeek()}
         markTemplateLimit={(issue) => void markTemplateLimit(issue)}
+        markSent={(issue) => void markSent(issue)}
+        clearSent={(issue) => void clearSent(issue)}
+        pinWeek={() => void pinWeek()}
+        unpinWeek={() => void unpinWeek()}
         busyId={busyId}
         openIssue={(id) => {
           setFilter("all");

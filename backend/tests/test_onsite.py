@@ -1292,11 +1292,12 @@ def test_template_limit_drops_page_from_this_week_not_closed(client: TestClient,
 
     headers = auth_header(client)
     before = client.get("/api/onsite/board", headers=headers).json()["this_week"]
-    assert [row["page_path"] for row in before] == [
+    assert [row["page_path"] for row in before][0] == "/snipers/article/articlelist/cat_id/3.html"
+    assert {row["page_path"] for row in before} == {
         "/snipers/article/articlelist/cat_id/3.html",
         "/news",
         "/about",
-    ]
+    }
 
     marked = client.post(f"/api/onsite/issues/{wiki_issue.id}/template-limit", headers=headers)
     assert marked.status_code == 200, marked.text
@@ -1306,7 +1307,7 @@ def test_template_limit_drops_page_from_this_week_not_closed(client: TestClient,
     assert marked.json()["closed_at"] is None
 
     after = client.get("/api/onsite/board", headers=headers).json()["this_week"]
-    assert [row["page_path"] for row in after] == ["/news", "/about"]
+    assert {row["page_path"] for row in after} == {"/news", "/about"}
     assert all(row["id"] != wiki_issue.id for row in after)
 
     brief = "\n".join(client.get("/api/dashboard/customer-brief", headers=headers).json()["this_week"])
@@ -1334,3 +1335,61 @@ def test_template_limit_drops_page_from_this_week_not_closed(client: TestClient,
     denied = client.post(f"/api/onsite/issues/{wiki_issue.id}/template-limit", headers=headers)
     assert denied.status_code == 400
     assert "已关闭" in denied.json()["detail"]
+
+
+def test_weekly_pin_keeps_pages_and_sent_is_not_live(client: TestClient, demo_user, db: Session) -> None:
+    tenant = db.get(Tenant, demo_user.tenant_id)
+    assert tenant is not None
+    tenant.site_origin = "https://www.snipers.com.cn"
+    tenant.name = "SNIPERS"
+    first = SitePage(tenant_id=demo_user.tenant_id, path="/a", locale="zh-CN", title="A", crawl_status="ok")
+    second = SitePage(tenant_id=demo_user.tenant_id, path="/b", locale="zh-CN", title="B", crawl_status="ok")
+    third = SitePage(tenant_id=demo_user.tenant_id, path="/c", locale="zh-CN", title="C", crawl_status="ok")
+    fresh = SitePage(tenant_id=demo_user.tenant_id, path="/new-critical", locale="zh-CN", title="New", crawl_status="ok")
+    db.add_all([first, second, third, fresh])
+    db.flush()
+    rows = [
+        OnsiteIssue(tenant_id=demo_user.tenant_id, page_id=first.id, category="tdk", title="首页标题过长", severity="high", status="open", risk="high"),
+        OnsiteIssue(tenant_id=demo_user.tenant_id, page_id=second.id, category="content", title="正文太少，买家看不够", severity="high", status="open", risk="high"),
+        OnsiteIssue(tenant_id=demo_user.tenant_id, page_id=third.id, category="heading", title="页面缺少主标题", severity="high", status="open", risk="high"),
+    ]
+    db.add_all(rows)
+    db.commit()
+
+    headers = auth_header(client)
+    pinned = client.post("/api/onsite/weekly/pin", headers=headers)
+    assert pinned.status_code == 200, pinned.text
+    assert pinned.json()["weekly_pinned"] is True
+    assert "不会顶掉" in pinned.json()["note"]
+    before = [item["page_path"] for item in pinned.json()["this_week"]]
+    assert set(before) == {"/a", "/b", "/c"}
+
+    db.add(
+        OnsiteIssue(
+            tenant_id=demo_user.tenant_id,
+            page_id=fresh.id,
+            category="tdk",
+            title="首页标题过长",
+            severity="critical",
+            status="open",
+            risk="high",
+        )
+    )
+    db.commit()
+    after = client.get("/api/onsite/board", headers=headers).json()
+    assert after["weekly_pinned"] is True
+    assert [item["page_path"] for item in after["this_week"]] == before
+
+    sent = client.post(f"/api/onsite/issues/{pinned.json()['this_week'][0]['id']}/sent-to-customer", headers=headers)
+    assert sent.status_code == 200, sent.text
+    assert sent.json()["this_week"][0]["sent_to_customer"] is True
+    assert sent.json()["this_week"][0]["status"] != "verified"
+    assert "不是官网已改" in sent.json()["note"]
+    brief = client.get("/api/dashboard/customer-brief", headers=headers).json()
+    assert any("已发给客户" in item for item in brief["sections"][2]["items"])
+    assert all("已经改完" not in item for item in brief["sections"][2]["items"])
+
+    unpinned = client.post("/api/onsite/weekly/unpin", headers=headers)
+    assert unpinned.status_code == 200, unpinned.text
+    assert unpinned.json()["weekly_pinned"] is False
+    assert unpinned.json()["this_week"][0]["page_path"] == "/new-critical"

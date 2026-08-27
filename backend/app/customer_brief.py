@@ -17,7 +17,7 @@ from app.geo_loop import (
     ticket_offsite_ask,
     weekly_paste,
 )
-from app.onsite_loop import issue_customer_note
+from app.onsite_loop import issue_customer_note, weekly_pin_state
 from app.routers.geo.prompts import geo_summary
 from app.routers.onsite.common import (
     _active_issue,
@@ -252,7 +252,11 @@ def build_customer_brief(user: User, db: Session) -> CustomerBriefOut:
             "这只是工作台打勾，不是客户官网已经改完的证明。"
         )
     elif priority_issues:
-        retest.append("客户改完这几处后，再抓一次对应页面核对。我们不改客户官网。")
+        sent_ids = set(weekly_pin_state(db, user.tenant_id).get("sent_ids") or [])
+        if any(issue.id in sent_ids for issue in priority_issues):
+            retest.append("这周这几处已发给客户。他们改完再打开对应页核对。工作台打勾不是官网已改。我们不代改。")
+        else:
+            retest.append("客户改完这几处后，再抓一次对应页面核对。我们不改客户官网。")
     compare_note = getattr(geo, "compare_note", "") or ""
     if compare_note:
         retest.append(compare_note)
