@@ -68,8 +68,11 @@ export default function HomePage() {
   }, []);
 
   const reviewTotal = useMemo(() => {
-    return (data?.weekly_onsite ?? []).length + (data?.summary.geo_tickets_open ?? 0);
+    if (!data) return 0;
+    if (typeof data.summary.this_week_open === "number") return data.summary.this_week_open;
+    return (data.weekly_onsite ?? []).length + (data.summary.geo_tickets_open ?? 0);
   }, [data]);
+  const weeklyCount = data?.weekly_onsite?.length ?? data?.summary.this_week_onsite ?? 0;
   const boardTotal = executionBoard?.total_open ?? 0;
 
   if (loadError) return <p className="text-sm text-red-600">{loadError}</p>;
@@ -89,9 +92,11 @@ export default function HomePage() {
   const workTone = reviewTotal > 0 ? "amber" : "green";
   const executiveSummary = [
     {
-      label: "网站风险",
-      text: highRisk > 0 ? `当前有 ${highRisk} 个紧急或优先网站问题，先处理打不开、是否收录、标题和页面说明。` : "当前没有打开的紧急或优先网站问题，重点进入复查和说明整理。",
-      tone: technicalTone,
+      label: "这周改三处",
+      text: weeklyCount
+        ? `这周给客户看 ${weeklyCount} 处站内改法${data.summary.geo_tickets_open ? `，另有 ${data.summary.geo_tickets_open} 条 AI 搜索待处理` : ""}。问题板上的检查记录不是这周要做完。客户改不改官网不挡交付。`
+        : "这周还没有要改的站内三处。有紧急或优先页才会出现。客户改不改官网不挡交付。",
+      tone: weeklyCount || data.summary.geo_tickets_open ? "amber" : "green",
     },
     {
       label: "AI 搜索",
@@ -113,7 +118,7 @@ export default function HomePage() {
             : (data.summary.inquiries_month_unlinked ?? 0) > 0
               ? `这个月有 ${data.summary.inquiries_month_unlinked} 条询盘还没挂问句。挂上不是证明被提到。`
               : reviewTotal > 0
-                ? `处理清单里还有 ${reviewTotal} 条未关闭事项，先处理紧急网站改法、AI 搜索和站外曝光。`
+                ? `这周还有 ${reviewTotal} 项给客户看（三处 + AI 搜索待处理）。问题板不是这周要做完。`
                 : "本周期暂无阻塞动作，可以进入客户说明或复查。",
       tone: data.summary.fact_pack_ready === false || (data.summary.geo_watch_due ?? 0) > 0 || (data.weekly_onsite ?? []).length || (data.summary.inquiries_month_unlinked ?? 0) > 0 || reviewTotal > 0 ? "amber" : "green",
     },
@@ -302,6 +307,7 @@ export default function HomePage() {
         sources={data.geo_trust_sources ?? []}
         competitors={data.geo_competitors ?? []}
         trustNote={data.geo_trust_note || ""}
+        onRecorded={() => void reloadWorkbench()}
       />
 
       <DiagnosticTargetsSection
@@ -341,6 +347,7 @@ export default function HomePage() {
         geoRecorded={geoRecorded}
         workTone={workTone}
         reviewTotal={reviewTotal}
+        weeklyCount={weeklyCount}
         boardTotal={boardTotal}
         perf={perf}
       />

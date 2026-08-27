@@ -34,6 +34,8 @@ def test_workbench_lists_same_openish_issues_as_summary(client: TestClient, demo
     assert any(item["id"] == issue.id for item in workbench["seo_items"])
     assert workbench["weekly_onsite"][0]["id"] == issue.id
     assert workbench["weekly_onsite"][0]["status"] == "待发给客户"
+    assert workbench["summary"]["this_week_onsite"] == 1
+    assert workbench["summary"]["this_week_open"] == 1
     assert any(item["id"] == "weekly-three" for item in workbench["next_actions"])
 
 
@@ -849,3 +851,141 @@ def test_english_boss_report_keeps_closed_retest(client: TestClient, demo_user, 
     assert "不能出对外草稿" not in paste
     assert "什么获客软件比较好" in paste
     assert any("/one" in item or "/two" in item or "/three" in item for item in body["this_week"])
+
+
+def test_workbench_this_week_is_not_the_open_board(client: TestClient, demo_user, db) -> None:
+    from app.models import GeoPrompt, GeoTicket
+
+    tenant = db.get(Tenant, demo_user.tenant_id)
+    tenant.site_origin = "https://www.snipers.com.cn"
+    tenant.name = "SNIPERS"
+    pages = [
+        SitePage(tenant_id=demo_user.tenant_id, path=f"/page-{index}", locale="zh-CN", title=f"P{index}", crawl_status="ok")
+        for index in range(8)
+    ]
+    db.add_all(pages)
+    db.flush()
+    db.add_all(
+        [
+            OnsiteIssue(
+                tenant_id=demo_user.tenant_id,
+                page_id=page.id,
+                category="tdk",
+                title="首页标题过长",
+                status="open",
+                severity="critical",
+                risk="high",
+            )
+            for page in pages
+        ]
+    )
+    prompt = GeoPrompt(
+        tenant_id=demo_user.tenant_id,
+        prompt_text="Which factory can export industrial fasteners to the US?",
+        locale="en-US",
+        recorded_from="sales",
+    )
+    db.add(prompt)
+    db.flush()
+    db.add(
+        GeoTicket(
+            tenant_id=demo_user.tenant_id,
+            prompt_id=prompt.id,
+            title="买家问紧固件出口时没提到我们",
+            diagnosis="absent",
+            status="open",
+        )
+    )
+    db.commit()
+
+    headers = auth_header(client)
+    workbench = client.get("/api/dashboard/workbench?days=28", headers=headers).json()
+    board = client.get("/api/execution/items", headers=headers).json()
+    summary = workbench["summary"]
+    weekly = workbench["weekly_onsite"]
+
+    assert len(weekly) == 3
+    assert summary["this_week_onsite"] == 3
+    assert summary["geo_tickets_open"] == 1
+    assert summary["this_week_open"] == 4
+    assert summary["onsite_open_critical"] == 8
+    assert board["total_open"] >= 9
+    assert summary["this_week_open"] < board["total_open"]
+    assert {item["subtitle"] for item in weekly} <= {f"/page-{index}" for index in range(8)}
+    assert workbench["geo_questions"][0]["title"].startswith("Which factory")
+    assert workbench["geo_questions"][0]["status"] == "还没抽查"
+    assert any(item["id"] == "weekly-three" for item in workbench["next_actions"])
+    assert any(item["id"] == "geo-sampling" or item["id"] == "geo-ticket" for item in workbench["next_actions"])
+    assert all("102" not in item["title"] for item in workbench["next_actions"])
+
+
+def test_workbench_open_verify_stays_on_week_and_can_restore(client: TestClient, demo_user, db, monkeypatch) -> None:
+    tenant = db.get(Tenant, demo_user.tenant_id)
+    tenant.site_origin = "https://www.snipers.com.cn"
+    tenant.name = "SNIPERS"
+    first = SitePage(tenant_id=demo_user.tenant_id, path="/snipers/article/articlelist/cat_id/3.html", locale="zh-CN", title="知识百科", crawl_status="ok")
+    second = SitePage(tenant_id=demo_user.tenant_id, path="/snipers/article/articlelist/cat_id/1.html", locale="zh-CN", title="资讯", crawl_status="ok")
+    third = SitePage(tenant_id=demo_user.tenant_id, path="/en/Article/detail/article_id/4.html", locale="en-US", title="SEO", crawl_status="ok")
+    filler = SitePage(tenant_id=demo_user.tenant_id, path="/snipers/Article/detail/article_id/5.html", locale="zh-CN", title="第五篇", crawl_status="ok")
+    db.add_all([first, second, third, filler])
+    db.flush()
+    week_rows = [
+        OnsiteIssue(tenant_id=demo_user.tenant_id, page_id=first.id, category="schema", title="页面说明和正文对不上", severity="critical", status="open", risk="high"),
+        OnsiteIssue(tenant_id=demo_user.tenant_id, page_id=second.id, category="crawl", title="网址层级太深，不好被找到", severity="critical", status="open", risk="high"),
+        OnsiteIssue(tenant_id=demo_user.tenant_id, page_id=third.id, category="crawl", title="网址层级太深，不好被找到", severity="critical", status="open", risk="high"),
+        OnsiteIssue(tenant_id=demo_user.tenant_id, page_id=filler.id, category="tdk", title="首页标题过长", severity="critical", status="open", risk="high"),
+    ]
+    db.add_all(week_rows)
+    db.commit()
+
+    headers = auth_header(client)
+    target_id = client.post("/api/onsite/weekly/pin", headers=headers).json()["this_week"][0]["id"]
+    sent = client.post(f"/api/onsite/issues/{target_id}/sent-to-customer", headers=headers)
+    assert sent.status_code == 200, sent.text
+
+    class Snap:
+        usable = True
+
+    def _pass(tmp_db, user, page, origin):
+        issue = tmp_db.get(OnsiteIssue, target_id)
+        assert issue is not None
+        issue.status = "verified"
+        return Snap(), 0, 1
+
+    monkeypatch.setattr("app.routers.onsite.issue_actions._fetch_one_registered", _pass)
+    opened = client.post(f"/api/onsite/issues/{target_id}/weekly-recheck", headers=headers)
+    assert opened.status_code == 200, opened.text
+    workbench = client.get("/api/dashboard/workbench?days=28", headers=headers).json()
+    card = next(item for item in workbench["weekly_onsite"] if item["id"] == target_id)
+    assert card["status"] == "已发给客户"
+    assert workbench["weekly_onsite"][0]["id"] == target_id
+    assert workbench["weekly_can_restore"] is False
+    assert card["subtitle"].endswith("cat_id/3.html")
+
+    from app.onsite_loop import save_weekly_pin
+
+    keepers = [item["id"] for item in workbench["weekly_onsite"] if item["id"] != target_id]
+    save_weekly_pin(
+        db,
+        demo_user.tenant_id,
+        issue_ids=[*keepers, week_rows[3].id],
+        sent_ids=[],
+        last_dropped_id=target_id,
+        last_dropped_sent=True,
+    )
+    dropped = db.get(OnsiteIssue, target_id)
+    assert dropped is not None
+    dropped.status = "verified"
+    db.commit()
+
+    after_drop = client.get("/api/dashboard/workbench?days=28", headers=headers).json()
+    assert after_drop["weekly_can_restore"] is True
+    assert all(item["id"] != target_id for item in after_drop["weekly_onsite"])
+
+    restored = client.post("/api/onsite/weekly/restore-dropped", headers=headers)
+    assert restored.status_code == 200, restored.text
+    home = client.get("/api/dashboard/workbench?days=28", headers=headers).json()
+    assert home["weekly_onsite"][0]["id"] == target_id
+    assert home["weekly_onsite"][0]["status"] == "已发给客户"
+    assert home["weekly_onsite"][0]["subtitle"].endswith("cat_id/3.html")
+    assert home["weekly_can_restore"] is False

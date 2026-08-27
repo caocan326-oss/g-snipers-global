@@ -209,6 +209,8 @@ export type DashboardSummary = {
   geo_latest_sampled?: number;
   geo_latest_mentioned?: number;
   geo_watch_due?: number;
+  this_week_onsite?: number;
+  this_week_open?: number;
   onsite_pages: number;
   onsite_open_low: number;
   onsite_open_high: number;
