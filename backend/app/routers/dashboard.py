@@ -489,6 +489,8 @@ def workbench(
     week_rows = load_weekly_onsite_issues(db, user.tenant_id)
     week_out = decorate_weekly_issues(db, user.tenant_id, week_rows)
     pin = weekly_pin_state(db, user.tenant_id)
+    summary.this_week_onsite = len(week_out)
+    summary.this_week_open = len(week_out) + summary.geo_tickets_open
     latest_by, previous_by = prompt_batch_rows(db, user.tenant_id)
     last_by = last_sampled_at_by_prompt(db, user.tenant_id)
     geo_questions: list[WorkbenchItem] = []

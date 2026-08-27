@@ -13,6 +13,7 @@ export function PillarsOverview({
   geoRecorded,
   workTone,
   reviewTotal,
+  weeklyCount,
   boardTotal,
   perf,
 }: {
@@ -23,6 +24,7 @@ export function PillarsOverview({
   geoRecorded: number;
   workTone: "default" | "green" | "amber" | "blue" | "red" | "brand";
   reviewTotal: number;
+  weeklyCount: number;
   boardTotal: number;
   perf: WorkbenchSeoPerformance;
 }) {
@@ -78,13 +80,13 @@ export function PillarsOverview({
           icon={ListChecks}
         >
           <div className="grid grid-cols-2 gap-2 text-sm">
+            <div className="rounded-md bg-slate-50 p-3"><div className="text-xs text-slate-500">站内三处</div><div className="mt-1 font-semibold">{weeklyCount}</div></div>
             <div className="rounded-md bg-slate-50 p-3"><div className="text-xs text-slate-500">AI 搜索</div><div className="mt-1 font-semibold">{data.summary.geo_tickets_open}</div></div>
-            <div className="rounded-md bg-slate-50 p-3"><div className="text-xs text-slate-500">待复查</div><div className="mt-1 font-semibold">{data.summary.seo_pending_review}</div></div>
           </div>
         </PillarCard>
       </section>
       <p className="text-xs leading-5 text-slate-500">
-        三块数字口径不同：左边只算网站紧急/优先，中间是买家问题抽查，右边是三处未关闭加总。对不上不是算错。
+        左边是网站紧急/优先加总，中间是买家问题抽查，右边是这周给客户看的项（三处 + AI 搜索待处理）。问题板那一百多条不是这周要做完。对不上不是算错。
       </p>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">

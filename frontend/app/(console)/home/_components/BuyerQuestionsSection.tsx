@@ -1,10 +1,14 @@
+"use client";
+
+import { FormEvent, useState } from "react";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import type { WorkbenchItem } from "@/lib/api";
+import { Input } from "@/components/ui/input";
+import { api, type WorkbenchItem } from "@/lib/api";
 
 function TrendDots({ trend }: { trend: string }) {
   const rounds = (trend.split("轮：")[1] || "")
@@ -31,12 +35,44 @@ export function BuyerQuestionsSection({
   sources = [],
   competitors = [],
   trustNote = "",
+  onRecorded,
 }: {
   items: WorkbenchItem[];
   sources?: WorkbenchItem[];
   competitors?: WorkbenchItem[];
   trustNote?: string;
+  onRecorded?: () => void;
 }) {
+  const [form, setForm] = useState({ prompt_text: "", recorded_from: "sales", source_note: "" });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [note, setNote] = useState("");
+
+  async function recordQuestion(event: FormEvent) {
+    event.preventDefault();
+    setError("");
+    setNote("");
+    setBusy(true);
+    try {
+      await api("/api/geo/prompts", {
+        method: "POST",
+        body: JSON.stringify({
+          prompt_text: form.prompt_text.trim(),
+          locale: "en-US",
+          recorded_from: form.recorded_from,
+          source_note: form.source_note.trim(),
+        }),
+      });
+      setForm({ prompt_text: "", recorded_from: form.recorded_from, source_note: "" });
+      setNote("已记下这句。没有抽过就空着，不会编。不保证这次被提到。");
+      onRecorded?.();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "没记下");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <Card className="rounded-md border-sky-200">
       <CardContent className="space-y-3 p-5">
@@ -78,8 +114,39 @@ export function BuyerQuestionsSection({
             ))}
           </div>
         ) : (
-          <p className="text-sm text-slate-500">还没有买家原句。先从销售、询盘、展会或客户自己说的记下来。没有时间序列，也没有可引用资产。</p>
+          <p className="text-sm text-slate-500">还没有买家原句。先从销售、询盘、展会或客户自己说的记下来。搜索词不要记。没有原句就空着。</p>
         )}
+        <form className="space-y-2 rounded-md border border-dashed border-slate-200 bg-slate-50 p-3" onSubmit={(event) => void recordQuestion(event)}>
+          <p className="text-xs leading-5 text-slate-500">记下原句。搜索词不要记。不要编。</p>
+          <Input
+            placeholder="例如：Which factory can export industrial fasteners to the US?"
+            value={form.prompt_text}
+            onChange={(e) => setForm({ ...form, prompt_text: e.target.value })}
+            required
+          />
+          <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+            <select
+              className="h-9 rounded-md border border-slate-200 bg-white px-2 text-sm"
+              value={form.recorded_from}
+              onChange={(e) => setForm({ ...form, recorded_from: e.target.value })}
+            >
+              <option value="sales">销售听到的</option>
+              <option value="inquiry">询盘里的</option>
+              <option value="exhibition">展会听到的</option>
+              <option value="customer">客户自己说的</option>
+            </select>
+            <Input
+              placeholder="谁说的，可选"
+              value={form.source_note}
+              onChange={(e) => setForm({ ...form, source_note: e.target.value })}
+            />
+            <Button type="submit" size="sm" disabled={busy}>
+              {busy ? "记下…" : "记下这句"}
+            </Button>
+          </div>
+          {note ? <p className="text-xs text-emerald-700">{note}</p> : null}
+          {error ? <p className="text-xs text-red-600">{error}</p> : null}
+        </form>
         {trustNote ? <p className="text-sm leading-6 text-slate-600">{trustNote}</p> : null}
         {sources.length || competitors.length ? (
           <div className="grid gap-3 md:grid-cols-2">

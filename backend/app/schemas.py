@@ -45,6 +45,8 @@ class DashboardSummary(BaseModel):
     geo_latest_sampled: int = 0
     geo_latest_mentioned: int = 0
     geo_watch_due: int = 0
+    this_week_onsite: int = 0
+    this_week_open: int = 0
     onsite_pages: int
     onsite_open_low: int
     onsite_open_high: int
