@@ -740,12 +740,12 @@ git log -1 --oneline
 
 | 项 | 值 |
 | --- | --- |
-| 日期 | 2026-08-27 13:05 |
+| 日期 | 2026-08-27 13:08 |
 | 最后一台 | 公司 `E:\G-snipers海外版` |
 | 分支 | `main` |
-| 提交 | 清 SNIPERS 门锁 llms.txt。地图空着人测已过。 |
-| 已 push origin / upstream | 发版时写。 |
-| 已发版生产 | 发版时写。迁移仍是 `025`。`DEMO_LOGIN_ENABLED` 仍关。 |
+| 提交 | `ad36846` 清 SNIPERS 门锁 llms.txt。地图空着人测已过。 |
+| 已 push origin / upstream | 是。 |
+| 已发版生产 | **是。** `sync-from-local.ps1 -Rebuild`。三处 `ad36846`。迁移 `025` 已跑。`DEMO_LOGIN_ENABLED` 仍关。 |
 | 接口实测 | 硬刷新 GEO：llms.txt 不应再是智能门锁。地图仍空。不要编问句、不要测绿联。 |
 | 未完成 | 没有原句则 GEO 空着。不要编问句。 |
 | 下一台先做 | 海外版家里先 `git pull origin main`。不代改、不编问句、不抽第三轮绿联。 |
