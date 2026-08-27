@@ -825,7 +825,7 @@ git log -1 --oneline
 | 日期 | 2026-08-27 18:38 |
 | 最后一台 | 公司 `E:\G-snipers海外版` |
 | 分支 | `main` |
-| 提交 | 产品 `526ed99`。交接随本提交。 |
+| 提交 | 产品 `526ed99`。交接 `75a7f09`。 |
 | 已 push origin / upstream | 是（随本轮一起推） |
 | 已发版生产 | **是。** `sync-from-local.ps1 -Rebuild`。产品 `526ed99`。无新迁移。`DEMO_LOGIN_ENABLED` 仍关。 |
 | 接口实测 | 生产走查七条都过。页头 SNIPERS。询盘这个月 0，没有 `alex@example.com`。搜索词拒记。没抽查。 |
