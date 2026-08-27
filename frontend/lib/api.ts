@@ -319,6 +319,10 @@ export type CustomerBrief = {
   this_week: string[];
   paste_text?: string;
   sections: CustomerBriefSection[];
+  english_title?: string;
+  english_headline?: string;
+  english_markdown?: string;
+  english_paste?: string;
 };
 
 export type AiStatus = {

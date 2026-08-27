@@ -132,6 +132,7 @@ export function ContentTab({
         <Card className="rounded-md">
           <CardHeader><CardTitle>新增客户事实资料</CardTitle></CardHeader>
           <CardContent>
+            <p className="mb-3 text-xs leading-5 text-slate-500">只写已批或官网正文里有的事实。落地页虚数、logo、没写在正文里的认证不要填。</p>
             <form className="space-y-3" onSubmit={saveFactPack}>
               <Input placeholder="事实包名称" value={factForm.name} onChange={(e) => setFactForm({ ...factForm, name: e.target.value })} />
               <Input placeholder="公司英文全称" value={factForm.legal_name} onChange={(e) => setFactForm({ ...factForm, legal_name: e.target.value })} />

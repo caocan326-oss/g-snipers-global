@@ -31,7 +31,14 @@ strong { font-weight: 700; }
 """
 
 
-def markdown_to_report_html(*, title: str, markdown_text: str) -> str:
+def markdown_to_report_html(
+    *,
+    title: str,
+    markdown_text: str,
+    kicker: str = "G-Snipers 海外版 · 给客户的说明",
+    footer: str = "只写已经检查到的事实。尚未检查的不会写成 0，也不会编造排名或推荐。",
+    lang: str = "zh-CN",
+) -> str:
     body = markdown.markdown(
         markdown_text,
         extensions=["sane_lists", "tables", "nl2br"],
@@ -39,7 +46,7 @@ def markdown_to_report_html(*, title: str, markdown_text: str) -> str:
     )
     safe_title = title.replace("<", "").replace(">", "")
     return f"""<!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="{lang}">
 <head>
   <meta charset="utf-8" />
   <title>{safe_title}</title>
@@ -47,10 +54,10 @@ def markdown_to_report_html(*, title: str, markdown_text: str) -> str:
 </head>
 <body>
   <div class="header">
-    <div class="kicker">G-Snipers 海外版 · 给客户的说明</div>
+    <div class="kicker">{kicker}</div>
   </div>
   {body}
-  <div class="footer">只写已经检查到的事实。尚未检查的不会写成 0，也不会编造排名或推荐。</div>
+  <div class="footer">{footer}</div>
 </body>
 </html>
 """
@@ -64,8 +71,21 @@ def html_to_pdf(html: str) -> bytes:
     return HTML(string=html).write_pdf()
 
 
-def pdf_response(*, title: str, markdown_text: str, filename: str) -> Response:
-    html = markdown_to_report_html(title=title, markdown_text=markdown_text)
+def pdf_response(
+    *,
+    title: str,
+    markdown_text: str,
+    filename: str,
+    kicker: str | None = None,
+    footer: str | None = None,
+    lang: str = "zh-CN",
+) -> Response:
+    extras: dict[str, str] = {"lang": lang}
+    if kicker:
+        extras["kicker"] = kicker
+    if footer:
+        extras["footer"] = footer
+    html = markdown_to_report_html(title=title, markdown_text=markdown_text, **extras)
     try:
         data = html_to_pdf(html)
     except RuntimeError as exc:

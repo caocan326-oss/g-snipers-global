@@ -155,6 +155,10 @@ class CustomerBriefOut(BaseModel):
     this_week: list[str] = []
     paste_text: str = ""
     sections: list[CustomerBriefSection] = []
+    english_title: str = ""
+    english_headline: str = ""
+    english_markdown: str = ""
+    english_paste: str = ""
 
 
 class MarketCreate(BaseModel):

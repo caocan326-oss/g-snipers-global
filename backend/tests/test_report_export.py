@@ -30,6 +30,26 @@ def test_customer_brief_pdf_uses_html_renderer(client, demo_user, monkeypatch) -
     assert "filename*=UTF-8''" in res.headers["content-disposition"]
 
 
+def test_english_customer_brief_pdf_uses_english_markdown(client, demo_user, monkeypatch) -> None:
+    from app import report_export
+
+    captured: dict[str, str] = {}
+
+    def fake_pdf(html: str) -> bytes:
+        captured["html"] = html
+        return b"%PDF-1.4 mock"
+
+    monkeypatch.setattr(report_export, "html_to_pdf", fake_pdf)
+    headers = auth_header(client)
+    res = client.get("/api/dashboard/customer-brief.pdf?lang=en", headers=headers)
+    assert res.status_code == 200, res.text
+    assert res.content.startswith(b"%PDF-1.4")
+    assert "weekly-report" in res.headers["content-disposition"]
+    assert "Weekly report" in captured["html"]
+    assert "G-Snipers Overseas" in captured["html"]
+    assert "本周客户说明" not in captured["html"]
+
+
 def test_pdf_response_returns_503_when_renderer_fails(monkeypatch) -> None:
     from fastapi import HTTPException
 

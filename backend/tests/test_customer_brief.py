@@ -776,3 +776,73 @@ def test_geo_watch_due_only_samples_recorded_prompts(client: TestClient, demo_us
     assert "不编问句" in body["note"] or "没有原句不会编" in body["note"]
     after = client.get("/api/geo/watches", headers=headers).json()
     assert stale.id not in {item["prompt_id"] for item in after["items"] if item["due"]}
+
+
+def test_english_boss_report_keeps_closed_retest(client: TestClient, demo_user, db) -> None:
+    from datetime import datetime, timezone
+
+    from app.models import GeoPrompt, GeoTicket
+
+    tenant = db.get(Tenant, demo_user.tenant_id)
+    tenant.site_origin = "https://www.example.com"
+    tenant.name = "Example"
+    pages = [
+        SitePage(tenant_id=demo_user.tenant_id, path="/one", locale="en-US", title="One", crawl_status="ok"),
+        SitePage(tenant_id=demo_user.tenant_id, path="/two", locale="en-US", title="Two", crawl_status="ok"),
+        SitePage(tenant_id=demo_user.tenant_id, path="/three", locale="en-US", title="Three", crawl_status="ok"),
+    ]
+    db.add_all(pages)
+    db.flush()
+    for page in pages:
+        db.add(
+            OnsiteIssue(
+                tenant_id=demo_user.tenant_id,
+                page_id=page.id,
+                category="tdk",
+                title="首页标题过长",
+                status="open",
+                severity="high",
+                risk="high",
+            )
+        )
+    prompt = GeoPrompt(
+        tenant_id=demo_user.tenant_id,
+        prompt_text="什么获客软件比较好",
+        locale="zh-CN",
+        recorded_from="sales",
+    )
+    db.add(prompt)
+    db.flush()
+    db.add(
+        GeoTicket(
+            tenant_id=demo_user.tenant_id,
+            prompt_id=prompt.id,
+            title="买家问「什么获客软件比较好」时没提到我们",
+            diagnosis="absent",
+            status="done",
+            retest_result="上次没有提到，这次仍没有提到。两次都没有给出官网。贴上了不等于被提到。",
+            closed_at=datetime.now(timezone.utc),
+        )
+    )
+    db.commit()
+
+    headers = auth_header(client)
+    body = client.get("/api/dashboard/customer-brief", headers=headers).json()
+    english = body["english_markdown"]
+    paste = body["english_paste"]
+    assert body["english_title"].startswith("Weekly report")
+    assert "什么获客软件比较好" in english
+    assert "not mentioned" in english
+    assert "official site not given" in english
+    assert "Ticket closed" in english
+    assert "0 recorded this month" in english
+    assert "ChatGPT recommended" not in english
+    assert "ISO" not in english
+    assert "TÜV" not in english
+    assert "紧急网站问题" not in body["english_headline"]
+    assert "site page" in body["english_headline"]
+    assert "这周请改这几处" in body["paste_text"]
+    assert "什么获客软件比较好" not in body["paste_text"]
+    assert "不能出对外草稿" not in paste
+    assert "什么获客软件比较好" in paste
+    assert any("/one" in item or "/two" in item or "/three" in item for item in body["this_week"])

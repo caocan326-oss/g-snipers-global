@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session, selectinload
@@ -112,6 +112,188 @@ def _headline(
 
 def _month_start(now: datetime) -> datetime:
     return now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+
+def _as_utc(now: datetime) -> datetime:
+    return now.astimezone(timezone.utc) if now.tzinfo else now.replace(tzinfo=timezone.utc)
+
+
+def _week_start(now: datetime) -> datetime:
+    utc = _as_utc(now)
+    monday = utc - timedelta(days=utc.weekday())
+    return monday.replace(hour=0, minute=0, second=0, microsecond=0)
+
+
+def _closed_tickets_this_week(db: Session, tenant_id: str, week_start: datetime) -> list[GeoTicket]:
+    rows = (
+        db.query(GeoTicket)
+        .options(selectinload(GeoTicket.prompt))
+        .filter(
+            GeoTicket.tenant_id == tenant_id,
+            GeoTicket.status.in_(["done", "closed"]),
+        )
+        .order_by(GeoTicket.updated_at.desc())
+        .limit(24)
+        .all()
+    )
+    kept: list[GeoTicket] = []
+    for ticket in rows:
+        stamp = ticket.closed_at or ticket.updated_at
+        if stamp is None:
+            continue
+        if stamp.tzinfo is None:
+            stamp = stamp.replace(tzinfo=timezone.utc)
+        if stamp >= week_start:
+            kept.append(ticket)
+        if len(kept) >= 8:
+            break
+    return kept
+
+
+def _en_retest_verdict(ticket: GeoTicket) -> str:
+    note = ticket.retest_result or ""
+    mentioned: bool | None = None
+    owned: bool | None = None
+    if any(mark in note for mark in ("仍没提到", "没有提到", "都没提到", "没提到", "not mentioned")):
+        mentioned = False
+    elif "提到了" in note or "提到品牌" in note:
+        mentioned = True
+    if any(mark in note for mark in ("没给出官网", "没有给出官网", "没给出", "official site not given", "no official site")):
+        owned = False
+    elif "给出了官网" in note:
+        owned = True
+    if ticket.diagnosis == "absent":
+        if mentioned is None:
+            mentioned = False
+        if owned is None:
+            owned = False
+    parts: list[str] = []
+    if mentioned is False:
+        parts.append("not mentioned")
+    elif mentioned is True:
+        parts.append("mentioned")
+    if owned is False:
+        parts.append("official site not given")
+    elif owned is True:
+        parts.append("a suspected official site appeared — not a stable recommendation")
+    if not parts:
+        parts.append("see the recorded close note")
+    return "; ".join(parts)
+
+
+def _ticket_question(ticket: GeoTicket) -> str:
+    prompt = getattr(ticket, "prompt", None)
+    text = " ".join(((prompt.prompt_text if prompt else "") or "").split())
+    return text or ticket.title
+
+
+def _issue_en_line(issue: OnsiteIssue) -> str:
+    path = (issue.page.path if issue.page else "") or "(no path)"
+    title = _plain_title(issue.title)
+    limited = (issue.blocked_reason or "").startswith("受模板限制")
+    extra = " (template-limited; we do not edit the theme)" if limited else ""
+    return f"Page {path}: {title}{extra}"
+
+
+def _english_headline(*, weekly_n: int, closed: list[GeoTicket], site_origin: str) -> str:
+    if not site_origin:
+        return "Website not registered yet. This is not a ranking claim."
+    if weekly_n:
+        week = f"This week: {weekly_n} site page(s) for the customer to fix."
+    else:
+        week = "This week: no new site pages in the weekly three."
+    if closed:
+        last = closed[0]
+        return f"{week} Last same-question check: “{_ticket_question(last)}” — {_en_retest_verdict(last)}."
+    return f"{week} No same-question ticket closed this week."
+
+
+def _build_english_report(
+    *,
+    tenant_name: str,
+    site_origin: str,
+    generated: datetime,
+    weekly_issues: list[OnsiteIssue],
+    buyer_prompts: list[GeoPrompt],
+    closed: list[GeoTicket],
+    inquiry_count: int,
+) -> tuple[str, str, str, str]:
+    name = (tenant_name or "Customer").strip() or "Customer"
+    title = f"Weekly report — {name}"
+    headline = _english_headline(weekly_n=len(weekly_issues), closed=closed, site_origin=site_origin)
+    week_lines = [_issue_en_line(issue) for issue in weekly_issues] or [
+        "No weekly three site pages. We do not invent pages."
+    ]
+    buyer_lines: list[str] = []
+    if not buyer_prompts:
+        buyer_lines.append("No recorded buyer questions. We do not invent questions.")
+    else:
+        for prompt in buyer_prompts:
+            buyer_lines.append(f"“{prompt.prompt_text}” (recorded)")
+        buyer_lines.append("Questions are recorded as spoken. We do not invent them.")
+    closed_lines: list[str] = []
+    if not closed:
+        closed_lines.append("No same-question ticket closed this week.")
+    else:
+        for ticket in closed:
+            note = (ticket.retest_result or "").strip()
+            line = f"“{_ticket_question(ticket)}” — {_en_retest_verdict(ticket)}. Ticket closed."
+            if note:
+                line = f"{line} Recorded note: {note}"
+            closed_lines.append(line)
+        closed_lines.append("Pasting a page is not the same as being mentioned.")
+    inquiry_line = f"{inquiry_count} recorded this month. The software does not scrape inboxes. The account manager logs them."
+    boundary = [
+        "We do not edit the website.",
+        "We do not post on your behalf.",
+        "This check is a web search source, not ChatGPT itself.",
+        "No guarantee of mention this time.",
+    ]
+    lines = [
+        f"# {title}",
+        "",
+        headline,
+        "",
+        f"- Website: {site_origin or 'not registered'}",
+        f"- Report time: {generated.strftime('%Y-%m-%d %H:%M')} UTC",
+        "",
+        "## This week's site pages",
+        "",
+        *[f"- {item}" for item in week_lines],
+        "",
+        "## Recorded buyer questions",
+        "",
+        *[f"- {item}" for item in buyer_lines],
+        "",
+        "## Same-question checks closed this week",
+        "",
+        *[f"- {item}" for item in closed_lines],
+        "",
+        "## Inquiries this month",
+        "",
+        f"- {inquiry_line}",
+        "",
+        "## Boundary",
+        "",
+        *[f"- {item}" for item in boundary],
+        "",
+    ]
+    paste_bits = [
+        title,
+        "",
+        headline,
+        "",
+        "This week's site pages",
+        *[f"{index}. {item}" for index, item in enumerate(week_lines, 1)],
+        "",
+        "Same-question checks closed this week",
+        *[f"- {item}" for item in closed_lines],
+        "",
+        f"Inquiries this month: {inquiry_count}",
+        "",
+        " ".join(boundary),
+    ]
+    return title, headline, "\n".join(lines), "\n".join(paste_bits)
 
 
 def build_customer_brief(user: User, db: Session) -> CustomerBriefOut:
@@ -411,6 +593,17 @@ def build_customer_brief(user: User, db: Session) -> CustomerBriefOut:
         "",
     ]
 
+    closed = _closed_tickets_this_week(db, user.tenant_id, _week_start(generated))
+    english_title, english_headline, english_markdown, english_paste = _build_english_report(
+        tenant_name=tenant.name if tenant else "",
+        site_origin=site_origin,
+        generated=generated,
+        weekly_issues=priority_issues,
+        buyer_prompts=buyer_prompts,
+        closed=closed,
+        inquiry_count=inquiry_count,
+    )
+
     return CustomerBriefOut(
         title=title,
         headline=headline,
@@ -420,4 +613,8 @@ def build_customer_brief(user: User, db: Session) -> CustomerBriefOut:
         this_week=this_week,
         paste_text=paste_text,
         sections=sections,
+        english_title=english_title,
+        english_headline=english_headline,
+        english_markdown=english_markdown,
+        english_paste=english_paste,
     )

@@ -364,9 +364,22 @@ def customer_brief(user: User = Depends(get_current_user), db: Session = Depends
 
 
 @router.get("/customer-brief.pdf")
-def customer_brief_pdf(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def customer_brief_pdf(
+    lang: str = Query(default="zh"),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     brief = build_customer_brief(user, db)
     date = brief.generated_at.strftime("%Y-%m-%d")
+    if (lang or "").lower().startswith("en"):
+        return pdf_response(
+            title=brief.english_title or brief.title,
+            markdown_text=brief.english_markdown or brief.markdown,
+            filename=f"weekly-report-{date}.pdf",
+            kicker="G-Snipers Overseas · Weekly report",
+            footer="Facts already recorded. Untested items are not written as zero. We do not invent ranks or recommendations.",
+            lang="en",
+        )
     return pdf_response(title=brief.title, markdown_text=brief.markdown, filename=f"本周客户说明-{date}.pdf")
 
 

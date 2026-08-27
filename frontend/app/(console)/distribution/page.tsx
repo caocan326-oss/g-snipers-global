@@ -62,6 +62,20 @@ export default function ReportDeliveryPage() {
     }
   }
 
+  async function copyEnglish() {
+    if (!brief?.english_paste) {
+      setError("没有可复制的英文周报。");
+      return;
+    }
+    setError("");
+    try {
+      await copyText(brief.english_paste);
+      setNote("英文周报已复制，可发给工厂老板。");
+    } catch {
+      setError("复制失败，请手动选中英文周报。");
+    }
+  }
+
   async function downloadBrief() {
     if (!brief) return;
     setBusy("brief");
@@ -70,6 +84,21 @@ export default function ReportDeliveryPage() {
       const date = new Date(brief.generated_at).toISOString().slice(0, 10);
       await downloadApiFile("/api/dashboard/customer-brief.pdf", `本周客户说明-${date}.pdf`);
       setNote("本周客户说明（PDF）已下载。");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "下载失败");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function downloadEnglishBrief() {
+    if (!brief) return;
+    setBusy("brief-en");
+    setError("");
+    try {
+      const date = new Date(brief.generated_at).toISOString().slice(0, 10);
+      await downloadApiFile("/api/dashboard/customer-brief.pdf?lang=en", `weekly-report-${date}.pdf`);
+      setNote("英文周报（PDF）已下载。");
     } catch (e) {
       setError(e instanceof Error ? e.message : "下载失败");
     } finally {
@@ -155,9 +184,17 @@ export default function ReportDeliveryPage() {
               <Copy className="mr-2 h-4 w-4" />
               复制给客户
             </Button>
+            <Button variant="outline" onClick={copyEnglish} disabled={!brief.english_paste}>
+              <Copy className="mr-2 h-4 w-4" />
+              复制英文周报给老板
+            </Button>
             <Button variant="outline" onClick={downloadBrief} disabled={busy === "brief"}>
               <FileText className="mr-2 h-4 w-4" />
               {busy === "brief" ? "下载中…" : "下载本周说明（PDF）"}
+            </Button>
+            <Button variant="outline" onClick={downloadEnglishBrief} disabled={busy === "brief-en"}>
+              <FileText className="mr-2 h-4 w-4" />
+              {busy === "brief-en" ? "下载中…" : "下载英文周报（PDF）"}
             </Button>
           </div>
         </div>
@@ -173,6 +210,20 @@ export default function ReportDeliveryPage() {
           </CardHeader>
           <CardContent>
             <pre className="whitespace-pre-wrap rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-6 text-slate-800">{brief.paste_text}</pre>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {brief.english_paste ? (
+        <Card className="rounded-md">
+          <CardHeader>
+            <CardTitle>英文周报给老板</CardTitle>
+            <p className="text-sm leading-6 text-slate-500">
+              {brief.english_headline || "同一批已记事实，给工厂老板看。已关掉的复查也写进去，不藏不过。"}
+            </p>
+          </CardHeader>
+          <CardContent>
+            <pre className="whitespace-pre-wrap rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-6 text-slate-800">{brief.english_paste}</pre>
           </CardContent>
         </Card>
       ) : null}
