@@ -421,7 +421,15 @@ def mark_weekly_claimed(
         raise HTTPException(status_code=400, detail="先打开核对再记过或记不过。客户说改完了还要再打开核对。")
     issue_ids = pin.get("issue_ids") or week_ids
     claimed_ids = list(dict.fromkeys([*(pin.get("claimed_ids") or []), row.id]))
-    save_weekly_pin(db, user.tenant_id, issue_ids=issue_ids, sent_ids=pin.get("sent_ids") or [], claimed_ids=claimed_ids)
+    awaiting_reopen_ids = list(dict.fromkeys([*(pin.get("awaiting_reopen_ids") or []), row.id]))
+    save_weekly_pin(
+        db,
+        user.tenant_id,
+        issue_ids=issue_ids,
+        sent_ids=pin.get("sent_ids") or [],
+        claimed_ids=claimed_ids,
+        awaiting_reopen_ids=awaiting_reopen_ids,
+    )
     db.commit()
     return _weekly_out(db, user, "已记下客户说改完了。还要打开核对。不是官网已改。我们不代改。")
 
@@ -477,6 +485,16 @@ def weekly_recheck_issue(
     else:
         row.retest_result = "打开过该页。只记看过，不是工作台勾完。还在这三处。我们不代改。"
         note = "已打开该页。只记看过，不是工作台勾完。还在这三处。我们不代改。"
+    pin = weekly_pin_state(db, user.tenant_id)
+    awaiting_reopen_ids = [item for item in (pin.get("awaiting_reopen_ids") or []) if item != row.id]
+    save_weekly_pin(
+        db,
+        user.tenant_id,
+        issue_ids=pin.get("issue_ids") or week_ids,
+        sent_ids=pin.get("sent_ids") or [],
+        claimed_ids=pin.get("claimed_ids") or [],
+        awaiting_reopen_ids=awaiting_reopen_ids,
+    )
     db.commit()
     return _weekly_out(db, user, note)
 
@@ -492,6 +510,9 @@ def weekly_recheck_verdict(
     week_ids = [item.id for item in load_weekly_onsite_issues(db, user.tenant_id)]
     if row.id not in week_ids:
         raise HTTPException(status_code=400, detail="只核这周这三处。先打开站内「这周给客户改三处」。")
+    pin = weekly_pin_state(db, user.tenant_id)
+    if row.id in (pin.get("awaiting_reopen_ids") or []):
+        raise HTTPException(status_code=400, detail="客户说改完了还要先打开核对。客户说了不算过。")
     if not (row.retest_result or "").startswith(WEEKLY_RECHECK_OPENED):
         raise HTTPException(status_code=400, detail="先打开核对这一页。只记看过还不算过。")
     if row.status == "verified":

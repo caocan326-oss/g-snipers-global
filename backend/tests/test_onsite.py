@@ -1547,6 +1547,25 @@ def test_weekly_recheck_fail_stays_pass_drops(client: TestClient, demo_user, db:
     brief_fail = client.get("/api/dashboard/customer-brief", headers=headers).json()
     assert "这周还有没过的，请再改" in (brief_fail.get("paste_text") or "")
     assert "核对不过。问题还在。请再改" in (brief_fail.get("paste_text") or "")
+    blocked = client.post(
+        f"/api/onsite/issues/{target_id}/weekly-recheck-verdict",
+        headers=headers,
+        json={"passed": True},
+    )
+    assert blocked.status_code == 400
+    assert "客户说改完了还要先打开核对" in blocked.json()["detail"]
+    reopened = client.post(f"/api/onsite/issues/{target_id}/weekly-recheck", headers=headers)
+    assert reopened.status_code == 200, reopened.text
+    passed_again = client.post(
+        f"/api/onsite/issues/{target_id}/weekly-recheck-verdict",
+        headers=headers,
+        json={"passed": True},
+    )
+    assert passed_again.status_code == 200, passed_again.text
+    after_pass = client.get("/api/dashboard/workbench?days=28", headers=headers).json()
+    done = next(item for item in after_pass["weekly_onsite"] if item["id"] == target_id)
+    assert done["status"] == "核对过"
+    assert done.get("claimed") is False
 
 
 def test_weekly_restore_puts_auto_closed_page_back(client: TestClient, demo_user, db: Session) -> None:
