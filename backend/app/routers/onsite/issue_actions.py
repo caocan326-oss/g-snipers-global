@@ -453,8 +453,6 @@ def mark_weekly_claimed(
     kind = weekly_recheck_kind(row.retest_result or "")
     if kind == "pass":
         raise HTTPException(status_code=400, detail="这一条已经核对过。不用再记客户说改完了。")
-    if kind not in {"fail", "viewed"}:
-        raise HTTPException(status_code=400, detail="先打开核对再记过或记不过。客户说改完了还要再打开核对。")
     issue_ids = pin.get("issue_ids") or week_ids
     claimed_ids = list(dict.fromkeys([*(pin.get("claimed_ids") or []), row.id]))
     awaiting_reopen_ids = list(dict.fromkeys([*(pin.get("awaiting_reopen_ids") or []), row.id]))

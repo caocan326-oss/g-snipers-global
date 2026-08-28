@@ -101,6 +101,52 @@ def test_workbench_weekly_three_follows_pin_and_sent(client: TestClient, demo_us
     assert any(item["id"] == "weekly-send" for item in after["next_actions"])
 
 
+def test_weekly_claimed_after_sent_without_opening(client: TestClient, demo_user, db) -> None:
+    tenant = db.get(Tenant, demo_user.tenant_id)
+    tenant.site_origin = "https://www.snipers.com.cn"
+    tenant.name = "SNIPERS"
+    pages = [
+        SitePage(tenant_id=demo_user.tenant_id, path="/a", locale="zh-CN", title="A", crawl_status="ok"),
+        SitePage(tenant_id=demo_user.tenant_id, path="/b", locale="zh-CN", title="B", crawl_status="ok"),
+        SitePage(tenant_id=demo_user.tenant_id, path="/c", locale="zh-CN", title="C", crawl_status="ok"),
+    ]
+    db.add_all(pages)
+    db.flush()
+    db.add_all(
+        [
+            OnsiteIssue(
+                tenant_id=demo_user.tenant_id,
+                page_id=page.id,
+                category="tdk",
+                title="首页标题过长",
+                status="open",
+                severity="high",
+                risk="high",
+            )
+            for page in pages
+        ]
+    )
+    db.commit()
+
+    headers = auth_header(client)
+    first_id = client.post("/api/onsite/weekly/pin", headers=headers).json()["this_week"][0]["id"]
+    sent = client.post(f"/api/onsite/issues/{first_id}/sent-to-customer", headers=headers)
+    assert sent.status_code == 200, sent.text
+    claimed = client.post(f"/api/onsite/issues/{first_id}/weekly-claimed", headers=headers)
+    assert claimed.status_code == 200, claimed.text
+    assert claimed.json()["note"].startswith("已记下客户说改完了")
+    assert "还要打开核对" in claimed.json()["note"]
+    assert "不是官网已改" in claimed.json()["note"]
+    workbench = client.get("/api/dashboard/workbench?days=28", headers=headers).json()
+    card = next(item for item in workbench["weekly_onsite"] if item["id"] == first_id)
+    assert card["status"] == "已发给客户"
+    assert card.get("sent") is True
+    assert card.get("claimed") is True
+    ready = next(item for item in workbench["next_actions"] if item["id"] == "weekly-verdict")
+    assert ready["title"] == "客户说改完了，去打开核对"
+    assert "客户说了不算官网已改" in ready["subtitle"]
+
+
 def test_customer_brief_empty_tenant_stays_untested(client: TestClient, demo_user) -> None:
     headers = auth_header(client)
     res = client.get("/api/dashboard/customer-brief", headers=headers)
