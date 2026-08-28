@@ -130,45 +130,66 @@ def _split_terms(value: str) -> list[str]:
     return [part.strip() for part in value.replace("\n", ",").split(",") if part.strip()]
 
 
+def _pack_text(value: str | None) -> str:
+    return (value or "").strip()
+
+
 def _generate_asset_body(fact: FactPack, asset_type: str) -> str:
     brand = (_split_terms(fact.brand_names) or [fact.legal_name or "[NEED_INPUT: brand name]"])[0]
-    categories = fact.product_categories_en or "[NEED_INPUT: product categories]"
-    website = fact.website or "[NEED_INPUT: website]"
-    certifications = fact.certifications or "[NEED_INPUT: certifications if public]"
-    contact = fact.contact_public or "[NEED_INPUT: public contact]"
-    boilerplate = fact.approved_boilerplate_en.strip()
+    categories = _pack_text(fact.product_categories_en) or "[NEED_INPUT: product categories]"
+    website = _pack_text(fact.website) or "[NEED_INPUT: website]"
+    certifications = _pack_text(fact.certifications)
+    contact = _pack_text(fact.contact_public)
+    specs = _pack_text(fact.key_specs)
+    boilerplate = _pack_text(fact.approved_boilerplate_en)
     if asset_type == "profile_fields":
-        return "\n".join(
-            [
-                f"Company name: {fact.legal_name or brand}",
-                f"Brand: {brand}",
-                f"Website: {website}",
-                f"Categories: {categories}",
-                f"Certifications: {certifications}",
-                f"Public contact: {contact}",
-                f"Company description: {boilerplate or '[NEED_INPUT: approved English boilerplate]'}",
-            ]
-        )
+        lines = [
+            f"Company name: {fact.legal_name or brand}",
+            f"Brand: {brand}",
+            f"Website: {website}",
+            f"Categories: {categories}",
+        ]
+        if certifications:
+            lines.append(f"Certifications: {certifications}")
+        if contact:
+            lines.append(f"Public contact: {contact}")
+        lines.append(f"Company description: {boilerplate or '[NEED_INPUT: approved English boilerplate]'}")
+        return "\n".join(lines)
     if asset_type == "social_snippet":
-        return (
-            f"{brand} | {categories}\n"
-            f"{boilerplate or '[NEED_INPUT: approved English boilerplate]'}\n"
-            f"Learn more: {website}\n"
-            f"Keywords: {categories}."
-        )
+        lines = [
+            f"{brand} | {categories}",
+            boilerplate or "[NEED_INPUT: approved English boilerplate]",
+            f"Learn more: {website}",
+        ]
+        if contact:
+            lines.append(f"Contact: {contact}")
+        lines.append(f"Keywords: {categories}.")
+        return "\n".join(lines)
     if asset_type == "listicle_pitch":
+        facts = [f"website {website}"]
+        if certifications:
+            facts.append(f"certifications/qualifications: {certifications}")
+        if specs:
+            facts.append(f"key specs: {specs}")
+        if contact:
+            facts.append(f"public contact: {contact}")
         return (
             f"Hi [EDITOR_NAME],\n\n"
             f"I am sharing {brand} for consideration in your supplier roundup about {categories}. "
-            f"Public facts we can verify: website {website}; certifications/qualifications: {certifications}; key specs: {fact.key_specs or '[NEED_INPUT: public specs]'}.\n\n"
+            f"Public facts we can verify: {'; '.join(facts)}.\n\n"
             f"Short description:\n{boilerplate or '[NEED_INPUT: approved English boilerplate]'}\n\n"
             f"Please let us know if you need images, specs, or a formal media kit.\n"
         )
-    return (
-        f"{brand} is a supplier focused on {categories}. "
-        f"{boilerplate or 'Its public company description still needs customer approval. [NEED_INPUT: approved English boilerplate]'} "
-        f"Website: {website}. Public certifications or qualifications: {certifications}."
-    )
+    parts = [
+        f"{brand} is a supplier focused on {categories}.",
+        boilerplate or "Its public company description still needs customer approval. [NEED_INPUT: approved English boilerplate]",
+        f"Website: {website}.",
+    ]
+    if certifications:
+        parts.append(f"Public certifications or qualifications: {certifications}.")
+    if contact:
+        parts.append(f"Public contact: {contact}.")
+    return " ".join(parts)
 
 
 def _review_asset(row: ContentAsset, fact: FactPack | None) -> tuple[str, list[str]]:

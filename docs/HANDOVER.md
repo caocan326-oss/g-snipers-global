@@ -8,7 +8,7 @@
 
 约定：家里和公司**不会同时改**。换机器前必须把这边 push 完。
 
-最后更新：2026-08-28 13:00（公司。卡片补联系方式已发。待现网看「SNIPERS confirmed」。）。
+最后更新：2026-08-28 14:04（公司。对外稿空认证不写 NEED_INPUT、邮箱进稿。已发版。T3 待现网复测。）。
 
 ---
 
@@ -951,7 +951,26 @@ T2 等再说。没点「换下一组」。
 
 已批包卡片补一行「联系：」。没有就写「未填」。不改库、不批旧草稿、不点换组。
 
-**已发生产，待现网测。** 站外 → 对外稿，只看「SNIPERS confirmed」。过：有「联系：snipers@snipers.com.cn」。旧两份仍是草稿。
+**现网（2026-08-28 13:10，硬刷新。只看 T1–T4。不点换组、不批旧草稿、不新建、不出对外稿）过。** 页头 SNIPERS。
+
+- T1 过：对外稿能打开，「客户事实资料」有卡。
+- T2 过：卡上原文：角标「已批准」。联系：snipers@snipers.com.cn。公司 SNIPERS / 赛珀，官网 https://www.snipers.com.cn。
+- T3 过：旧两份仍是「草稿」。
+- T4 过：今天先做没有「草稿待批」，第一项是「这周给客户改三处」，三条仍是「核对过」。
+
+没点换组，没批旧草稿，没新建。卡片联系方式收口。
+
+### 4.66 出对外稿（T3 不过，现网当没修）
+
+**现网（2026-08-28 13:35。只选已批包，只点「从客户事实资料生成草稿」。不批、不保存、不换组）T1 T2 T4 过，T3 不过。** 页头 SNIPERS。没点换组，没批，没保存。
+
+- T1 过：下拉能选「SNIPERS confirmed · approved」。
+- T2 过：出了一篇「SNIPERS confirmed · company_blurb」，角标 `draft`。绿字没抓住（可能闪没了），没有红错。没点「人工批准」。
+- T3 不过。缺邮箱，有 `[NEED_INPUT`。整段原文：`SNIPERS is a supplier focused on AI customer acquisition, SEM, SEO, GEO. SNIPERS (赛珀) is a digital transformation service provider. G-Snipers is its AI customer-acquisition product covering SEM, SEO, and GEO. Website: https://www.snipers.com.cn. Public certifications or qualifications: [NEED_INPUT: certifications if public].`
+- T4 过：Default 和 SNIPERS public facts 仍是草稿。
+- T5 停。现网多出这一篇草稿，先留着。不要清。
+
+认证空着就不该写成 `[NEED_INPUT`，邮箱在包里却没写进稿。本轮已改生成模板并**已发版**：空认证不写那句；包里有公开联系方式就写进稿。T3 待现网硬刷新复测。只看新出的一篇，不要看已有那篇还带 `[NEED_INPUT` 的。换组仍等用户说再点。
 
 ---
 
@@ -986,16 +1005,17 @@ git log -1 --oneline
 
 | 项 | 值 |
 | --- | --- |
-| 日期 | 2026-08-28 13:00 |
+| 日期 | 2026-08-28 14:04 |
 | 最后一台 | **公司** `E:\G-snipers海外版`。家里不要同时改。 |
 | 下一台 | 家里先 `git pull origin main`。 |
 | 分支 | `main` |
-| 产品提交 | 本提交：事实包卡片显示公开联系方式。 |
-| 已 push origin / upstream | 是（随本提交一起推） |
-| 已发版生产 | **是。** `sync-from-local.ps1 -Rebuild`。待现网看 §4.65。 |
+| 产品提交 | 本提交 — 对外稿空认证不写 NEED_INPUT，包里邮箱写进稿。 |
+| 远端文档 | 随本提交。 |
+| 已 push origin / upstream | 是（随本轮发版一起推） |
+| 已发版生产 | **是。** `sync-from-local.ps1 -Rebuild`。T3 待现网硬刷新复测。 |
 | 本机工作区 | 提交并推完后应干净。 |
-| 接口实测 | §4.64 新包已批。§4.65 **待现网测**。没点换组。 |
-| 记下没挡 | 已批「SNIPERS confirmed」。旧**两份**草稿没动。 |
+| 接口实测 | §4.66 T1 T2 T4 过，T3 待发版后复测。没点换组、没批、没保存。 |
+| 记下没挡 | 已批「SNIPERS confirmed」。现网旧稿 `SNIPERS confirmed · company_blurb` 先留着。旧两份仍草稿。 |
 | 仍做不到 / 不要做 | 网址过深本周做不到。llms.txt 做不到。贴上了不等于被提到。不要编问句、不要代改、不要再打开/抽客户网站、不要登 `139.129.99.194`、不要批准未核对的草稿、不要清草稿除非用户说清。 |
 
 `www` 灰云、A 仍 `39.97.52.149`。`relay.weiyids.com` 橙云，不要 CNAME 回 `workers.dev`。不要开 Google Ads。不要在服务器 `git pull`。
@@ -1032,7 +1052,7 @@ git log -1 --oneline
 ### 6.3 不要动的产品事实
 
 - 定位：每周获客 OS（`docs/POSITIONING.md`）。不按 16 周表。VISION 是天花板，不是今晚排期。
-- 没有**已批准** Fact Pack（英文说明 + 官网）不能出对外页/FAQ/llms 草稿。现网已批「SNIPERS confirmed」。旧两份仍是草稿。周报可以没有 Fact Pack。
+- 没有**已批准** Fact Pack（英文说明 + 官网）不能出对外页/FAQ/llms 草稿。现网已批「SNIPERS confirmed」。旧两份仍是草稿。现网已出一篇旧稿 `SNIPERS confirmed · company_blurb`（draft），T3 不过原文仍在那篇上。本轮已发版，复测只看新稿。周报可以没有 Fact Pack。
 - 已记原句只有三句：什么获客软件比较好 / 什么GEO工具可以让我快速上去 / 有什么自动化的AI获客工具么？ 不要编第四句。
 - FAQ 已贴 `article_id/11`。同一问复测（博查 + Tavily）仍没提到、没官网。工单已关：贴上了不等于被提到。
 - 这周三处仍钉着；`cat_id/3` JSON-LD 人眼已过。深网址 / llms.txt = 受模板限制。
@@ -1041,7 +1061,7 @@ git log -1 --oneline
 
 ### 6.4 下一件（家里等用户开口，不要自己开）
 
-§4.65 已发，待现网看「SNIPERS confirmed」有没有「联系：snipers@snipers.com.cn」。T2 换组等用户说再点。不要清旧草稿。对外稿现网已能出，先看卡片再出稿。
+§4.66 已发版。T3 待现网硬刷新复测：只看新出的一篇，不看旧那篇还带 `[NEED_INPUT` 的。换组仍等用户说再点。不要清现网旧草稿。不要自己开新功能。
 
 ---
 

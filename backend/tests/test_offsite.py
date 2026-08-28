@@ -166,6 +166,7 @@ def test_fact_pack_content_asset_approval_and_distribution_gate(client: TestClie
     asset_id = draft.json()["id"]
     assert draft.json()["status"] == "draft"
     assert "ExamplePump" in draft.json()["body_md"]
+    assert "ISO 9001" in draft.json()["body_md"]
 
     job_denied = client.post(
         "/api/distribution/jobs",
@@ -204,6 +205,55 @@ def test_fact_pack_content_asset_approval_and_distribution_gate(client: TestClie
     assert job.status_code == 201, job.text
     assert job.json()["content_asset_id"] == asset_id
     assert "ExamplePump" in job.json()["payload_summary"]
+
+
+def test_generate_company_blurb_uses_pack_contact_and_skips_empty_certs(client: TestClient, demo_user) -> None:
+    headers = auth_header(client)
+    fact = client.post(
+        "/api/offsite/fact-packs",
+        headers=headers,
+        json={
+            "name": "SNIPERS confirmed",
+            "legal_name": "SNIPERS",
+            "brand_names": "SNIPERS, 赛珀",
+            "website": "https://www.snipers.com.cn",
+            "product_categories_en": "AI customer acquisition, SEM, SEO, GEO",
+            "contact_public": "snipers@snipers.com.cn",
+            "approved_boilerplate_en": (
+                "SNIPERS (赛珀) is a digital transformation service provider. "
+                "G-Snipers is its AI customer-acquisition product covering SEM, SEO, and GEO."
+            ),
+        },
+    )
+    assert fact.status_code == 201, fact.text
+    approved = client.post(
+        f"/api/offsite/fact-packs/{fact.json()['id']}/approve",
+        headers=headers,
+        json={"confirmed": True, "note": "客户确认"},
+    )
+    assert approved.status_code == 200, approved.text
+
+    draft = client.post(
+        "/api/offsite/content-assets/generate",
+        headers=headers,
+        json={"fact_pack_id": fact.json()["id"], "asset_type": "company_blurb"},
+    )
+    assert draft.status_code == 201, draft.text
+    body = draft.json()["body_md"]
+    assert draft.json()["status"] == "draft"
+    assert "SNIPERS" in body
+    assert "赛珀" in body
+    assert "https://www.snipers.com.cn" in body
+    assert "G-Snipers" in body
+    assert "SEM" in body
+    assert "snipers@snipers.com.cn" in body
+    assert "NEED_INPUT" not in body
+    assert "certification" not in body.lower()
+    assert "ISO" not in body
+    assert "TÜV" not in body
+    assert "厦门" not in body
+    assert "门锁" not in body
+    assert "UGREEN" not in body
 
 
 def test_content_asset_review_blocks_need_input_and_banned_claim(client: TestClient, demo_user) -> None:
