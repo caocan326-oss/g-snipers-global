@@ -387,6 +387,8 @@ export default function HomePage() {
         siteOrigin={data.site_origin || ""}
         busyId={weeklyBusyId}
         canRestore={Boolean(data.weekly_can_restore)}
+        note={note}
+        error={error}
         recheckIssue={(item) => void weeklyRecheck(item)}
         recordVerdict={(item, passed) => void weeklyVerdict(item, passed)}
         restoreDropped={() => void restoreDroppedWeek()}

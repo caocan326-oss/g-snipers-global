@@ -1491,6 +1491,48 @@ def test_weekly_next_set_skips_passed_pages(client: TestClient, demo_user, db: S
     assert old_ids.isdisjoint({item["id"] for item in after["weekly_onsite"]})
 
 
+def test_weekly_recheck_does_not_fetch_or_add_issues(client: TestClient, demo_user, db: Session, monkeypatch) -> None:
+    tenant = db.get(Tenant, demo_user.tenant_id)
+    assert tenant is not None
+    tenant.site_origin = "https://www.snipers.com.cn"
+    pages = [
+        SitePage(tenant_id=demo_user.tenant_id, path="/a", locale="zh-CN", title="A", crawl_status="ok"),
+        SitePage(tenant_id=demo_user.tenant_id, path="/b", locale="zh-CN", title="B", crawl_status="ok"),
+        SitePage(tenant_id=demo_user.tenant_id, path="/c", locale="zh-CN", title="C", crawl_status="ok"),
+    ]
+    db.add_all(pages)
+    db.flush()
+    db.add_all(
+        [
+            OnsiteIssue(
+                tenant_id=demo_user.tenant_id,
+                page_id=page.id,
+                category="tdk",
+                title="首页标题过长",
+                severity="high",
+                status="open",
+                risk="high",
+            )
+            for page in pages
+        ]
+    )
+    db.commit()
+    before = db.query(OnsiteIssue).filter(OnsiteIssue.tenant_id == demo_user.tenant_id).count()
+
+    def boom(*_args, **_kwargs):
+        raise AssertionError("打开核对不该再抓站")
+
+    monkeypatch.setattr("app.routers.onsite.issue_actions._fetch_one_registered", boom)
+    headers = auth_header(client)
+    target_id = client.post("/api/onsite/weekly/pin", headers=headers).json()["this_week"][0]["id"]
+    opened = client.post(f"/api/onsite/issues/{target_id}/weekly-recheck", headers=headers)
+    assert opened.status_code == 200, opened.text
+    assert opened.json()["note"] == "已打开该页。只记看过，不是工作台勾完。还在这三处。我们不代改。"
+    db.expire_all()
+    after = db.query(OnsiteIssue).filter(OnsiteIssue.tenant_id == demo_user.tenant_id).count()
+    assert after == before
+
+
 def test_weekly_recheck_fail_stays_pass_drops(client: TestClient, demo_user, db: Session, monkeypatch) -> None:
     tenant = db.get(Tenant, demo_user.tenant_id)
     assert tenant is not None

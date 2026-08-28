@@ -21,6 +21,8 @@ export function WeeklyOnsiteSection({
   siteOrigin,
   busyId,
   canRestore,
+  note,
+  error,
   recheckIssue,
   recordVerdict,
   restoreDropped,
@@ -35,6 +37,8 @@ export function WeeklyOnsiteSection({
   siteOrigin: string;
   busyId: string;
   canRestore: boolean;
+  note?: string;
+  error?: string;
   recheckIssue: (item: WorkbenchItem) => void;
   recordVerdict: (item: WorkbenchItem, passed: boolean) => void;
   restoreDropped: () => void;
@@ -47,6 +51,7 @@ export function WeeklyOnsiteSection({
   const [copiedId, setCopiedId] = useState("");
   const allPassed = items.length > 0 && items.every((item) => item.status === "核对过");
   const unsentCount = items.filter((item) => item.status === "待发给客户").length;
+  const failCount = items.filter((item) => item.status === "核对不过").length;
 
   async function copyNote(item: WorkbenchItem) {
     const text = (item.meta || "").trim();
@@ -103,6 +108,13 @@ export function WeeklyOnsiteSection({
             {unsentCount} 处还没发给客户。复制短稿发给客户，再点记下已发。不是官网已改。我们不代发。
           </p>
         ) : null}
+        {failCount ? (
+          <p className="text-sm leading-6 text-amber-800">
+            {failCount} 处核对不过。等客户再改完再打开核对。不是官网已改。我们不代改。
+          </p>
+        ) : null}
+        {error ? <p className="text-sm leading-6 text-red-600">{error}</p> : null}
+        {note ? <p className="text-sm leading-6 text-emerald-700">{note}</p> : null}
         {items.length ? (
           <div className="grid gap-3 lg:grid-cols-3">
             {items.map((item, index) => {

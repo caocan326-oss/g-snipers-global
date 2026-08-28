@@ -501,24 +501,17 @@ def weekly_recheck_issue(
     page = db.get(SitePage, row.page_id)
     if page is None or page.tenant_id != user.tenant_id:
         raise HTTPException(status_code=404, detail="页面不存在")
-    origin = _require_origin(_tenant(db, user))
-    prior_status = row.status
     try:
-        snap, _created, _verified = _fetch_one_registered(db, user, page, origin)
+        _require_origin(_tenant(db, user))
     except OriginError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    db.flush()
-    db.refresh(row)
+    prior_status = row.status
     row.last_checked_at = datetime.now(timezone.utc)
     if row.status == "verified":
         row.status = prior_status if prior_status != "verified" else "open"
         row.closed_at = None
-    if not getattr(snap, "usable", False):
-        row.retest_result = "打开过该页，但这次没抓全。只记看过，不是工作台勾完。还在这三处。我们不代改。"
-        note = "已打开该页。这次没抓全。只记看过，不是工作台勾完。还在这三处。我们不代改。"
-    else:
-        row.retest_result = "打开过该页。只记看过，不是工作台勾完。还在这三处。我们不代改。"
-        note = "已打开该页。只记看过，不是工作台勾完。还在这三处。我们不代改。"
+    row.retest_result = "打开过该页。只记看过，不是工作台勾完。还在这三处。我们不代改。"
+    note = "已打开该页。只记看过，不是工作台勾完。还在这三处。我们不代改。"
     pin = weekly_pin_state(db, user.tenant_id)
     awaiting_reopen_ids = [item for item in (pin.get("awaiting_reopen_ids") or []) if item != row.id]
     save_weekly_pin(
