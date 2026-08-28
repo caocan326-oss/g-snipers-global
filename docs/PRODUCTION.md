@@ -267,7 +267,7 @@ powershell -File deploy/sync-from-local.ps1
 | 2026-08-28 | 产品/运维 | 公司发到 `9087d87`（`sync-from-local.ps1 -Rebuild`）。待发露出、换组避深页、对外稿「草稿/缺事实」、问题板未关闭不是这周。 |
 | 2026-08-28 | 产品/运维 | 公司发到 `8c32298`（`sync-from-local.ps1 -Rebuild`）。已发未打开也能记「客户说改完了」。 |
 | 2026-08-28 | 运维 | 公司交接 docs-only 同步（`sync-from-local.ps1`，无 Rebuild）。产品仍 `8c32298`。§4.69–§4.71 人测进生产工作副本。 |
-| 2026-08-28 | 产品/运维 | 公司发到本提交（`sync-from-local.ps1 -Rebuild`）。打开核对不抓站；绿字钉在三处；核对不过黄字。 |
+| 2026-08-28 | 产品/运维 | 公司发到 `88ee4a4`（`sync-from-local.ps1 -Rebuild`）。打开核对不抓站；绿字钉在三处；核对不过黄字。 |
 
 ---
 
