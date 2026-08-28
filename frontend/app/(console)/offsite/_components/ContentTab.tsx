@@ -94,6 +94,7 @@ export function ContentTab({
                       <span>品牌：{fact.brand_names || "未填"}</span>
                       <span>品类：{fact.product_categories_en || "未填"}</span>
                       <span>认证：{fact.certifications || "未填"}</span>
+                      <span>联系：{fact.contact_public || "未填"}</span>
                       <span>禁用语：{fact.banned_claims || "未填"}</span>
                     </div>
                   </div>
