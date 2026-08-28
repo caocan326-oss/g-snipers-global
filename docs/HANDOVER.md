@@ -1009,8 +1009,8 @@ git log -1 --oneline
 | 最后一台 | **公司** `E:\G-snipers海外版`。家里不要同时改。 |
 | 下一台 | 家里先 `git pull origin main`。 |
 | 分支 | `main` |
-| 产品提交 | 本提交 — 对外稿空认证不写 NEED_INPUT，包里邮箱写进稿。 |
-| 远端文档 | 随本提交。 |
+| 产品提交 | `626e3dd` — 对外稿空认证不写 NEED_INPUT，包里邮箱写进稿。 |
+| 远端文档 | `626e3dd`。 |
 | 已 push origin / upstream | 是（随本轮发版一起推） |
 | 已发版生产 | **是。** `sync-from-local.ps1 -Rebuild`。T3 待现网硬刷新复测。 |
 | 本机工作区 | 提交并推完后应干净。 |
