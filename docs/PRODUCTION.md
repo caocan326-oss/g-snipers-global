@@ -264,6 +264,7 @@ powershell -File deploy/sync-from-local.ps1
 | 2026-08-27 | 产品/运维 | 公司发到 `1c2ab88`（`sync-from-local.ps1 -Rebuild`）。从资料收草稿时先认门锁再认太短。 |
 | 2026-08-27 | 产品/运维 | 家里发到 `82dd632`（`sync-from-local.ps1 -Rebuild`）。活客户诊断目标清掉门锁竞品。演示租户可留。 |
 | 2026-08-28 | 产品/运维 | 公司发到 `626e3dd`（`sync-from-local.ps1 -Rebuild`）。对外稿空认证不写 NEED_INPUT，包里联系方式写进稿。 |
+| 2026-08-28 | 产品/运维 | 公司发本轮打磨（`sync-from-local.ps1 -Rebuild`）。待发露出、换组避深页、对外稿「草稿/缺事实」、问题板未关闭不是这周。 |
 
 ---
 

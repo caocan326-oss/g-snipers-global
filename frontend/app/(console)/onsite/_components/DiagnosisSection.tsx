@@ -51,7 +51,7 @@ export function DiagnosisSection({
           <div className="rounded-md bg-slate-50 p-3">
             <div className="text-xs text-slate-500">未完成问题</div>
             <div className="mt-1 text-xl font-semibold text-slate-950">{diagnosisReadiness.unresolved}</div>
-            <p className="mt-1 text-xs text-slate-500">紧急 / 优先 / 常规尚未关闭</p>
+            <p className="mt-1 text-xs text-slate-500">检查记录加总，不是这周要做完的三处</p>
           </div>
           <div className="rounded-md bg-slate-50 p-3">
             <div className="text-xs text-slate-500">搜索数据</div>

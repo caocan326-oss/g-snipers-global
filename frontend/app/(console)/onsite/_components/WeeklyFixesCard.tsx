@@ -50,7 +50,7 @@ export function WeeklyFixesCard({
           <div>
             <h2 className="text-lg font-semibold text-slate-950">这周给客户改三处</h2>
             <p className="mt-1 text-sm leading-6 text-slate-500">
-              从紧急/优先里每页只挑一条，最多三页。钉住后新抓到的紧急页不会顶掉。「打开核对」只打开现网并记下看过。看完再点「记过」或「记不过」。不会自己勾完、也不会拿掉。已发给客户不是官网已改。我们不代改。
+              从紧急/优先里每页只挑一条，最多三页。同一紧急程度先挑列表页，不优先 article_id 深页。钉住后新抓到的紧急页不会顶掉。「打开核对」只打开现网并记下看过。看完再点「记过」或「记不过」。不会自己勾完、也不会拿掉。已发给客户不是官网已改。我们不代改。
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -86,6 +86,11 @@ export function WeeklyFixesCard({
         {allPassed ? (
           <p className="text-sm leading-6 text-emerald-700">
             这三处都核对过。换下一组按紧急/优先另挑。上一组还在问题板，不是已解决。我们不代改。
+          </p>
+        ) : null}
+        {!allPassed && issues.some((issue) => !issue.sent_to_customer) ? (
+          <p className="text-sm leading-6 text-amber-800">
+            还有没发给客户的。复制短稿发给客户，再点已发给客户。不是官网已改。我们不代发。
           </p>
         ) : null}
         {issues.length ? (

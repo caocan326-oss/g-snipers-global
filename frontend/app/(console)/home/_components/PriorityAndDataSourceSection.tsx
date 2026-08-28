@@ -29,7 +29,7 @@ export function PriorityAndDataSourceSection({
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <CardTitle>今天先做</CardTitle>
-              <p className="mt-1 text-sm text-slate-500">没有 Fact Pack（已批英文说明 + 官网）时这一条排第一，不能出对外草稿。不要编规格。询盘没挂问句时也会出现在这里。</p>
+              <p className="mt-1 text-sm text-slate-500">没有 Fact Pack（已批英文说明 + 官网）时这一条排第一，不能出对外草稿。不要编规格。询盘没挂问句时也会出现在这里。问题板未关闭条数不是这周要做完。</p>
             </div>
             <Badge tone="amber">Top Actions</Badge>
           </div>

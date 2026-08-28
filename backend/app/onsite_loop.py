@@ -273,6 +273,17 @@ def clear_weekly_pin(db: Session, tenant_id: str) -> None:
     ).delete(synchronize_session=False)
 
 
+def _issue_page_path(issue: OnsiteIssue) -> str:
+    page = getattr(issue, "page", None)
+    if page is None:
+        return ""
+    return (page.path or "").strip()
+
+
+def _deep_article_rank(path: str) -> int:
+    return 1 if "article_id/" in path.lower() else 0
+
+
 def weekly_onsite_picks(
     issues: list[OnsiteIssue],
     *,
@@ -291,10 +302,11 @@ def weekly_onsite_picks(
     by_id = {issue.id: issue for issue in active}
     retired = {item for item in (retired_page_ids or []) if item}
 
-    def sort_key(issue: OnsiteIssue) -> tuple[int, int, str, str]:
+    def sort_key(issue: OnsiteIssue) -> tuple[int, int, int, str, str]:
         created = (issue.created_at or datetime.min.replace(tzinfo=timezone.utc)).isoformat()
         return (
             _SEV_RANK.get(issue.severity or "low", 3),
+            _deep_article_rank(_issue_page_path(issue)),
             _STATUS_RANK.get(issue.status or "", 9),
             created,
             issue.id or "",

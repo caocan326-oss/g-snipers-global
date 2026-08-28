@@ -70,7 +70,7 @@ export function IssueBoard({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
         <CardTitle>需要处理的问题</CardTitle>
-            <p className="mt-1 text-sm text-slate-500">按紧急程度和进度排列。点开一条即可查看依据、改法和复查方式。</p>
+            <p className="mt-1 text-sm text-slate-500">按紧急程度和进度排列。这里是检查记录，不是这周要做完。这周给客户看的三处在上面。点开一条即可查看依据、改法和复查方式。</p>
           </div>
           <Badge tone="amber">{visibleIssues.length} / {totalCount} 条</Badge>
         </div>

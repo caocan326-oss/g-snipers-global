@@ -655,6 +655,7 @@ def workbench(
             )
         )
         pending = [item for item in weekly_onsite if item.status in {"打开过，还没过", "核对不过"}]
+        unsent = [item for item in weekly_onsite if item.status == "待发给客户"]
         if pending:
             viewed_n = sum(1 for item in pending if item.status == "打开过，还没过")
             fail_n = sum(1 for item in pending if item.status == "核对不过")
@@ -697,6 +698,18 @@ def workbench(
                     href="/home",
                     status="可以换组",
                     tone="green",
+                    action_label="去总览",
+                )
+            )
+        elif unsent:
+            next_actions.append(
+                WorkbenchItem(
+                    id="weekly-send",
+                    title="把这周三处发给客户",
+                    subtitle=f"{len(unsent)} 处还没发。复制短稿发给客户，再点记下已发。不是官网已改。我们不代发。",
+                    href="/home",
+                    status="还没发",
+                    tone="amber",
                     action_label="去总览",
                 )
             )

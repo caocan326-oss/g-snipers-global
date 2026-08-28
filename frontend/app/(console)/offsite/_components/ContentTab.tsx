@@ -136,8 +136,9 @@ export function ContentTab({
                       <h3 className="font-semibold text-slate-950">{asset.title}</h3>
                       <Badge>{asset.asset_type}</Badge>
                       <Badge tone={asset.status === "human_approved" ? "green" : asset.ai_review_status === "fail" ? "red" : "amber"}>
-                        {asset.status === "human_approved" ? "人工已批准" : asset.ai_review_status === "fail" ? "初审未过" : asset.status}
+                        {asset.status === "human_approved" ? "人工已批准" : asset.ai_review_status === "fail" ? "初审未过" : asset.status === "draft" ? "草稿" : asset.status}
                       </Badge>
+                      {(asset.body_md || "").includes("NEED_INPUT") ? <Badge tone="red">缺事实</Badge> : null}
                     </div>
                     <p className="mt-1 text-xs text-slate-500">{asset.fact_pack_name || "未绑定客户事实资料"} · {asset.locale} · v{asset.version}</p>
                     <p className="mt-3 whitespace-pre-wrap rounded-md bg-slate-50 p-3 text-sm leading-6 text-slate-700">{asset.body_md}</p>

@@ -231,7 +231,7 @@ export default function OffsitePage() {
   }
 
   function loadContent() {
-    Promise.all([api<FactPack[]>("/api/offsite/fact-packs"), api<ContentAsset[]>("/api/offsite/content-assets")])
+    return Promise.all([api<FactPack[]>("/api/offsite/fact-packs"), api<ContentAsset[]>("/api/offsite/content-assets")])
       .then(([facts, rows]) => {
         setFactPacks(facts);
         setAssets(rows);
@@ -601,8 +601,8 @@ export default function OffsitePage() {
         locale: assetForm.locale,
       }),
     });
+    await loadContent();
     setNote("已基于客户事实资料生成内容草稿。");
-    loadContent();
   }
 
   async function reviewAsset(id: string) {

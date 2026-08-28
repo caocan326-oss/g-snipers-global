@@ -37,6 +37,10 @@ def test_workbench_lists_same_openish_issues_as_summary(client: TestClient, demo
     assert workbench["summary"]["this_week_onsite"] == 1
     assert workbench["summary"]["this_week_open"] == 1
     assert any(item["id"] == "weekly-three" for item in workbench["next_actions"])
+    send = next(item for item in workbench["next_actions"] if item["id"] == "weekly-send")
+    assert send["title"] == "把这周三处发给客户"
+    assert "不代发" in send["subtitle"]
+    assert send["href"] == "/home"
 
 
 def test_workbench_weekly_three_follows_pin_and_sent(client: TestClient, demo_user, db) -> None:
@@ -78,6 +82,9 @@ def test_workbench_weekly_three_follows_pin_and_sent(client: TestClient, demo_us
     assert action["title"] == "这周给客户改三处"
     assert action["status"] == "待钉住"
     assert action["href"] == "/onsite"
+    send = next(item for item in empty_note["next_actions"] if item["id"] == "weekly-send")
+    assert send["title"] == "把这周三处发给客户"
+    assert send["status"] == "还没发"
 
     pinned = client.post("/api/onsite/weekly/pin", headers=headers).json()
     first_id = pinned["this_week"][0]["id"]
@@ -91,6 +98,7 @@ def test_workbench_weekly_three_follows_pin_and_sent(client: TestClient, demo_us
     assert after["weekly_onsite"][0]["tone"] == "blue"
     pinned_action = next(item for item in after["next_actions"] if item["id"] == "weekly-three")
     assert pinned_action["status"] == "已钉住"
+    assert any(item["id"] == "weekly-send" for item in after["next_actions"])
 
 
 def test_customer_brief_empty_tenant_stays_untested(client: TestClient, demo_user) -> None:

@@ -226,6 +226,33 @@ def test_weekly_onsite_picks_skips_retired_pages() -> None:
     assert [row.id for row in nxt] == ["new"]
 
 
+def test_weekly_onsite_picks_prefers_shallow_over_article_id() -> None:
+    list_page = SitePage(id="p-list", tenant_id="t1", path="/snipers/article/articlelist/cat_id/1.html", title="List")
+    deep = SitePage(id="p-deep", tenant_id="t1", path="/snipers/Article/detail/article_id/4.html", title="Deep")
+    shallow = OnsiteIssue(
+        id="shallow",
+        tenant_id="t1",
+        page_id=list_page.id,
+        category="tdk",
+        title="首页标题过长",
+        severity="high",
+        status="open",
+    )
+    shallow.page = list_page
+    article = OnsiteIssue(
+        id="deep",
+        tenant_id="t1",
+        page_id=deep.id,
+        category="tdk",
+        title="首页标题过长",
+        severity="high",
+        status="open",
+    )
+    article.page = deep
+    picks = weekly_onsite_picks([article, shallow])
+    assert [row.id for row in picks] == ["shallow", "deep"]
+
+
 def test_weekly_onsite_picks_low_only_empty_unless_pinned() -> None:
     issues = [
         OnsiteIssue(id="l1", tenant_id="t1", page_id="p1", category="image", title="图片没有文字说明", severity="low", status="open"),

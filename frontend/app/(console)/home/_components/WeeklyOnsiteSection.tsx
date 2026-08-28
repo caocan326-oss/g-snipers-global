@@ -46,6 +46,7 @@ export function WeeklyOnsiteSection({
 }) {
   const [copiedId, setCopiedId] = useState("");
   const allPassed = items.length > 0 && items.every((item) => item.status === "核对过");
+  const unsentCount = items.filter((item) => item.status === "待发给客户").length;
 
   async function copyNote(item: WorkbenchItem) {
     const text = (item.meta || "").trim();
@@ -95,6 +96,11 @@ export function WeeklyOnsiteSection({
         {allPassed ? (
           <p className="text-sm leading-6 text-emerald-700">
             这三处都核对过。换下一组按紧急/优先另挑。上一组还在问题板，不是已解决。我们不代改。
+          </p>
+        ) : null}
+        {unsentCount ? (
+          <p className="text-sm leading-6 text-amber-800">
+            {unsentCount} 处还没发给客户。复制短稿发给客户，再点记下已发。不是官网已改。我们不代发。
           </p>
         ) : null}
         {items.length ? (
