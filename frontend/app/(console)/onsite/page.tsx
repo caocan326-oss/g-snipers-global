@@ -873,6 +873,20 @@ export default function OnsiteBoardPage() {
     }
   }
 
+  async function rotateWeek() {
+    setError("");
+    setBusyId("weekly-next");
+    try {
+      const body = await api<{ note?: string }>("/api/onsite/weekly/next-set", { method: "POST" });
+      setNote(body.note || "已换下一组。");
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "没换组");
+    } finally {
+      setBusyId("");
+    }
+  }
+
   async function weeklyRecheck(issue: OnsiteIssue) {
     setError("");
     setBusyId(issue.id);
@@ -1066,6 +1080,7 @@ export default function OnsiteBoardPage() {
         clearSent={(issue) => void clearSent(issue)}
         pinWeek={() => void pinWeek()}
         unpinWeek={() => void unpinWeek()}
+        rotateWeek={() => void rotateWeek()}
         recheckIssue={(issue) => void weeklyRecheck(issue)}
         recordVerdict={(issue, passed) => void weeklyVerdict(issue, passed)}
         restoreDropped={() => void restoreDropped()}

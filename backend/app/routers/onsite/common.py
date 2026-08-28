@@ -362,7 +362,11 @@ def load_weekly_onsite_issues(db: Session, tenant_id: str) -> list[OnsiteIssue]:
         .all()
     )
     pin = weekly_pin_state(db, tenant_id)
-    return weekly_onsite_picks(rows, pinned_ids=pin.get("issue_ids") or [])
+    return weekly_onsite_picks(
+        rows,
+        pinned_ids=pin.get("issue_ids") or [],
+        retired_page_ids=pin.get("retired_page_ids") or [],
+    )
 
 
 def decorate_weekly_issues(db: Session, tenant_id: str, rows: list[OnsiteIssue]) -> list[OnsiteIssueOut]:
@@ -387,7 +391,11 @@ def refresh_weekly_pin_after_drop(db: Session, tenant_id: str, dropped_id: str) 
         .filter(OnsiteIssue.tenant_id == tenant_id, OnsiteIssue.status.in_(list(BOARD_ACTIONABLE)))
         .all()
     )
-    filled = weekly_onsite_picks(rows, pinned_ids=remaining)
+    filled = weekly_onsite_picks(
+        rows,
+        pinned_ids=remaining,
+        retired_page_ids=pin.get("retired_page_ids") or [],
+    )
     save_weekly_pin(
         db,
         tenant_id,

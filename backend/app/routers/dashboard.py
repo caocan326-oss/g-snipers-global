@@ -688,6 +688,18 @@ def workbench(
                     action_label="去总览",
                 )
             )
+        elif all(item.status == "核对过" for item in weekly_onsite):
+            next_actions.append(
+                WorkbenchItem(
+                    id="weekly-next-set",
+                    title="这周过了，换下一组",
+                    subtitle="这三处都核对过。换下一组按紧急/优先另挑。上一组还在问题板，不是已解决。我们不代改。",
+                    href="/home",
+                    status="可以换组",
+                    tone="green",
+                    action_label="去总览",
+                )
+            )
     if summary.inquiries_month_unlinked:
         next_actions.append(
             WorkbenchItem(

@@ -209,6 +209,23 @@ def test_weekly_onsite_picks_keeps_pinned_when_newer_critical_arrives() -> None:
     assert auto[0].id == "new"
 
 
+def test_weekly_onsite_picks_skips_retired_pages() -> None:
+    old = SitePage(id="p-old", tenant_id="t1", path="/old", title="Old")
+    mid = SitePage(id="p-mid", tenant_id="t1", path="/mid", title="Mid")
+    extra = SitePage(id="p-extra", tenant_id="t1", path="/extra", title="Extra")
+    fresh = SitePage(id="p-new", tenant_id="t1", path="/new", title="New")
+    issues = [
+        OnsiteIssue(id="old", tenant_id="t1", page_id=old.id, category="tdk", title="首页标题过长", severity="high", status="open"),
+        OnsiteIssue(id="mid", tenant_id="t1", page_id=mid.id, category="content", title="正文太少，买家看不够", severity="high", status="open"),
+        OnsiteIssue(id="extra", tenant_id="t1", page_id=extra.id, category="heading", title="页面缺少主标题", severity="high", status="open"),
+        OnsiteIssue(id="new", tenant_id="t1", page_id=fresh.id, category="tdk", title="首页标题过长", severity="critical", status="open"),
+    ]
+    pinned = weekly_onsite_picks(issues, pinned_ids=["old", "mid", "extra"], retired_page_ids=[old.id, mid.id, extra.id])
+    assert [row.id for row in pinned] == ["old", "mid", "extra"]
+    nxt = weekly_onsite_picks(issues, retired_page_ids=[old.id, mid.id, extra.id])
+    assert [row.id for row in nxt] == ["new"]
+
+
 def test_weekly_onsite_picks_low_only_empty_unless_pinned() -> None:
     issues = [
         OnsiteIssue(id="l1", tenant_id="t1", page_id="p1", category="image", title="图片没有文字说明", severity="low", status="open"),

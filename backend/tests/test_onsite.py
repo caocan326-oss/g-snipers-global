@@ -1398,6 +1398,99 @@ def test_weekly_pin_keeps_pages_and_sent_is_not_live(client: TestClient, demo_us
     assert unpinned.json()["this_week"][0]["page_path"] == "/new-critical"
 
 
+def test_weekly_next_set_skips_passed_pages(client: TestClient, demo_user, db: Session) -> None:
+    from app.onsite_loop import WEEKLY_RECHECK_PASS
+
+    tenant = db.get(Tenant, demo_user.tenant_id)
+    assert tenant is not None
+    tenant.site_origin = "https://www.snipers.com.cn"
+    tenant.name = "SNIPERS"
+    pages = [
+        SitePage(tenant_id=demo_user.tenant_id, path="/a", locale="zh-CN", title="A", crawl_status="ok"),
+        SitePage(tenant_id=demo_user.tenant_id, path="/b", locale="zh-CN", title="B", crawl_status="ok"),
+        SitePage(tenant_id=demo_user.tenant_id, path="/c", locale="zh-CN", title="C", crawl_status="ok"),
+        SitePage(tenant_id=demo_user.tenant_id, path="/new-critical", locale="zh-CN", title="New", crawl_status="ok"),
+    ]
+    db.add_all(pages)
+    db.flush()
+    week_rows = [
+        OnsiteIssue(
+            tenant_id=demo_user.tenant_id,
+            page_id=pages[0].id,
+            category="tdk",
+            title="首页标题过长",
+            severity="high",
+            status="open",
+            risk="high",
+            retest_result=WEEKLY_RECHECK_PASS,
+        ),
+        OnsiteIssue(
+            tenant_id=demo_user.tenant_id,
+            page_id=pages[1].id,
+            category="content",
+            title="正文太少，买家看不够",
+            severity="high",
+            status="open",
+            risk="high",
+            retest_result=WEEKLY_RECHECK_PASS,
+        ),
+        OnsiteIssue(
+            tenant_id=demo_user.tenant_id,
+            page_id=pages[2].id,
+            category="heading",
+            title="页面缺少主标题",
+            severity="high",
+            status="open",
+            risk="high",
+        ),
+    ]
+    db.add_all(week_rows)
+    db.commit()
+
+    headers = auth_header(client)
+    pinned = client.post("/api/onsite/weekly/pin", headers=headers)
+    assert pinned.status_code == 200, pinned.text
+    blocked = client.post("/api/onsite/weekly/next-set", headers=headers)
+    assert blocked.status_code == 400
+    assert "还没都过" in blocked.json()["detail"]
+
+    nxt = OnsiteIssue(
+        tenant_id=demo_user.tenant_id,
+        page_id=pages[3].id,
+        category="tdk",
+        title="首页标题过长",
+        severity="critical",
+        status="open",
+        risk="high",
+    )
+    week_rows[2].retest_result = WEEKLY_RECHECK_PASS
+    db.add_all([week_rows[2], nxt])
+    db.commit()
+    workbench = client.get("/api/dashboard/workbench?days=28", headers=headers).json()
+    action = next(item for item in workbench["next_actions"] if item["id"] == "weekly-next-set")
+    assert action["title"] == "这周过了，换下一组"
+    assert "还在问题板" in action["subtitle"]
+    assert all(item["id"] != "weekly-verdict" for item in workbench["next_actions"])
+
+    rotated = client.post("/api/onsite/weekly/next-set", headers=headers)
+    assert rotated.status_code == 200, rotated.text
+    assert rotated.json()["note"].startswith("已换下一组")
+    assert "不是已解决" in rotated.json()["note"]
+    assert "不代改" in rotated.json()["note"]
+    paths = [item["page_path"] for item in rotated.json()["this_week"]]
+    assert paths == ["/new-critical"]
+    assert rotated.json()["weekly_pinned"] is True
+    old_ids = {row.id for row in week_rows}
+    for row in week_rows:
+        db.refresh(row)
+        assert row.status == "open"
+        assert row.id not in {item["id"] for item in rotated.json()["this_week"]}
+    assert nxt.id in {item["id"] for item in rotated.json()["this_week"]}
+    after = client.get("/api/dashboard/workbench?days=28", headers=headers).json()
+    assert all(item["id"] != "weekly-next-set" for item in after["next_actions"])
+    assert old_ids.isdisjoint({item["id"] for item in after["weekly_onsite"]})
+
+
 def test_weekly_recheck_fail_stays_pass_drops(client: TestClient, demo_user, db: Session, monkeypatch) -> None:
     tenant = db.get(Tenant, demo_user.tenant_id)
     assert tenant is not None

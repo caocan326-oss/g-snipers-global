@@ -18,6 +18,7 @@ from app.onsite_loop import (
     dropped_restore_id,
     is_template_limited,
     save_weekly_pin,
+    weekly_all_passed,
     weekly_pin_state,
     weekly_recheck_kind,
 )
@@ -347,6 +348,41 @@ def unpin_weekly_onsite(user: User = Depends(get_current_user), db: Session = De
     clear_weekly_pin(db, user.tenant_id)
     db.commit()
     return _weekly_out(db, user, "已取消钉住。这周三处按紧急/优先重新挑。")
+
+
+@router.post("/weekly/next-set", response_model=WeeklyOnsiteOut)
+def rotate_weekly_onsite(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> WeeklyOnsiteOut:
+    current = load_weekly_onsite_issues(db, user.tenant_id)
+    if not current:
+        raise HTTPException(status_code=400, detail="还没有这周三处可以换。")
+    if not weekly_all_passed(current):
+        raise HTTPException(status_code=400, detail="这周三处还没都过。过了再换下一组。")
+    page_ids = [(row.page_id or "").strip() for row in current if (row.page_id or "").strip()]
+    pin = weekly_pin_state(db, user.tenant_id)
+    retired = list(dict.fromkeys([*(pin.get("retired_page_ids") or []), *page_ids]))
+    save_weekly_pin(
+        db,
+        user.tenant_id,
+        issue_ids=[],
+        sent_ids=[],
+        claimed_ids=[],
+        awaiting_reopen_ids=[],
+        retired_page_ids=retired,
+    )
+    db.flush()
+    nxt = load_weekly_onsite_issues(db, user.tenant_id)
+    if nxt:
+        save_weekly_pin(
+            db,
+            user.tenant_id,
+            issue_ids=[row.id for row in nxt],
+            retired_page_ids=retired,
+        )
+        note = "已换下一组。按紧急/优先另挑。上一组还在问题板，不是已解决。我们不代改。"
+    else:
+        note = "上一组过了。紧急/优先里没有下一组。上一组还在问题板，不是已解决。我们不代改。"
+    db.commit()
+    return _weekly_out(db, user, note)
 
 
 @router.post("/weekly/restore-dropped", response_model=WeeklyOnsiteOut)

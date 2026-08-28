@@ -304,6 +304,20 @@ export default function HomePage() {
     }
   }
 
+  async function rotateWeeklySet() {
+    setError("");
+    setWeeklyBusyId("weekly-next");
+    try {
+      const body = await api<{ note?: string }>("/api/onsite/weekly/next-set", { method: "POST" });
+      setNote(body.note || "已换下一组。");
+      await reloadWorkbench();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "没换组");
+    } finally {
+      setWeeklyBusyId("");
+    }
+  }
+
   async function restoreDroppedWeek() {
     setError("");
     setWeeklyBusyId("weekly-restore");
@@ -380,6 +394,7 @@ export default function HomePage() {
         clearSent={(item) => void weeklyClearSent(item)}
         markClaimed={(item) => void weeklyMarkClaimed(item)}
         clearClaimed={(item) => void weeklyClearClaimed(item)}
+        rotateWeek={() => void rotateWeeklySet()}
       />
 
       <BuyerQuestionsSection

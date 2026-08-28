@@ -28,6 +28,7 @@ export function WeeklyOnsiteSection({
   clearSent,
   markClaimed,
   clearClaimed,
+  rotateWeek,
 }: {
   items: WorkbenchItem[];
   pinned: boolean;
@@ -41,8 +42,10 @@ export function WeeklyOnsiteSection({
   clearSent: (item: WorkbenchItem) => void;
   markClaimed: (item: WorkbenchItem) => void;
   clearClaimed: (item: WorkbenchItem) => void;
+  rotateWeek: () => void;
 }) {
   const [copiedId, setCopiedId] = useState("");
+  const allPassed = items.length > 0 && items.every((item) => item.status === "核对过");
 
   async function copyNote(item: WorkbenchItem) {
     const text = (item.meta || "").trim();
@@ -70,6 +73,11 @@ export function WeeklyOnsiteSection({
                 客户说明
               </Button>
             </Link>
+            {allPassed ? (
+              <Button size="sm" onClick={rotateWeek} disabled={busyId === "weekly-next"}>
+                换下一组
+              </Button>
+            ) : null}
             {canRestore ? (
               <Button size="sm" variant="outline" onClick={restoreDropped} disabled={busyId === "weekly-restore"}>
                 放回刚拿掉的一页
@@ -84,6 +92,11 @@ export function WeeklyOnsiteSection({
           </div>
         </div>
         {pinned ? <Badge tone="amber">已钉住。新抓到的页不会顶掉。</Badge> : null}
+        {allPassed ? (
+          <p className="text-sm leading-6 text-emerald-700">
+            这三处都核对过。换下一组按紧急/优先另挑。上一组还在问题板，不是已解决。我们不代改。
+          </p>
+        ) : null}
         {items.length ? (
           <div className="grid gap-3 lg:grid-cols-3">
             {items.map((item, index) => {

@@ -18,6 +18,7 @@ export function WeeklyFixesCard({
   clearSent,
   pinWeek,
   unpinWeek,
+  rotateWeek,
   recheckIssue,
   recordVerdict,
   restoreDropped,
@@ -34,12 +35,14 @@ export function WeeklyFixesCard({
   clearSent: (issue: OnsiteIssue) => void;
   pinWeek: () => void;
   unpinWeek: () => void;
+  rotateWeek: () => void;
   recheckIssue: (issue: OnsiteIssue) => void;
   recordVerdict: (issue: OnsiteIssue, passed: boolean) => void;
   restoreDropped: () => void;
   canRestore: boolean;
   busyId: string;
 }) {
+  const allPassed = issues.length > 0 && issues.every((issue) => (issue.retest_result || "").includes("这一条现在对得上"));
   return (
     <Card className="rounded-md border-amber-200">
       <CardContent className="space-y-3 p-5">
@@ -55,6 +58,11 @@ export function WeeklyFixesCard({
               <Button size="sm" variant="outline" onClick={copyAll}>
                 <Copy className="mr-1.5 h-3.5 w-3.5" />
                 复制这三处
+              </Button>
+            ) : null}
+            {allPassed ? (
+              <Button size="sm" onClick={rotateWeek} disabled={busyId === "weekly-next"}>
+                换下一组
               </Button>
             ) : null}
             {issues.length && pinned ? (
@@ -75,6 +83,11 @@ export function WeeklyFixesCard({
           </div>
         </div>
         {pinned ? <Badge tone="amber">已钉住。新抓到的页不会顶掉。</Badge> : null}
+        {allPassed ? (
+          <p className="text-sm leading-6 text-emerald-700">
+            这三处都核对过。换下一组按紧急/优先另挑。上一组还在问题板，不是已解决。我们不代改。
+          </p>
+        ) : null}
         {issues.length ? (
           <div className="grid gap-3 lg:grid-cols-3">
             {issues.map((issue, index) => (

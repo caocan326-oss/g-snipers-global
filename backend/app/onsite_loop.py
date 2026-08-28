@@ -149,12 +149,17 @@ def is_template_limited(issue: OnsiteIssue) -> bool:
     return (issue.blocked_reason or "").startswith(TEMPLATE_LIMIT_MARK)
 
 
+def weekly_all_passed(issues: list[OnsiteIssue]) -> bool:
+    return bool(issues) and all(weekly_recheck_kind(issue.retest_result or "") == "pass" for issue in issues)
+
+
 def weekly_pin_state(db: Session, tenant_id: str) -> dict:
     empty = {
         "issue_ids": [],
         "sent_ids": [],
         "claimed_ids": [],
         "awaiting_reopen_ids": [],
+        "retired_page_ids": [],
         "last_dropped_id": "",
         "last_dropped_sent": False,
     }
@@ -176,11 +181,13 @@ def weekly_pin_state(db: Session, tenant_id: str) -> dict:
         awaiting_reopen_ids = list(claimed_ids)
     else:
         awaiting_reopen_ids = [str(item) for item in (raw.get("awaiting_reopen_ids") or []) if str(item).strip()]
+    retired_page_ids = [str(item) for item in (raw.get("retired_page_ids") or []) if str(item).strip()]
     return {
         "issue_ids": issue_ids[:WEEKLY_ONSITE_LIMIT],
         "sent_ids": sent_ids,
         "claimed_ids": claimed_ids,
         "awaiting_reopen_ids": awaiting_reopen_ids,
+        "retired_page_ids": list(dict.fromkeys(retired_page_ids)),
         "last_dropped_id": str(raw.get("last_dropped_id") or "").strip(),
         "last_dropped_sent": bool(raw.get("last_dropped_sent")),
     }
@@ -194,6 +201,7 @@ def save_weekly_pin(
     sent_ids: list[str] | None = None,
     claimed_ids: list[str] | None = None,
     awaiting_reopen_ids: list[str] | None = None,
+    retired_page_ids: list[str] | None = None,
     last_dropped_id: str | None = None,
     last_dropped_sent: bool | None = None,
 ) -> dict:
@@ -210,6 +218,11 @@ def save_weekly_pin(
         for item in (awaiting_reopen_ids if awaiting_reopen_ids is not None else prev.get("awaiting_reopen_ids") or [])
         if item in keep_claimed
     ]
+    keep_retired = [
+        str(item)
+        for item in (retired_page_ids if retired_page_ids is not None else prev.get("retired_page_ids") or [])
+        if str(item).strip()
+    ]
     dropped = prev.get("last_dropped_id") or "" if last_dropped_id is None else last_dropped_id
     dropped_sent = prev.get("last_dropped_sent") if last_dropped_sent is None else last_dropped_sent
     payload = {
@@ -217,6 +230,7 @@ def save_weekly_pin(
         "sent_ids": keep_sent,
         "claimed_ids": keep_claimed,
         "awaiting_reopen_ids": keep_awaiting,
+        "retired_page_ids": list(dict.fromkeys(keep_retired)),
         "last_dropped_id": dropped or "",
         "last_dropped_sent": bool(dropped_sent),
     }
@@ -263,6 +277,7 @@ def weekly_onsite_picks(
     issues: list[OnsiteIssue],
     *,
     pinned_ids: list[str] | None = None,
+    retired_page_ids: list[str] | None = None,
     limit: int = WEEKLY_ONSITE_LIMIT,
 ) -> list[OnsiteIssue]:
     """At most three pages. Only critical/high, unless pinned. One issue per page. Pins stay put."""
@@ -274,6 +289,7 @@ def weekly_onsite_picks(
     urgent = [issue for issue in active if (issue.severity or "low") in {"critical", "high"}]
     pool = urgent
     by_id = {issue.id: issue for issue in active}
+    retired = {item for item in (retired_page_ids or []) if item}
 
     def sort_key(issue: OnsiteIssue) -> tuple[int, int, str, str]:
         created = (issue.created_at or datetime.min.replace(tzinfo=timezone.utc)).isoformat()
@@ -301,7 +317,7 @@ def weekly_onsite_picks(
         if issue in picked:
             continue
         page_id = (issue.page_id or "").strip()
-        if not page_id or page_id in seen_pages:
+        if not page_id or page_id in seen_pages or page_id in retired:
             continue
         seen_pages.add(page_id)
         picked.append(issue)
